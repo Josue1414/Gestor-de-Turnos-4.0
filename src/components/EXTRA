@@ -1,0 +1,719 @@
+import React, { useState } from 'react';
+import { 
+  Calendar, Plus, Users, Save, Edit2, Map as MapIcon, 
+  Image as ImageIcon, X, Bird 
+} from 'lucide-react';
+
+import type { DiaEvento, Participante } from '../../types';
+import AssignUserModal from '../../components/AssignUserModal';
+import ParticipantDrawer from '../../components/ParticipantDrawer';
+import MatrizTurnos from '../../components/MatrizTurnos';
+import EditNameModal from '../../components/EditNameModal';
+import SpecialBoxModal from '../../components/SpecialBoxModal';
+import EditShiftModal from '../../components/EditShiftModal';
+
+const AdminPanel = () => {
+  const [diaActivo, setDiaActivo] = useState(0);
+  const [showDirectorio, setShowDirectorio] = useState(false);
+  const [showCroquis, setShowCroquis] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [seccionName, setSeccionName] = useState('Accesos Principales');
+  
+  const [showSpecialModal, setShowSpecialModal] = useState(false);
+
+  const [editModal, setEditModal] = useState({ 
+    isOpen: false, title: '', initialValue: '', label: '', type: '' as 'caja' | 'horario', id: '' 
+  });
+
+  const [participantes, setParticipantes] = useState<Participante[]>([
+    { id: 'p1', nombre: 'Roberto Sánchez', linkUnico: '...', estado: 'Libre' },
+    { id: 'p2', nombre: 'Juan Pérez', linkUnico: '...', estado: 'Libre' },
+    { id: 'p3', nombre: 'Sofía Martínez', linkUnico: '...', estado: 'Libre' },
+    { id: 'p4', nombre: 'María López', linkUnico: '...', estado: 'Libre' },
+  ]);
+
+  const [dias, setDias] = useState<DiaEvento[]>([
+    {
+      id: 'd1', fecha: '2026-03-15', nombreDia: 'Viernes 15',
+      horariosMaestros: ['08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00', '14:00 - 16:00'],
+      cajas: [
+        { id: 'c1', nombre: 'Caja 1', turnos: [
+            { id: 't1', horario: '08:00 - 10:00', participanteId: 'p2' },
+            { id: 't2', horario: '10:00 - 12:00', participanteId: null },
+            { id: 't2b', horario: '12:00 - 14:00', participanteId: 'CERRADO' },
+            { id: 't2c', horario: '14:00 - 16:00', participanteId: null },
+          ]
+        },
+        { id: 'c2', nombre: 'Caja 2', turnos: [
+            { id: 't3', horario: '08:00 - 10:00', participanteId: 'p4' },
+            { id: 't4', horario: '10:00 - 12:00', participanteId: 'p2' }, 
+            { id: 't4b', horario: '12:00 - 14:00', participanteId: null },
+            { id: 't4c', horario: '14:00 - 16:00', participanteId: null },
+          ]
+        }
+      ]
+    }
+  ]);
+
+  const [modalAsignacion, setModalAsignacion] = useState({ isOpen: false, cajaId: '', turnoId: '', horario: '', cajaNombre: '' });
+
+  const diaActual = dias[diaActivo];
+
+  const participantesEnriquecidos = participantes.map(p => {
+    const ubicaciones: string[] = [];
+    diaActual.cajas.forEach(caja => {
+      caja.turnos.forEach(turno => {
+        if (turno.participanteId === p.id) {
+          ubicaciones.push(`${caja.nombre} - ${turno.horario}`);
+        }
+      });
+    });
+    return { ...p, estado: ubicaciones.length > 0 ? 'Asignado' : 'Libre', ubicaciones } as Participante;
+  });
+
+  const getParticipante = (id: string | null) => participantesEnriquecidos.find(p => p.id === id);
+
+  const abrirModalAsignacion = (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => {
+    setModalAsignacion({ isOpen: true, cajaId, turnoId, horario, cajaNombre });
+  };
+
+  const cerrarModalAsignacion = () => setModalAsignacion({ ...modalAsignacion, isOpen: false });
+
+  const actualizarTurnoVisual = (participanteId: string | null) => {
+    const nuevosDias = [...dias];
+    const caja = nuevosDias[diaActivo].cajas.find(c => c.id === modalAsignacion.cajaId);
+    if (caja) {
+      const turno = caja.turnos.find(t => t.id === modalAsignacion.turnoId);
+      if (turno) turno.participanteId = participanteId;
+    }
+    setDias(nuevosDias);
+  };
+
+  const asignarUsuarioExistente = (participanteId: string) => {
+    actualizarTurnoVisual(participanteId);
+    cerrarModalAsignacion();
+  };
+
+  const crearYAsignarUsuario = (nombre: string) => {
+    const nuevoId = 'nuevo_' + Date.now();
+    setParticipantes(prev => [...prev, { id: nuevoId, nombre, linkUnico: '...', estado: 'Libre' }]);
+    actualizarTurnoVisual(nuevoId);
+    cerrarModalAsignacion();
+  };
+
+  const quitarParticipante = (cajaId: string, turnoId: string) => {
+    const nuevosDias = [...dias];
+    const caja = nuevosDias[diaActivo].cajas.find(c => c.id === cajaId);
+    if (caja) {
+      const turno = caja.turnos.find(t => t.id === turnoId);
+      if (turno) turno.participanteId = null;
+    }
+    setDias(nuevosDias);
+  };
+
+  const handleCrearCaja = () => {
+    const nuevosDias = [...dias];
+    const dia = nuevosDias[diaActivo];
+    const numeroCaja = dia.cajas.length + 1;
+    
+    dia.cajas.push({
+      id: `c_${Date.now()}`,
+      nombre: `Caja ${numeroCaja}`,
+      turnos: dia.horariosMaestros.map(h => ({
+        id: `t_${Date.now()}_${Math.random()}`,
+        horario: h,
+        participanteId: null
+      }))
+    });
+    setDias(nuevosDias);
+  };
+
+  // --- LÓGICA FLEXIBLE PARA CAJA ESPECIAL ---
+  const handleCrearCajaEspecial = (nombre: string, turnosConfig: any[]) => {
+    const nuevosDias = [...dias];
+    const dia = nuevosDias[diaActivo];
+
+    dia.cajas.push({
+      id: `special_${Date.now()}`,
+      nombre: nombre,
+      // @ts-ignore
+      esEspecial: true, 
+      // Aquí mapeamos los turnos rebeldes con su hora exacta definida en el modal
+      turnos: turnosConfig.map((config) => ({
+        id: `t_spec_${Date.now()}_${Math.random()}`,
+        horario: `${config.inicio} - ${config.fin}`, // Guardamos su horario propio
+        participanteId: null
+      }))
+    });
+    setDias(nuevosDias);
+  };
+
+  const handleCrearHorario = () => {
+    const nuevosDias = [...dias];
+    const dia = nuevosDias[diaActivo];
+    let nuevoHorarioText = "Nuevo Horario";
+    
+    if (dia.horariosMaestros.length > 0) {
+      const ultimoHorario = dia.horariosMaestros[dia.horariosMaestros.length - 1];
+      const partes = ultimoHorario.split('-');
+      if (partes.length === 2) {
+        const horaFinStr = partes[1].trim().split(':')[0]; 
+        const horaFin = parseInt(horaFinStr, 10);
+        if (!isNaN(horaFin)) {
+          const nuevaHoraFin = horaFin + 2;
+          nuevoHorarioText = `${horaFinStr}:00 - ${nuevaHoraFin.toString().padStart(2, '0')}:00`;
+        }
+      }
+    } else {
+      nuevoHorarioText = "08:00 - 10:00";
+    }
+
+    dia.horariosMaestros.push(nuevoHorarioText);
+    dia.cajas.forEach(caja => {
+      caja.turnos.push({
+        id: `t_${Date.now()}_${Math.random()}`,
+        horario: nuevoHorarioText,
+        participanteId: null 
+      });
+    });
+    setDias(nuevosDias);
+  };
+
+  const handleEliminarCaja = (cajaId: string) => {
+    const nuevosDias = [...dias];
+    nuevosDias[diaActivo].cajas = nuevosDias[diaActivo].cajas.filter(c => c.id !== cajaId);
+    setDias(nuevosDias);
+  };
+
+  const handleEliminarHorario = (horarioText: string) => {
+    const nuevosDias = [...dias];
+    nuevosDias[diaActivo].horariosMaestros = nuevosDias[diaActivo].horariosMaestros.filter(h => h !== horarioText);
+    nuevosDias[diaActivo].cajas.forEach(caja => {
+      caja.turnos = caja.turnos.filter(t => t.horario !== horarioText);
+    });
+    setDias(nuevosDias);
+  };
+
+  const abrirEditor = (type: 'caja' | 'horario', id: string, currentVal: string) => {
+    setEditModal({
+      isOpen: true,
+      type,
+      id,
+      initialValue: currentVal,
+      title: type === 'caja' ? 'Editar Nombre de Caja' : 'Editar Horario',
+      label: type === 'caja' ? 'Nombre de la ubicación' : 'Rango de tiempo'
+    });
+  };
+
+  const handleSaveEdit = (newValue: string) => {
+    const nuevosDias = [...dias];
+    const dia = nuevosDias[diaActivo];
+
+    if (editModal.type === 'caja') {
+      const caja = dia.cajas.find(c => c.id === editModal.id);
+      if (caja) caja.nombre = newValue;
+    } else {
+      const horarioViejo = editModal.id;
+      dia.horariosMaestros = dia.horariosMaestros.map(h => h === horarioViejo ? newValue : h);
+      dia.horariosMaestros.sort((a, b) => a.substring(0, 5).localeCompare(b.substring(0, 5)));
+
+      dia.cajas.forEach(caja => {
+        caja.turnos.forEach(t => {
+          if (t.horario === horarioViejo) t.horario = newValue;
+        });
+        caja.turnos.sort((a, b) => a.horario.substring(0, 5).localeCompare(b.horario.substring(0, 5)));
+      });
+    }
+    setDias(nuevosDias);
+    setEditModal({ ...editModal, isOpen: false });
+  };
+
+  const getBusyUserIdsForModal = () => {
+    if (!modalAsignacion.horario) return [];
+    return diaActual.cajas.flatMap(caja => 
+      caja.turnos.filter(t => t.horario === modalAsignacion.horario && t.participanteId && t.participanteId !== 'CERRADO')
+      .map(t => t.participanteId as string)
+    );
+  };
+
+  const totalCajas = diaActual.cajas.length;
+  const turnosActivos = diaActual.cajas.reduce((acc, caja) => 
+    acc + caja.turnos.filter(t => t.participanteId !== 'CERRADO').length, 0
+  );
+  const turnosLibres = diaActual.cajas.reduce((acc, caja) => 
+    acc + caja.turnos.filter(t => t.participanteId === null).length, 0
+  );
+  const totalParticipantes = participantes.length;
+
+  
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-4 shrink-0 gap-4">
+        <div>
+          <div className="flex items-center gap-2 group">
+            {isEditingTitle ? (
+              <input type="text" value={seccionName} onChange={(e) => setSeccionName(e.target.value)} onBlur={() => setIsEditingTitle(false)} onKeyDown={(e) => e.key === 'Enter' && setIsEditingTitle(false)} autoFocus className="text-xl font-black text-slate-800 tracking-tight border-b-2 border-blue-500 outline-none bg-slate-50 px-2 py-1 rounded" />
+            ) : (
+              <h1 onClick={() => setIsEditingTitle(true)} className="text-xl font-black text-slate-800 tracking-tight cursor-pointer hover:text-blue-600 transition flex items-center gap-2">
+                MI SECCIÓN: {seccionName} <Edit2 size={16} className="text-slate-300 group-hover:text-blue-500 opacity-0 group-hover:opacity-100 transition" />
+              </h1>
+            )}
+          </div>
+          <p className="text-slate-500 text-sm mt-1">Evento: Convención Anime</p>
+        </div>
+        <button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition">
+          <Save size={18} /> Guardar Cambios
+        </button>
+      </header>
+
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0">
+        {dias.map((dia, idx) => (
+          <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-5 py-2 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
+            <Calendar size={16} /> {dia.nombreDia}
+          </button>
+        ))}
+        <button 
+          onClick={() => setShowSpecialModal(true)}
+          className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-100 transition font-bold text-sm flex items-center gap-2 whitespace-nowrap shadow-sm"
+        >
+          <Plus size={16} /> Caja Especial
+        </button>
+      </div>
+
+      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+        <div className="p-3 sm:p-4 bg-slate-50 border-b border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm font-bold text-slate-600">
+            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">🏢 {totalCajas} Cajas</span>
+            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">⏳ {turnosActivos} Turnos</span>
+            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-2 font-bold text-blue-600">
+              <Bird size={16} /> {turnosLibres} Libres
+            </span>
+            <span className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">👥 {totalParticipantes} Participantes</span>
+            <button onClick={handleCrearCaja} className="ml-0 sm:ml-2 bg-slate-800 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center justify-center gap-1 hover:bg-slate-700 transition shadow-sm">
+              <Plus size={14} /> Kiosco Normal
+            </button>
+          </div>
+          <div className="flex gap-2 w-full lg:w-auto">
+            <button onClick={() => setShowCroquis(true)} className="flex-1 lg:flex-none bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm"><MapIcon size={16} className="text-indigo-500" /> Croquis</button>
+            <button onClick={() => setShowDirectorio(true)} className="flex-1 lg:flex-none bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition shadow-md"><Users size={16} /> Participantes</button>
+          </div>
+        </div>
+
+        <MatrizTurnos 
+          diaActual={diaActual}
+          getParticipante={getParticipante}
+          onAsignar={abrirModalAsignacion}
+          onQuitar={quitarParticipante}
+          onCrearCaja={handleCrearCaja}
+          onCrearHorario={handleCrearHorario} 
+          onDeleteCaja={handleEliminarCaja}
+          onDeleteHorario={handleEliminarHorario}
+          onEditCaja={(id) => {
+            const caja = diaActual.cajas.find(c => c.id === id);
+            if (caja) abrirEditor('caja', id, caja.nombre);
+          }}
+          onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
+        />
+      </div>
+
+      <AssignUserModal isOpen={modalAsignacion.isOpen} onClose={cerrarModalAsignacion} horario={modalAsignacion.horario} cajaNombre={modalAsignacion.cajaNombre} participantes={participantesEnriquecidos} busyUserIds={getBusyUserIdsForModal()} onAssign={asignarUsuarioExistente} onCreateAndAssign={crearYAsignarUsuario} />
+      <ParticipantDrawer isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} />
+      
+      <EditNameModal 
+        isOpen={editModal.isOpen && editModal.type === 'caja'}
+        title={editModal.title}
+        initialValue={editModal.initialValue}
+        label={editModal.label}
+        onClose={() => setEditModal({...editModal, isOpen: false})}
+        onSave={handleSaveEdit}
+      />
+
+      <EditShiftModal 
+        isOpen={editModal.isOpen && editModal.type === 'horario'}
+        initialRange={editModal.initialValue}
+        onClose={() => setEditModal({...editModal, isOpen: false})}
+        onSave={handleSaveEdit}
+      />
+
+      <SpecialBoxModal 
+        isOpen={showSpecialModal} 
+        onClose={() => setShowSpecialModal(false)} 
+        onCreate={handleCrearCajaEspecial} 
+      />
+    </div>
+  );
+};
+
+export default AdminPanel;
+
+---------------------------------------------
+
+super admin vista 1
+
+import React, { useState } from 'react';
+import { 
+  ShieldCheck, Users, Plus, Edit2, Lock, Settings, 
+  Map as MapIcon, DatabaseZap, ExternalLink, 
+  Key, Calendar, Clock, LayoutGrid, Eye, Trash2,
+  UserCheck, UserX, UserPlus, Info, X
+} from 'lucide-react';
+
+// --- ATOM: FICHA DE ADMINISTRACIÓN (Cada celda de la tabla) ---
+const AdminSystemCard = ({ name, area, org, turnos, libres }: any) => (
+  <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 shadow-sm hover:border-blue-500 transition-all min-w-[280px] relative group">
+    <div className="flex justify-between items-start mb-4">
+      <div>
+        <h4 className="font-black text-slate-800 leading-tight uppercase text-sm tracking-tighter">{name}</h4>
+        <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{area}</p>
+      </div>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-blue-600 hover:text-white transition shadow-sm">
+          <ExternalLink size={14} />
+        </button>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+        <p className="text-[9px] text-slate-400 font-black uppercase">Turnos</p>
+        <p className="text-sm font-black text-slate-700">{turnos}</p>
+      </div>
+      <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 text-center">
+        <p className="text-[9px] text-emerald-400 font-black uppercase">Libres</p>
+        <p className="text-sm font-black text-emerald-600">{libres}</p>
+      </div>
+    </div>
+
+    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+      <div className="flex items-center gap-1.5 text-slate-400">
+        <Key size={12} />
+        <span className="text-[10px] font-mono font-bold tracking-tighter">ID: ADMIN_78</span>
+      </div>
+      <button className="bg-slate-100 hover:bg-slate-200 p-2 rounded-lg text-slate-600 transition">
+        <Settings size={14} />
+      </button>
+    </div>
+  </div>
+);
+
+// --- ATOM: TARJETA INFORMATIVA (Zona Azul) ---
+const EventStat = ({ icon, label, value, color }: any) => (
+  <div className={`flex items-center gap-3 p-3 rounded-2xl border-2 bg-white ${color}`}>
+    <div className="shrink-0">{icon}</div>
+    <div>
+      <p className="text-[9px] font-black uppercase opacity-60 leading-none mb-1">{label}</p>
+      <p className="text-sm font-black tracking-tight">{value}</p>
+    </div>
+  </div>
+);
+
+const SuperAdminPanel = () => {
+  const [showNewEvent, setShowNewEvent] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans flex flex-col gap-6">
+      
+      {/* HEADER MAESTRO */}
+      <header className="flex justify-between items-center bg-slate-900 p-6 rounded-[2rem] shadow-2xl border-b-8 border-blue-600">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg rotate-3">
+            <ShieldCheck size={32} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tighter uppercase italic">Control Maestro</h1>
+            <p className="text-blue-400 text-[10px] font-black tracking-[0.2em] uppercase">SuperUser Access Only</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => setShowNewEvent(!showNewEvent)}
+          className={`px-8 py-3 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 shadow-lg ${showNewEvent ? 'bg-red-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-500'}`}
+        >
+          {showNewEvent ? <X size={20} /> : <Plus size={20} />} 
+          {showNewEvent ? "CERRAR" : "NUEVO EVENTO"}
+        </button>
+      </header>
+
+      {/* FORMULARIO NUEVO EVENTO (Desplegable) */}
+      {showNewEvent && (
+        <div className="bg-white rounded-[2rem] border-4 border-blue-500 shadow-2xl p-8 animate-in slide-in-from-top duration-500">
+          <h2 className="text-xl font-black text-slate-800 mb-6 uppercase flex items-center gap-2 italic">
+             <Plus className="text-blue-600" /> Parámetros del Nuevo Evento
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+             <div className="space-y-1">
+               <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Nombre del Evento</label>
+               <input type="text" placeholder="Ej. Convención Anime" className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-blue-500 outline-none font-bold" />
+             </div>
+             <div className="space-y-1">
+               <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Estructura Base</label>
+               <select className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl outline-none font-bold"><option>Cajas Normales</option><option>Híbrido</option></select>
+             </div>
+             <div className="space-y-1">
+               <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Guardado Principal</label>
+               <select className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl outline-none font-bold"><option>Firebase</option><option>Sheets</option></select>
+             </div>
+             <div className="flex items-end">
+               <button className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black hover:bg-blue-600 transition-colors uppercase italic tracking-tighter shadow-lg">Inicializar Evento</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TABLA DE EVENTO (Estructura tipo Matriz) */}
+      <div className="bg-white rounded-[2.5rem] shadow-xl border-2 border-slate-200 overflow-hidden flex flex-col mb-10">
+        
+        {/* ZONA AZUL: CABECERA Y TARJETAS INFORMATIVAS */}
+        <div className="bg-slate-900 p-6 lg:p-8 flex flex-col gap-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-3 h-12 bg-blue-600 rounded-full"></div>
+              <div>
+                <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">CONVENCIÓN ANIME 2026</h2>
+                <p className="text-blue-400 text-xs font-bold mt-1 uppercase tracking-widest flex items-center gap-2">
+                   <Calendar size={14} /> Viernes 15 - Domingo 17 de Marzo
+                </p>
+              </div>
+            </div>
+
+            {/* ZONA AMARILLA: BOTÓN CLAVE GENERAL */}
+            <button className="bg-amber-400 hover:bg-amber-300 text-amber-950 px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 shadow-[0_4px_0_0_#d97706] active:translate-y-1 active:shadow-none transition-all uppercase italic">
+              <Lock size={16} /> Contraseña General Admins
+            </button>
+          </div>
+
+          {/* GRID DE TARJETAS INFORMATIVAS (Lo que marcaste en azul) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <EventStat color="border-blue-500/20 text-blue-600" icon={<Users size={18}/>} label="Total Admins" value="12" />
+            <EventStat color="border-slate-500/20 text-slate-700" icon={<LayoutGrid size={18}/>} label="Total Cajas" value="48" />
+            <EventStat color="border-emerald-500/20 text-emerald-600" icon={<UserCheck size={18}/>} label="Participantes Activos" value="156" />
+            <EventStat color="border-red-500/20 text-red-600" icon={<UserX size={18}/>} label="Inactivos" value="14" />
+            <EventStat color="border-amber-500/20 text-amber-600" icon={<UserPlus size={18}/>} label="Confirmados" value="170" />
+            <EventStat color="border-indigo-500/20 text-indigo-600" icon={<Clock size={18}/>} label="Turnos Libres" value="32" />
+          </div>
+        </div>
+
+        {/* CONTENIDO: MATRIZ DE FICHAS DE ADMINISTRADORES */}
+        <div className="p-6 bg-slate-50">
+          <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-slate-300">
+            {/* GRUPO DE ADMINISTRADORES */}
+            <div className="flex gap-4 p-6 bg-white rounded-[2rem] border-2 border-slate-200 shadow-inner">
+               <AdminSystemCard name="Roberto Sánchez" area="Accesos Principales" turnos="24" libres="4" />
+               <AdminSystemCard name="Ana Martínez" area="Zona VIP" turnos="12" libres="0" />
+               <AdminSystemCard name="Carlos Ruiz" area="Estacionamiento" turnos="18" libres="12" />
+               
+               {/* BOTÓN AÑADIR ADMIN A ESTE EVENTO */}
+               <button className="min-w-[200px] border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center text-slate-300 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50/50 transition-all group">
+                  <div className="p-4 bg-white rounded-full shadow-sm group-hover:scale-110 transition-transform">
+                    <Plus size={32} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase mt-4 tracking-widest">Añadir Administrador</span>
+               </button>
+            </div>
+
+            {/* ACCIONES DE CONFIGURACIÓN DE TABLA */}
+            <div className="flex flex-col gap-3 justify-center pl-4 border-l-2 border-slate-200">
+               <button className="p-4 bg-white border-2 border-slate-200 rounded-2xl text-slate-400 hover:text-indigo-600 hover:border-indigo-600 transition shadow-sm" title="Subir Croquis Base">
+                  <MapIcon size={24} />
+               </button>
+               <button className="p-4 bg-white border-2 border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:border-blue-600 transition shadow-sm" title="Añadir Día/Horario Global">
+                  <Calendar size={24} />
+               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* PIE DE TABLA: ACCIONES DE BORRADO O CIERRE */}
+        <div className="bg-white p-4 border-t border-slate-100 flex justify-end">
+           <button className="flex items-center gap-2 text-[10px] font-black text-red-400 hover:text-red-600 transition uppercase tracking-widest">
+             <Trash2 size={14} /> Eliminar Evento Completo
+           </button>
+        </div>
+      </div>
+
+      {/* FOOTER INFORMATIVO */}
+      <footer className="text-center py-10 opacity-30">
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">Gestor Maestro © 2026 - Central Intelligence System</p>
+      </footer>
+
+    </div>
+  );
+};
+
+export default SuperAdminPanel;
+
+---------------------------------------
+
+vista opcion 2 
+
+
+import React, { useState } from 'react';
+import { 
+  ShieldCheck, Users, Plus, Edit2, Lock, Settings, 
+  Map as MapIcon, DatabaseZap, ChevronDown, ExternalLink, 
+  Key, Calendar, Clock, LayoutGrid, Eye, Trash2
+} from 'lucide-react';
+
+// --- COMPONENTE: TARJETA DE ADMINISTRADOR (La "Ficha" de la tabla) ---
+const AdminSystemCard = ({ name, area, org, turnos, participantes, libres }: any) => (
+  <div className="bg-white border-2 border-slate-200 rounded-xl p-3 shadow-sm hover:border-blue-400 transition-all min-w-[250px]">
+    <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-2">
+      <div>
+        <h4 className="font-black text-slate-800 leading-tight uppercase text-sm">{name}</h4>
+        <p className="text-[10px] text-blue-600 font-bold uppercase">{area}</p>
+      </div>
+      <div className="flex gap-1">
+        <button className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-blue-100 hover:text-blue-600 transition" title="Ver como Admin">
+          <ExternalLink size={14} />
+        </button>
+        <button className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-indigo-100 hover:text-indigo-600 transition" title="Ajustes">
+          <Settings size={14} />
+        </button>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+        <p className="text-[9px] text-slate-400 font-bold uppercase">Turnos</p>
+        <p className="text-xs font-black text-slate-700">{turnos}</p>
+      </div>
+      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+        <p className="text-[9px] text-slate-400 font-bold uppercase">Libres</p>
+        <p className="text-xs font-black text-emerald-600">{libres}</p>
+      </div>
+    </div>
+
+    <div className="flex items-center justify-between mt-2 pt-2 border-t border-dashed border-slate-100">
+      <div className="flex items-center gap-1.5">
+        <Key size={12} className="text-amber-500" />
+        <span className="text-[10px] font-mono font-bold text-slate-400">****123</span>
+      </div>
+      <button className="text-[10px] font-black text-blue-600 hover:underline uppercase">Editar Clave</button>
+    </div>
+  </div>
+);
+
+const SuperAdminPanel = () => {
+  const [showNewEvent, setShowNewEvent] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans flex flex-col gap-8">
+      
+      {/* HEADER SUPERIOR */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 p-6 rounded-3xl shadow-xl border-b-4 border-blue-600">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+            <ShieldCheck size={32} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tighter uppercase italic">Control Maestro SuperUser</h1>
+            <p className="text-blue-300 text-xs font-bold tracking-widest">SISTEMA DE GESTIÓN DE EVENTOS V3.0</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => setShowNewEvent(!showNewEvent)}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 transition shadow-lg active:scale-95"
+        >
+          {showNewEvent ? <X size={20} /> : <Plus size={20} />} 
+          {showNewEvent ? "CANCELAR" : "CREAR NUEVO EVENTO"}
+        </button>
+      </header>
+
+      {/* SECCIÓN EXPANDIBLE: CREAR EVENTO */}
+      {showNewEvent && (
+        <div className="bg-white rounded-3xl border-2 border-blue-500 shadow-2xl p-8 animate-in slide-in-from-top duration-300">
+          <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+             <Plus className="text-blue-600" /> CONFIGURACIÓN DE NUEVO EVENTO
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             <div className="space-y-2">
+               <label className="text-xs font-black text-slate-500 uppercase">Nombre del Evento</label>
+               <input type="text" placeholder="Ej. Convención Anime" className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none font-bold" />
+             </div>
+             <div className="space-y-2">
+               <label className="text-xs font-black text-slate-500 uppercase">Password General (Opcional)</label>
+               <input type="password" placeholder="Clave para todos" className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none font-bold" />
+             </div>
+             <div className="space-y-2">
+               <label className="text-xs font-black text-slate-500 uppercase">Método de Guardado</label>
+               <select className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none font-bold">
+                 <option>Firebase Only</option>
+                 <option>Google Sheets Only</option>
+                 <option>Ambos (Híbrido)</option>
+               </select>
+             </div>
+          </div>
+          <div className="mt-6 flex justify-end">
+            <button className="bg-slate-900 text-white px-10 py-3 rounded-xl font-black hover:bg-slate-800 transition">CREAR ESTRUCTURA BASE</button>
+          </div>
+        </div>
+      )}
+
+      {/* TABLA DE EVENTO 1 (Mismo estilo que la de turnos) */}
+      <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-200 overflow-hidden flex flex-col">
+        {/* Encabezado de la Tabla de Evento */}
+        <div className="bg-slate-50 p-6 border-b-2 border-slate-200 flex flex-wrap justify-between items-center gap-4">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">CONVENCIÓN ANIME 2026</h2>
+            <div className="flex gap-2">
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase">5 Admins</span>
+              <span className="bg-emerald-500 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase">120 Participantes</span>
+            </div>
+          </div>
+          <div className="flex gap-3">
+             <button className="bg-white border-2 border-slate-200 p-2.5 rounded-xl text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition shadow-sm flex items-center gap-2 font-bold text-xs"><MapIcon size={16} /> Croquis Base</button>
+             <button className="bg-white border-2 border-slate-200 p-2.5 rounded-xl text-slate-600 hover:border-blue-500 hover:text-blue-600 transition shadow-sm flex items-center gap-2 font-bold text-xs"><DatabaseZap size={16} /> Config. Global</button>
+          </div>
+        </div>
+
+        {/* Matriz de Administradores */}
+        <div className="p-6 overflow-x-auto">
+          <div className="flex gap-4 min-w-max pb-4">
+            {/* Columna de Admin 1 */}
+            <div className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
+               <AdminSystemCard name="Roberto Sánchez" area="Accesos" org="Flex-Norte" turnos="24" libres="5" />
+               <AdminSystemCard name="María López" area="Zona VIP" org="Centro" turnos="12" libres="0" />
+            </div>
+
+            {/* Columna de Admin 2 */}
+            <div className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
+               <AdminSystemCard name="Juan Pérez" area="Comida" org="Catering" turnos="15" libres="10" />
+               <div className="h-full min-h-[150px] border-4 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300 hover:text-blue-400 hover:border-blue-300 transition cursor-pointer group">
+                  <Plus size={32} className="group-hover:scale-110 transition" />
+                  <span className="text-xs font-black uppercase mt-2">Añadir Admin</span>
+               </div>
+            </div>
+
+            {/* Columna de Agregar más columnas */}
+            <div className="w-[200px] flex items-center justify-center border-l-2 border-slate-100 ml-4">
+               <button className="flex flex-col items-center gap-2 text-slate-400 hover:text-slate-800 transition">
+                  <div className="w-12 h-12 rounded-full border-2 border-slate-300 flex items-center justify-center"><Calendar size={20} /></div>
+                  <span className="text-[10px] font-black uppercase">Gestionar Días/Horarios</span>
+               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer de la Tabla (Resumen) */}
+        <div className="bg-slate-900 p-4 flex justify-between items-center">
+           <div className="flex gap-6">
+              <p className="text-white text-xs font-bold uppercase tracking-widest"><span className="text-blue-400">Total Cajas:</span> 12</p>
+              <p className="text-white text-xs font-bold uppercase tracking-widest"><span className="text-emerald-400">Total Libres:</span> 15</p>
+           </div>
+           <button className="text-white hover:text-red-400 transition"><Trash2 size={18} /></button>
+        </div>
+      </div>
+
+      {/* EVENTO 2 (Scroll hacia abajo) */}
+      <div className="bg-white rounded-3xl shadow-xl border-2 border-slate-200 overflow-hidden flex flex-col opacity-60">
+        <div className="bg-slate-50 p-6 border-b-2 border-slate-200 flex justify-between items-center">
+          <h2 className="text-2xl font-black text-slate-400 uppercase italic tracking-tighter">CONGRESO LIDERAZGO (PASADO)</h2>
+          <button className="bg-slate-200 text-slate-500 px-4 py-2 rounded-xl text-xs font-black uppercase">Ver Historial</button>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+export default SuperAdminPanel;
