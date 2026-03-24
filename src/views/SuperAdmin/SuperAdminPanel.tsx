@@ -365,10 +365,11 @@ const SuperAdminPanel = () => {
     editEventModalState, setEditEventModalState, handleSaveEditEvent
   } = useSuperAdminLogic();
 
-  const handleVerAdmin = (adminId: string) => {
-    // AQUÍ ESTÁ EL CAMBIO CLAVE PARA EL BOTÓN DE REGRESAR:
-    // Le pasamos un "estado" oculto a la ruta del admin
-    navigate(`/admin/${adminId}`, { state: { openedBySuperAdmin: true } }); 
+  // --- FUNCIÓN ARREGLADA PARA EL BOTÓN VER ---
+  const handleVerAdmin = (eventoId: string, adminId: string) => {
+    localStorage.setItem('current_admin_id', adminId);
+    // IMPORTANTE: Mandamos el eventoId a la URL, no el adminId
+    navigate(`/admin/${eventoId}`, { state: { openedBySuperAdmin: true } }); 
   };
 
   // --- FUNCIÓN DE CERRAR SESIÓN ---
@@ -472,7 +473,8 @@ const SuperAdminPanel = () => {
             onDeleteEvent={(id: string, name: string) => setDeleteModalState({ isOpen: true, type: 'evento', eventoId: id, targetId: id, targetName: name })}
             onOpenSettings={handleOpenAjustesAdmin}
             onDownload={(id: string) => setDownloadModalState({ isOpen: true, adminId: id })}
-            onView={handleVerAdmin}
+            // AQUÍ ESTÁ EL CAMBIO DE ONVIEW
+            onView={(adminId: string) => handleVerAdmin(evento.id, adminId)}
             onDeleteAdmin={(eventoId: string, adminId: string, adminName: string) => setDeleteModalState({ isOpen: true, type: 'admin', eventoId, targetId: adminId, targetName: adminName })}
             onAddAdmin={handleAddAdmin}
             onEditEvent={(eventData: EventoItem) => setEditEventModalState({ isOpen: true, eventData })}
