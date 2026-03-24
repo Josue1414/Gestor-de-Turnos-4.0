@@ -26,12 +26,12 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
               <th 
                 key={caja.id} 
                 className={`sticky top-0 z-20 p-3 min-w-[220px] border-b-2 border-slate-800 border-l transition-colors ${
-                  // @ts-ignore
+                
                   caja.esEspecial ? 'bg-indigo-700 text-white border-l-indigo-500' : 'bg-slate-600 text-white border-l-slate-500'
                 }`}
               >
                 <div className="flex items-center gap-2 min-h-[32px]">
-                  {/* @ts-ignore */}
+                
                   {caja.esEspecial && <Star size={16} className="text-yellow-400 fill-yellow-400" />}
                   <span className="font-bold uppercase text-sm tracking-tight">{caja.nombre}</span>
                 </div>
@@ -47,7 +47,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
               </td>
               
               {diaActual.cajas.map(caja => {
-                // @ts-ignore
+              
                 const esEspecial = caja.esEspecial;
                 const turno = caja.turnos.find(t => t.horario === horario);
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
@@ -7,7 +6,7 @@ interface CountdownDeleteModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string; // <-- NUEVA PROPIEDAD
+  message: string;
 }
 
 const CountdownDeleteModal: React.FC<CountdownDeleteModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
@@ -15,7 +14,9 @@ const CountdownDeleteModal: React.FC<CountdownDeleteModalProps> = ({ isOpen, onC
 
   useEffect(() => {
     if (isOpen) {
-      setCountdown(3);
+      // Diferimos la actualización inicial con setTimeout para evitar el "Cascading Render"
+      const resetTimer = setTimeout(() => setCountdown(3), 0);
+      
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
@@ -25,7 +26,11 @@ const CountdownDeleteModal: React.FC<CountdownDeleteModalProps> = ({ isOpen, onC
           return prev - 1;
         });
       }, 1000);
-      return () => clearInterval(timer);
+      
+      return () => {
+        clearTimeout(resetTimer);
+        clearInterval(timer);
+      };
     }
   }, [isOpen]);
 

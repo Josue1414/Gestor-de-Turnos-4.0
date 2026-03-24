@@ -2,7 +2,25 @@ import { useState, useEffect } from 'react';
 import type { DiaEvento, Participante } from '../types';
 import { isNameDuplicate } from '../utils/validations';
 
+// --- NUEVOS TIPOS PARA EVITAR 'any' ---
+interface UsuarioPerfil {
+  id: string;
+  name: string;
+  role: 'Administrador' | 'Participante' | 'SuperAdmin';
+  phone: string;
+  supportArea: string;
+  notes: string;
+  organizationLabel?: string;
+  organization?: string;
+}
+
+interface TurnoEspecialConfig {
+  inicio: string;
+  fin: string;
+}
+
 const hayChoqueDeHorario = (rango1: string, rango2: string) => {
+  // Solución al error "'e' is defined but never used": Omitimos la 'e'
   try {
     const [inicio1, fin1] = rango1.split('-').map(t => t.trim());
     const [inicio2, fin2] = rango2.split('-').map(t => t.trim());
@@ -10,7 +28,7 @@ const hayChoqueDeHorario = (rango1: string, rango2: string) => {
     const i1 = aMin(inicio1), f1 = aMin(fin1);
     const i2 = aMin(inicio2), f2 = aMin(fin2);
     return i1 < f2 && i2 < f1;
-  } catch (e) {
+  } catch { 
     return false; 
   }
 };
@@ -26,15 +44,16 @@ export const useAdminLogic = () => {
   const [editModal, setEditModal] = useState({ isOpen: false, title: '', initialValue: '', label: '', type: '' as 'caja' | 'horario', id: '' });
   
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
-  const [usuarioActivo, setUsuarioActivo] = useState<any>(null);
+  // Reemplazamos 'any' por la interfaz UsuarioPerfil o null
+  const [usuarioActivo, setUsuarioActivo] = useState<UsuarioPerfil | null>(null);
   const [isViewingSelf, setIsViewingSelf] = useState(false);
   const [modalAsignacion, setModalAsignacion] = useState({ isOpen: false, cajaId: '', turnoId: '', horario: '', cajaNombre: '' });
   
   const [downloadModal, setDownloadModal] = useState<{ isOpen: boolean; type: 'personal' | 'general'; targetUserId?: string; }>({ isOpen: false, type: 'personal' });
 
   // --- ESTADOS DE DATOS (NUESTRA API SIMULADA) ---
-  const [misDatosAdmin, setMisDatosAdmin] = useState({
-    id: 'admin_1', name: 'Administrador Principal', role: 'Administrador' as const, phone: '+52 899 123 4567',
+  const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil>({
+    id: 'admin_1', name: 'Administrador Principal', role: 'Administrador', phone: '+52 899 123 4567',
     supportArea: 'Líder de línea - Flex-Norte', notes: 'Supervisión de accesos principales.', organizationLabel: 'Empresa', organization: 'Flex-Norte'
   });
 
@@ -61,7 +80,8 @@ export const useAdminLogic = () => {
         cajas: [
           { id: 'c1', nombre: 'Caja 1', turnos: [{ id: 't1', horario: '08:00 - 10:00', participanteId: 'p2' }, { id: 't2', horario: '10:00 - 12:00', participanteId: null }, { id: 't2b', horario: '12:00 - 14:00', participanteId: 'CERRADO' }, { id: 't2c', horario: '14:00 - 16:00', participanteId: null }] },
           { id: 'c2', nombre: 'Caja 2', turnos: [{ id: 't3', horario: '08:00 - 10:00', participanteId: 'p4' }, { id: 't4', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't4b', horario: '12:00 - 14:00', participanteId: null }, { id: 't4c', horario: '14:00 - 16:00', participanteId: null }] },
-          { id: 'spec1', nombre: 'Staff VIP', esEspecial: true, turnos: [{ id: 'ts1', horario: '08:00 - 16:00', participanteId: 'p1' }] } as any
+          // Quitamos as any
+          { id: 'spec1', nombre: 'Staff VIP', esEspecial: true, turnos: [{ id: 'ts1', horario: '08:00 - 16:00', participanteId: 'p1' }] } 
         ]
       },
       {
@@ -77,7 +97,8 @@ export const useAdminLogic = () => {
         horariosMaestros: ['10:00 - 12:00', '12:00 - 14:00'],
         cajas: [
           { id: 'c5', nombre: 'Caja Principal', turnos: [{ id: 't13', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't14', horario: '12:00 - 14:00', participanteId: null }] },
-          { id: 'spec2', nombre: 'Estacionamiento', esEspecial: true, turnos: [{ id: 'ts2', horario: '09:00 - 15:00', participanteId: 'p3' }] } as any
+          // Quitamos as any
+          { id: 'spec2', nombre: 'Estacionamiento', esEspecial: true, turnos: [{ id: 'ts2', horario: '09:00 - 15:00', participanteId: 'p3' }] }
         ]
       }
     ];
@@ -131,9 +152,10 @@ export const useAdminLogic = () => {
     setDias(nuevosDias);
   };
 
-  const handleCrearCajaEspecial = (nombre: string, turnosConfig: any[]) => {
+  // Reemplazamos el 'any' por la interfaz TurnoEspecialConfig
+  const handleCrearCajaEspecial = (nombre: string, turnosConfig: TurnoEspecialConfig[]) => {
     const nuevosDias = [...dias]; const dia = nuevosDias[diaActivo];
-    dia.cajas.push({ id: `special_${Date.now()}`, nombre: nombre, esEspecial: true, turnos: turnosConfig.map((config: any) => ({ id: `t_spec_${Date.now()}_${Math.random()}`, horario: `${config.inicio} - ${config.fin}`, participanteId: null })) } as any);
+    dia.cajas.push({ id: `special_${Date.now()}`, nombre: nombre, esEspecial: true, turnos: turnosConfig.map((config) => ({ id: `t_spec_${Date.now()}_${Math.random()}`, horario: `${config.inicio} - ${config.fin}`, participanteId: null })) });
     setDias(nuevosDias);
   };
 
@@ -146,7 +168,7 @@ export const useAdminLogic = () => {
     }
     dia.horariosMaestros.push(nuevoHorarioText); dia.horariosMaestros.sort((a, b) => a.substring(0, 5).localeCompare(b.substring(0, 5)));
     dia.cajas.forEach(caja => {
-      if (!(caja as any).esEspecial) { caja.turnos.push({ id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorarioText, participanteId: null }); caja.turnos.sort((a, b) => a.horario.substring(0, 5).localeCompare(b.horario.substring(0, 5))); }
+      if (!caja.esEspecial) { caja.turnos.push({ id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorarioText, participanteId: null }); caja.turnos.sort((a, b) => a.horario.substring(0, 5).localeCompare(b.horario.substring(0, 5))); }
     });
     setDias(nuevosDias);
   };
@@ -181,7 +203,9 @@ export const useAdminLogic = () => {
     const p = participantesEnriquecidos.find(x => x.id === idParticipante);
     if (p) { setUsuarioActivo({ id: p.id, name: p.nombre, role: 'Participante', phone: '', supportArea: p.ubicaciones?.join(', ') || 'Sin área asignada', notes: '' }); setIsViewingSelf(false); setIsUsuarioModalOpen(true); }
   };
-  const handleGuardarUsuario = (datosActualizados: any) => {
+  
+  // Reemplazamos el 'any' por la interfaz UsuarioPerfil
+  const handleGuardarUsuario = (datosActualizados: UsuarioPerfil) => {
     if (isViewingSelf) setMisDatosAdmin(datosActualizados); else setParticipantes(prev => prev.map(p => p.id === datosActualizados.id ? { ...p, nombre: datosActualizados.name } : p));
     setIsUsuarioModalOpen(false);
   };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Phone, MapPin, StickyNote, Lock, X, ExternalLink, Edit2, Check, Users as UsersIcon, Download } from 'lucide-react';
+import { User, Phone, MapPin, StickyNote, X, ExternalLink, Edit2, Check, Users as UsersIcon, Download } from 'lucide-react';
 
 interface Usuario {
   id: string; name: string; role: 'Administrador' | 'Participante' | 'SuperAdmin';
@@ -44,11 +44,24 @@ const ModalInfoUsuario: React.FC<ModalInfoUsuarioProps> = ({
 
   useEffect(() => {
     if (isOpen && data) {
-      setFormData({
-        id: data.id, name: data.name || '', role: data.role || 'Participante', phone: data.phone || '',
-        supportArea: data.supportArea || '', notes: data.notes || '', organizationLabel: data.organizationLabel || 'Congregación', organization: data.organization || ''
-      });
-      setIsEditingName(false); setIsEditingOrgLabel(false); setNameError('');
+      // Usamos setTimeout para evitar el "Cascading Render" que marca Vercel
+      const timer = setTimeout(() => {
+        setFormData({
+          id: data.id, 
+          name: data.name || '', 
+          role: data.role || 'Participante', 
+          phone: data.phone || '',
+          supportArea: data.supportArea || '', 
+          notes: data.notes || '', 
+          organizationLabel: data.organizationLabel || 'Congregación', 
+          organization: data.organization || ''
+        });
+        setIsEditingName(false); 
+        setIsEditingOrgLabel(false); 
+        setNameError('');
+      }, 0);
+      
+      return () => clearTimeout(timer);
     }
   }, [isOpen, data]);
 

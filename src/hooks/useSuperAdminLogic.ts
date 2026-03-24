@@ -1,47 +1,77 @@
 import { useState, useEffect } from 'react';
-// 1. Importamos la conexión a la base de datos y las funciones de Firebase
 import { db } from '../firebase'; 
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
+// --- 1. DEFINICIÓN ESTRICTA DE TIPOS ---
+export interface AdminData {
+  id: string;
+  name: string;
+  area: string;
+  org: string;
+  cajas: number;
+  horarios: number;
+  turnosTotales: number;
+  necesarios: number;
+  disponibles: number;
+  inactivos: number;
+  password?: string;
+}
+
+export interface EventoData {
+  id: string;
+  nombre: string;
+  passwordGeneral: string;
+  metodoGuardado: string;
+  admins: AdminData[];
+  createdAt?: string;
+}
+
+interface DeleteModalState {
+  isOpen: boolean;
+  type: 'evento' | 'admin' | null;
+  eventoId: string | null;
+  targetId: string | null;
+  targetName: string;
+}
+
 export const useSuperAdminLogic = () => {
-  const [eventos, setEventos] = useState<any[]>([]); // Empezamos con lista vacía
-  const [loading, setLoading] = useState(true); // Estado para saber si está cargando de la nube
+  const [eventos, setEventos] = useState<EventoData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // --- 2. ESCUCHAR LA BASE DE DATOS EN TIEMPO REAL ---
   useEffect(() => {
-    // Referencia a la colección "eventos" en Firebase
     const colRef = collection(db, 'eventos');
-
-    // onSnapshot hace que si alguien cambia algo en la nube, tu app se actualice solita
     const unsubscribe = onSnapshot(colRef, (snapshot) => {
       const listaEventos = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as EventoData[];
       setEventos(listaEventos);
       setLoading(false);
     });
 
-    return () => unsubscribe(); // Limpiamos al cerrar
+    return () => unsubscribe();
   }, []);
 
-  // --- ESTADOS DE LA INTERFAZ (Se mantienen igual) ---
+  // --- ESTADOS DE LA INTERFAZ ---
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [nuevoEventoForm, setNuevoEventoForm] = useState({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
   const [croquisModalState, setCroquisModalState] = useState(false);
-  const [infoUsuarioState, setInfoUsuarioState] = useState<{isOpen: boolean, data: any}>({ isOpen: false, data: null });
+  
+  const [infoUsuarioState, setInfoUsuarioState] = useState<{isOpen: boolean, data: AdminData | null}>({ isOpen: false, data: null });
   const [downloadModalState, setDownloadModalState] = useState<{isOpen: boolean, adminId?: string}>({ isOpen: false });
   const [baseStructureModalState, setBaseStructureModalState] = useState(false);
   const [estructuraGuardada, setEstructuraGuardada] = useState<{ dias: string[], horarios: string[], cajas: string[] } | null>(null);
-  const [deleteModalState, setDeleteModalState] = useState<{isOpen: boolean, type: 'evento' | 'admin' | null, eventoId: string | null, targetId: string | null, targetName: string}>({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
-  const [editEventModalState, setEditEventModalState] = useState<{isOpen: boolean, eventData: any}>({ isOpen: false, eventData: null });
+  
+  const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
+  const [editEventModalState, setEditEventModalState] = useState<{isOpen: boolean, eventData: EventoData | null}>({ isOpen: false, eventData: null });
 
   // --- 3. CREAR EVENTO EN FIREBASE ---
   const handleCrearEvento = async () => {
     if (!nuevoEventoForm.nombre.trim()) return alert("Por favor, ingresa un nombre.");
 
     const cantidadAdmins = parseInt(nuevoEventoForm.numAdmins) || 0;
-    const nuevosAdmins: any[] = [];
+    const nuevosAdmins: AdminData[] = [];
     const cantCajas = estructuraGuardada ? estructuraGuardada.cajas.length : 0;
     const cantHorarios = estructuraGuardada ? estructuraGuardada.horarios.length : 0;
     const totalTurnos = cantCajas * cantHorarios;
@@ -65,10 +95,8 @@ export const useSuperAdminLogic = () => {
     };
 
     try {
-      // Guardamos en Firebase
       await addDoc(collection(db, 'eventos'), nuevoEvento);
       
-      // Limpiamos
       setNuevoEventoForm({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
       setEstructuraGuardada(null); 
       setShowNewEvent(false);
@@ -79,16 +107,19 @@ export const useSuperAdminLogic = () => {
   };
 
   // --- 4. CONFIRMAR BORRADO EN FIREBASE ---
+  // --- 4. CONFIRMAR BORRADO EN FIREBASE ---
   const handleConfirmDelete = async () => {
     try {
       if (deleteModalState.type === 'evento' && deleteModalState.targetId) {
         await deleteDoc(doc(db, 'eventos', deleteModalState.targetId));
       } else if (deleteModalState.type === 'admin' && deleteModalState.eventoId && deleteModalState.targetId) {
         const ev = eventos.find(e => e.id === deleteModalState.eventoId);
-        const nuevosAdmins = ev.admins.filter((a: any) => a.id !== deleteModalState.targetId);
-        await updateDoc(doc(db, 'eventos', deleteModalState.eventoId), { admins: nuevosAdmins });
+        if (ev) {
+          const nuevosAdmins = ev.admins.filter(a => a.id !== deleteModalState.targetId);
+          await updateDoc(doc(db, 'eventos', deleteModalState.eventoId), { admins: nuevosAdmins });
+        }
       }
-    } catch (e) {
+    } catch { // <-- ¡AQUÍ ESTÁ EL CAMBIO! Solo borra la 'e' y los paréntesis
       alert("No se pudo eliminar.");
     }
     setDeleteModalState({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
@@ -100,7 +131,7 @@ export const useSuperAdminLogic = () => {
     if (!ev) return;
 
     const baseAdmin = ev.admins.length > 0 ? ev.admins[0] : null;
-    const nuevoAdmin = {
+    const nuevoAdmin: AdminData = {
       id: `admin_${Date.now()}`,
       name: `Nuevo Admin ${ev.admins.length + 1}`,
       area: 'Sin asignar', org: 'Sin asignar',
@@ -118,14 +149,17 @@ export const useSuperAdminLogic = () => {
   };
 
   // --- 6. GUARDAR EDICIÓN DEL EVENTO ---
-  const handleSaveEditEvent = async (editedEventData: any) => {
+  const handleSaveEditEvent = async (editedEventData: EventoData) => {
+    // Extraemos el id para no actualizarlo, y guardamos el resto
     const { id, ...datosSinId } = editedEventData;
     await updateDoc(doc(db, 'eventos', id), datosSinId);
     setEditEventModalState({ isOpen: false, eventData: null });
   };
 
-  const handleOpenAjustesAdmin = (adminData: any) => setInfoUsuarioState({ isOpen: true, data: adminData });
-  const handleGuardarAjustesAdmin = (datosActualizados: any) => { 
+  const handleOpenAjustesAdmin = (adminData: AdminData) => setInfoUsuarioState({ isOpen: true, data: adminData });
+  
+  // Solución al error de variable no usada: Quitamos el parámetro que no se usaba
+  const handleGuardarAjustesAdmin = () => { 
     setInfoUsuarioState({ isOpen: false, data: null }); 
   };
 

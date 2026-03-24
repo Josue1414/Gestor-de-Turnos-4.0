@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Map as MapIcon, Settings, Users, Star, CheckCircle, Bird, ShieldCheck } from 'lucide-react';
 import type { DiaEvento, Participante } from '../../types';
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
@@ -7,6 +7,18 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 
+// Creamos un "tipo" específico para los datos de tu perfil en lugar de usar "any"
+type PerfilUsuario = {
+  id: string;
+  name: string;
+  role: 'Participante' | 'Administrador' | 'SuperAdmin';
+  phone: string;
+  supportArea: string;
+  notes: string;
+  organizationLabel?: string;
+  organization?: string;
+};
+
 const ParticipantPanel = () => {
   const [diaActivo, setDiaActivo] = useState(0);
   const [downloadModal, setDownloadModal] = useState(false);
@@ -14,8 +26,8 @@ const ParticipantPanel = () => {
   const [showDirectorio, setShowDirectorio] = useState(false);
   const [showCroquis, setShowCroquis] = useState(false);
 
-  const [misDatosParticipante, setMisDatosParticipante] = useState({
-    id: 'p2', name: 'Juan Pérez', role: 'Participante' as const, phone: '+52 899 111 2222',
+  const [misDatosParticipante, setMisDatosParticipante] = useState<PerfilUsuario>({
+    id: 'p2', name: 'Juan Pérez', role: 'Participante', phone: '+52 899 111 2222',
     supportArea: '', notes: 'Llegaré 10 mins tarde el viernes.', organizationLabel: 'Congregación', organization: 'Centro Sur'
   });
 
@@ -41,7 +53,8 @@ const ParticipantPanel = () => {
         cajas: [
           { id: 'c1', nombre: 'Caja 1', turnos: [{ id: 't1', horario: '08:00 - 10:00', participanteId: 'p2' }, { id: 't2', horario: '10:00 - 12:00', participanteId: null }, { id: 't2b', horario: '12:00 - 14:00', participanteId: 'CERRADO' }, { id: 't2c', horario: '14:00 - 16:00', participanteId: null }] },
           { id: 'c2', nombre: 'Caja 2', turnos: [{ id: 't3', horario: '08:00 - 10:00', participanteId: 'p4' }, { id: 't4', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't4b', horario: '12:00 - 14:00', participanteId: null }, { id: 't4c', horario: '14:00 - 16:00', participanteId: null }] },
-          { id: 'spec1', nombre: 'Staff VIP', esEspecial: true, turnos: [{ id: 'ts1', horario: '08:00 - 16:00', participanteId: 'p1' }] } as any
+          // Quitamos el "as any"
+          { id: 'spec1', nombre: 'Staff VIP', esEspecial: true, turnos: [{ id: 'ts1', horario: '08:00 - 16:00', participanteId: 'p1' }] } 
         ]
       },
       {
@@ -57,7 +70,8 @@ const ParticipantPanel = () => {
         horariosMaestros: ['10:00 - 12:00', '12:00 - 14:00'],
         cajas: [
           { id: 'c5', nombre: 'Caja Principal', turnos: [{ id: 't13', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't14', horario: '12:00 - 14:00', participanteId: null }] },
-          { id: 'spec2', nombre: 'Estacionamiento', esEspecial: true, turnos: [{ id: 'ts2', horario: '09:00 - 15:00', participanteId: 'p3' }] } as any
+          // Quitamos el "as any"
+          { id: 'spec2', nombre: 'Estacionamiento', esEspecial: true, turnos: [{ id: 'ts2', horario: '09:00 - 15:00', participanteId: 'p3' }] } 
         ]
       }
     ];
@@ -82,7 +96,6 @@ const ParticipantPanel = () => {
   const getParticipante = (id: string | null) => participantesEnriquecidos.find(p => p.id === id);
 
   // --- NUEVA ETIQUETA GLOBAL ---
-  // Calcula cuántos turnos tiene EN TOTAL durante todo el evento (todos los días)
   const totalMisTurnosGlobales = dias.reduce((accDia, dia) => 
     accDia + dia.cajas.reduce((accCaja, caja) => 
       accCaja + caja.turnos.filter(t => t.participanteId === misDatosParticipante.id).length, 0
@@ -108,7 +121,8 @@ const ParticipantPanel = () => {
     }
   };
 
-  const handleGuardarPerfil = (datosActualizados: any) => {
+  // Reemplazamos el "any" por el tipo PerfilUsuario
+  const handleGuardarPerfil = (datosActualizados: PerfilUsuario) => {
     setMisDatosParticipante(datosActualizados);
     setParticipantes(prev => prev.map(p => p.id === datosActualizados.id ? { ...p, nombre: datosActualizados.name } : p));
     setIsUsuarioModalOpen(false);
@@ -123,7 +137,6 @@ const ParticipantPanel = () => {
           <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2 uppercase">
             VISTA DE: <span className="text-blue-600">{misDatosParticipante.name}</span>
           </h1>
-          {/* AQUÍ ESTÁ LA NUEVA ETIQUETA GLOBAL DE TURNOS */}
           <div className="mt-2 flex items-center">
             <span className="bg-emerald-100 border border-emerald-300 text-emerald-800 px-3 py-1 rounded-full text-xs font-black shadow-sm flex items-center gap-1.5 uppercase tracking-wide">
               <ShieldCheck size={16} /> Total Asignado: {totalMisTurnosGlobales} Turno(s)

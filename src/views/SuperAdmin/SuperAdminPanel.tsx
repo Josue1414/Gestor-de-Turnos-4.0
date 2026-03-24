@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, Plus, Settings, Edit2,
-  Map as MapIcon, Key, Calendar, Eye, Lock, 
+  Map as MapIcon, Key, Calendar, Eye, 
   DatabaseZap, Trash2, Download, Link, UploadCloud,
   ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp
 } from 'lucide-react';
@@ -14,21 +14,57 @@ import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
+// --- 1. DEFINICIÓN DE TIPOS (Para eliminar los "any") ---
+export interface AdminItem {
+  id: string;
+  name: string;
+  area: string;
+  org: string;
+  cajas: number;
+  horarios: number;
+  turnosTotales: number;
+  disponibles: number;
+  necesarios: number;
+  inactivos: number;
+  password?: string;
+}
+
+export interface EventoItem {
+  id: string;
+  nombre: string;
+  metodoGuardado: string;
+  passwordGeneral?: string;
+  admins: AdminItem[];
+}
+
+interface EditEventModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: EventoItem) => void;
+  initialData: EventoItem | null;
+  onOpenStructure: () => void;
+  onOpenCroquis: () => void;
+}
+
 // --- MODAL PARA EDITAR EL EVENTO ---
-const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure, onOpenCroquis }: any) => {
+const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure, onOpenCroquis }: EditEventModalProps) => {
   const [formData, setFormData] = useState({
     nombre: '',
     passwordGeneral: '',
     metodoGuardado: 'Firebase'
   });
 
+  // Solución al error de Vercel (Cascading Renders): Usamos setTimeout para diferir la actualización
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        nombre: initialData.nombre || '',
-        passwordGeneral: initialData.passwordGeneral || '',
-        metodoGuardado: initialData.metodoGuardado || 'Firebase'
-      });
+    if (initialData && isOpen) {
+      const timer = setTimeout(() => {
+        setFormData({
+          nombre: initialData.nombre || '',
+          passwordGeneral: initialData.passwordGeneral || '',
+          metodoGuardado: initialData.metodoGuardado || 'Firebase'
+        });
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [initialData, isOpen]);
 
@@ -37,7 +73,9 @@ const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre.trim()) return alert("El nombre es obligatorio.");
-    onSave({ ...initialData, ...formData });
+    if (initialData) {
+      onSave({ ...initialData, ...formData });
+    }
   };
 
   return (
@@ -117,7 +155,15 @@ const StatBadge = ({ label, value, colorClass }: { label: string, value: string 
   </div>
 );
 
-const AdminFiche = ({ data, onOpenSettings, onDownload, onView, onDelete }: any) => (
+interface AdminFicheProps {
+  data: AdminItem;
+  onOpenSettings: (data: AdminItem) => void;
+  onDownload: (id: string) => void;
+  onView: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
+}
+
+const AdminFiche = ({ data, onOpenSettings, onDownload, onView, onDelete }: AdminFicheProps) => (
   <div className="w-full sm:w-[280px] bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all rounded-xl flex flex-col overflow-hidden">
     <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-start">
       <div className="pr-2 w-full overflow-hidden">
@@ -171,6 +217,18 @@ const AdminFiche = ({ data, onOpenSettings, onDownload, onView, onDelete }: any)
   </div>
 );
 
+interface EventoSectionProps {
+  evento: EventoItem;
+  isDefaultExpanded: boolean;
+  onDeleteEvent: (id: string, name: string) => void;
+  onOpenSettings: (data: AdminItem) => void;
+  onDownload: (id: string) => void;
+  onView: (id: string) => void;
+  onDeleteAdmin: (eventoId: string, adminId: string, adminName: string) => void;
+  onAddAdmin: (eventoId: string) => void;
+  onEditEvent: (evento: EventoItem) => void;
+}
+
 const EventoSection = ({ 
   evento, 
   isDefaultExpanded, 
@@ -181,19 +239,17 @@ const EventoSection = ({
   onDeleteAdmin,
   onAddAdmin,
   onEditEvent
-}: any) => {
+}: EventoSectionProps) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
-  
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 8; 
 
-  const totalPages = Math.ceil(evento.admins.length / ITEMS_PER_PAGE) || 1;
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [totalPages, page]);
-
-  const startIndex = (page - 1) * ITEMS_PER_PAGE;
+  // Solución al error de Vercel (Cascading Renders): Evitamos usar useEffect para setear la página.
+  // Calculamos la "página segura" directamente durante el renderizado.
+  const totalPages = Math.max(1, Math.ceil(evento.admins.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  
+  const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
   const currentItems = evento.admins.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
@@ -202,7 +258,6 @@ const EventoSection = ({
       {/* HEADER DEL EVENTO */}
       <div className="bg-slate-800 p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-700">
         
-        {/* Zona Izquierda: Clickeable para abrir/cerrar */}
         <div 
           className="flex items-center gap-3 flex-1 cursor-pointer group w-full lg:w-auto"
           onClick={() => setIsExpanded(!isExpanded)}
@@ -215,16 +270,14 @@ const EventoSection = ({
             <ShieldCheck size={24} />
           </div>
           
-          {/* Nombre del Evento y Botón Añadir (Reubicado aquí) */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
                 <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight truncate group-hover:text-blue-300 transition">
                   {evento.nombre}
                 </h2>
-                {/* <-- BOTÓN AÑADIR ADMIN: Reubicado al lado del nombre (evitando el clic del acordeón con preventPropagation) */}
                 <button 
                     onClick={(e) => {
-                        e.stopPropagation(); // <-- Detenemos el clic del acordeón
+                        e.stopPropagation();
                         onAddAdmin(evento.id);
                     }} 
                     className="bg-blue-600 hover:bg-blue-500 text-white p-2 px-3 rounded-lg transition shadow-md border border-blue-500 flex items-center gap-1.5 text-xs font-bold shrink-0"
@@ -240,7 +293,6 @@ const EventoSection = ({
           </div>
         </div>
 
-        {/* Zona Derecha: Botones de Acción Global (Solo Editar y Borrar) */}
         <div className="flex gap-2 shrink-0 w-full lg:w-auto justify-end mt-3 lg:mt-0 pt-3 lg:pt-0 border-t border-slate-700 lg:border-none">
             <button onClick={() => onEditEvent(evento)} className="bg-slate-700 hover:bg-slate-600 text-white p-2 sm:px-3 rounded-lg transition shadow-sm border border-slate-600 flex items-center gap-1 text-xs font-bold" title="Editar Detalles del Evento">
               <Edit2 size={14} /> <span className="hidden sm:block">Editar</span>
@@ -251,12 +303,12 @@ const EventoSection = ({
         </div>
       </div>
 
-      {/* CONTENIDO DEL EVENTO (ACORDEÓN) */}
+      {/* CONTENIDO DEL EVENTO */}
       {isExpanded && (
         <div className="p-4 bg-slate-50/50 flex flex-col min-h-[220px] animate-in slide-in-from-top-2 duration-200">
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
-              {currentItems.map((item: any) => (
+              {currentItems.map((item: AdminItem) => (
                   <AdminFiche 
                       key={item.id} 
                       data={item} 
@@ -277,17 +329,17 @@ const EventoSection = ({
 
           {totalPages > 1 && (
             <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-center gap-4">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
                 <ChevronLeft size={16} /> <span className="text-sm font-bold hidden sm:block">Anterior</span>
               </button>
               <div className="flex gap-1.5 items-center">
                 {Array.from({ length: totalPages }).map((_, i) => (
-                  <button key={i} onClick={() => setPage(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition ${page === i + 1 ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
+                  <button key={i} onClick={() => setPage(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition ${safePage === i + 1 ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
                     {i + 1}
                   </button>
                 ))}
               </div>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
                  <span className="text-sm font-bold hidden sm:block">Siguiente</span> <ChevronRight size={16} />
               </button>
             </div>
@@ -393,7 +445,7 @@ const SuperAdminPanel = () => {
       )}
 
       <div className="flex flex-col gap-6 flex-1 overflow-y-auto pb-10">
-        {eventos.map((evento: any, index: number) => (
+        {eventos.map((evento: EventoItem, index: number) => (
           <EventoSection 
             key={evento.id} 
             evento={evento}
@@ -404,14 +456,24 @@ const SuperAdminPanel = () => {
             onView={handleVerAdmin}
             onDeleteAdmin={(eventoId: string, adminId: string, adminName: string) => setDeleteModalState({ isOpen: true, type: 'admin', eventoId, targetId: adminId, targetName: adminName })}
             onAddAdmin={handleAddAdmin}
-            onEditEvent={(eventData: any) => setEditEventModalState({ isOpen: true, eventData })}
+            onEditEvent={(eventData: EventoItem) => setEditEventModalState({ isOpen: true, eventData })}
           />
         ))}
       </div>
 
       {/* MODALES EXTERNOS */}
       <CroquisModal isOpen={croquisModalState} onClose={() => setCroquisModalState(false)} isAdmin={true} />
-      <ModalInfoUsuario isOpen={infoUsuarioState.isOpen} onClose={() => setInfoUsuarioState({ isOpen: false, data: null })} data={infoUsuarioState.data} isViewingSelf={false} currentUserRole="Administrador" onSave={handleGuardarAjustesAdmin} checkNameExists={() => false} />
+      
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <ModalInfoUsuario 
+        isOpen={infoUsuarioState.isOpen} 
+        onClose={() => setInfoUsuarioState({ isOpen: false, data: null })} 
+        data={infoUsuarioState.data as never} 
+        isViewingSelf={false} 
+        currentUserRole="Administrador" 
+        onSave={handleGuardarAjustesAdmin} 
+        checkNameExists={() => false} 
+      />
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />
       
       <BaseStructureModal 

@@ -9,7 +9,7 @@ interface DownloadScheduleModalProps {
   type: 'personal' | 'general';
   seccionName: string;
   dias: DiaEvento[];
-  diaActivo: number; // <-- NUEVO: Para saber qué día imprimir en General
+  diaActivo: number;
   participantes: Participante[];
   targetUserId?: string;
 }
@@ -63,7 +63,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
             const misTurnosDia = dia.cajas.flatMap(caja => 
               caja.turnos
                 .filter(t => t.participanteId === targetUser.id)
-                // @ts-ignore
                 .map(t => ({ cajaNombre: caja.nombre, horario: t.horario, esEspecial: caja.esEspecial }))
             );
             if (misTurnosDia.length === 0) return null;
@@ -96,13 +95,10 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
   };
 
   const renderGeneralView = () => {
-    // AHORA TOMA EL DÍA QUE SELECCIONASTE EN PANTALLA
     const diaActual = dias[diaActivo] || dias[0]; 
     
-    // SEPARAR CAJAS NORMALES DE ESPECIALES
-    // @ts-ignore
+    // SEPARAR CAJAS NORMALES DE ESPECIALES (Ya sin los comentarios @ts-ignore)
     const cajasNormales = diaActual.cajas.filter(c => !c.esEspecial);
-    // @ts-ignore
     const cajasEspeciales = diaActual.cajas.filter(c => c.esEspecial);
 
     return (
@@ -150,7 +146,7 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
           </div>
         )}
 
-        {/* TABLA 2: CAJAS ESPECIALES (Muestra solo si existen) */}
+        {/* TABLA 2: CAJAS ESPECIALES */}
         {cajasEspeciales.length > 0 && (
           <div className="mt-4 border-t-2 border-dashed border-slate-200 pt-6">
             <h3 className="text-lg font-black text-indigo-900 tracking-tight uppercase mb-3 flex items-center gap-2">

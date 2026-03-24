@@ -16,11 +16,16 @@ const EditShiftModal: React.FC<EditShiftModalProps> = ({ isOpen, onClose, onSave
 
   useEffect(() => {
     if (isOpen && initialRange.includes('-')) {
-      const parts = initialRange.split('-');
-      if (parts.length === 2) {
-        setStart(parts[0].trim());
-        setEnd(parts[1].trim());
-      }
+      // Nuestro confiable setTimeout para evitar el "Cascading Render"
+      const timer = setTimeout(() => {
+        const parts = initialRange.split('-');
+        if (parts.length === 2) {
+          setStart(parts[0].trim());
+          setEnd(parts[1].trim());
+        }
+      }, 0);
+      
+      return () => clearTimeout(timer);
     }
   }, [initialRange, isOpen]);
 

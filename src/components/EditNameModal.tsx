@@ -19,7 +19,12 @@ const EditNameModal: React.FC<EditNameModalProps> = ({
   const [value, setValue] = useState(initialValue);
 
   useEffect(() => {
-    setValue(initialValue);
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        setValue(initialValue);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
   }, [initialValue, isOpen]);
 
   if (!isOpen) return null;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, User, CheckCircle2, X, Lock, Star, Clock } from 'lucide-react';
+import { Plus, User, X, Lock, Star, Clock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
 
@@ -17,7 +17,7 @@ interface MatrizTurnosProps {
 }
 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
-  diaActual, getParticipante, onAsignar, onQuitar, onCrearCaja, onCrearHorario,
+  diaActual, getParticipante, onAsignar, onQuitar, onCrearHorario,
   onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario
 }) => {
   return (
@@ -38,7 +38,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
             </th>
 
             {diaActual.cajas.map(caja => {
-              // @ts-ignore
+       
               const esEspecial = caja.esEspecial;
               return (
                 <th 
@@ -85,7 +85,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                 </td>
               
               {diaActual.cajas.map(caja => {
-                // @ts-ignore
+           
                 const esEspecial = caja.esEspecial;
                 const turno = caja.turnos.find(t => t.horario === horario);
 

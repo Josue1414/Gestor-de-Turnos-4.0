@@ -13,8 +13,13 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
 
   useEffect(() => {
     if (isOpen) {
-      const guardada = localStorage.getItem('gestor_croquis');
-      if (guardada) setImagenUrl(guardada);
+      // Diferimos la carga de la imagen un milisegundo para contentar a Vercel
+      const timer = setTimeout(() => {
+        const guardada = localStorage.getItem('gestor_croquis');
+        if (guardada) setImagenUrl(guardada);
+      }, 0);
+      
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

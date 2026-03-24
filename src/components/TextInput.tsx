@@ -1,4 +1,4 @@
-import React, { InputHTMLAttributes, ChangeEvent } from 'react';
+import type { InputHTMLAttributes, ChangeEvent } from 'react';
 import { XCircle, Search } from 'lucide-react';
 
 interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {

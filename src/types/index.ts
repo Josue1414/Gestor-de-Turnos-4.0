@@ -44,6 +44,7 @@ export interface Caja {
   id: string;
   nombre: string; // Ej: "Caja 1", "Kiosco A"
   turnos: Turno[];
+  esEspecial?: boolean;
 }
 
 export interface DiaEvento {
@@ -63,7 +64,8 @@ export interface Participante {
   id: string;
   nombre: string; // Se validará que no haya duplicados (case-insensitive)
   linkUnico: string; // El link mágico para que entre sin contraseña
+  estado?: string;        // <-- AGREGA ESTO
+  ubicaciones?: string[]; // <-- AGREGA ESTO
   whatsapp?: string; // Opcional, sugerido en su perfil
   notasDisponibilidad?: string; // Ej: "Disponible de 10 a 12"
-  ubicaciones?: string[]
 }
