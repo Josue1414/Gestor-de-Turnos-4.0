@@ -33,7 +33,7 @@ export interface EventoItem {
   id: string;
   nombre: string;
   metodoGuardado: string;
-  passwordGeneral?: string;
+  passwordGeneral: string;
   admins: AdminItem[];
 }
 
