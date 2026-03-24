@@ -38,7 +38,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
             </th>
 
             {diaActual.cajas.map(caja => {
-       
               const esEspecial = caja.esEspecial;
               return (
                 <th 
@@ -67,9 +66,8 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         <tbody>
           {diaActual.horariosMaestros.map((horario, rowIdx) => (
             <tr key={rowIdx}>
-              {/* COLUMNA DE HORARIO - ESTRUCTURA IDÉNTICA A LOS HEADERS */}
+              {/* COLUMNA DE HORARIO */}
               <td className="sticky left-0 z-40 bg-slate-600 text-white p-3 border-b border-slate-500 shadow-xl">
-                {/* Añadimos 'relative' aquí para que el menú se posicione bien */}
                 <div className="flex justify-between items-center min-h-[32px] group relative"> 
                     <span className="font-bold text-sm font-mono tracking-tighter">
                     {horario}
@@ -85,75 +83,83 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                 </td>
               
               {diaActual.cajas.map(caja => {
-           
                 const esEspecial = caja.esEspecial;
                 const turno = caja.turnos.find(t => t.horario === horario);
 
+                // --- NUEVA LÓGICA PARA CAJAS ESPECIALES (Misma que Participante) ---
                 if (esEspecial) {
-                  if (rowIdx !== 0) return null; 
+                  // Solo dibujamos la caja especial en la PRIMERA fila
+                  if (rowIdx === 0) {
+                    return (
+                      <td 
+                        key={caja.id} 
+                        className="p-3 border-l border-indigo-100 bg-indigo-50/20 align-top"
+                      >
+                        <div className="flex flex-col gap-4">
+                          {caja.turnos.map((tSpec) => {
+                            const participante = getParticipante(tSpec.participanteId);
+                            return (
+                              <div key={tSpec.id} className="relative group">
+                                <div className={`border-2 rounded-2xl p-4 shadow-sm transition-all ${
+                                  participante ? 'bg-white border-indigo-400' : 'bg-indigo-50/50 border-dashed border-indigo-300'
+                                }`}>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                      <Clock size={10} /> {tSpec.horario}
+                                    </span>
+                                    {participante && (
+                                      <button 
+                                        onClick={() => onQuitar(caja.id, tSpec.id, participante.id)} 
+                                        className="text-slate-300 hover:text-red-500 transition-colors"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </div>
 
-                  return (
-                    <td 
-                      key={caja.id} 
-                      rowSpan={diaActual.horariosMaestros.length} 
-                      className="p-3 border-l border-indigo-100 bg-indigo-50/20 align-top"
-                    >
-                      <div className="flex flex-col gap-4">
-                        {caja.turnos.map((tSpec) => {
-                          const participante = getParticipante(tSpec.participanteId);
-                          return (
-                            <div key={tSpec.id} className="relative group">
-                              <div className={`border-2 rounded-2xl p-4 shadow-sm transition-all ${
-                                participante ? 'bg-white border-indigo-400' : 'bg-indigo-50/50 border-dashed border-indigo-300'
-                              }`}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                    <Clock size={10} /> {tSpec.horario}
-                                  </span>
-                                  {participante && (
+                                  {participante ? (
+                                    <div className="flex items-center gap-3">
+                                      <div className="bg-indigo-100 p-2 rounded-full text-indigo-600"><User size={20} /></div>
+                                      <div>
+                                        <p className="font-bold text-slate-800 text-sm leading-none mb-1">{participante.nombre}</p>
+                                        <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-tighter">Turno Especial</p>
+                                      </div>
+                                    </div>
+                                  ) : (
                                     <button 
-                                      onClick={() => onQuitar(caja.id, tSpec.id, participante.id)} 
-                                      className="text-slate-300 hover:text-red-500 transition-colors"
+                                      onClick={() => onAsignar(caja.id, caja.nombre, tSpec.id, tSpec.horario)}
+                                      className="w-full py-4 flex flex-col items-center justify-center gap-1 text-indigo-500 hover:text-indigo-700 transition-colors"
                                     >
-                                      <X size={14} />
+                                      <Plus size={20} />
+                                      <span className="text-xs font-bold tracking-tight">Asignar Personal</span>
                                     </button>
                                   )}
                                 </div>
-
-                                {participante ? (
-                                  <div className="flex items-center gap-3">
-                                    <div className="bg-indigo-100 p-2 rounded-full text-indigo-600"><User size={20} /></div>
-                                    <div>
-                                      <p className="font-bold text-slate-800 text-sm leading-none mb-1">{participante.nombre}</p>
-                                      <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-tighter">Turno Especial</p>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button 
-                                    onClick={() => onAsignar(caja.id, caja.nombre, tSpec.id, tSpec.horario)}
-                                    className="w-full py-4 flex flex-col items-center justify-center gap-1 text-indigo-500 hover:text-indigo-700 transition-colors"
-                                  >
-                                    <Plus size={20} />
-                                    <span className="text-xs font-bold tracking-tight">Asignar Personal</span>
-                                  </button>
-                                )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
-                  );
+                            );
+                          })}
+                        </div>
+                      </td>
+                    );
+                  } else {
+                    // Para el resto de filas debajo de una caja especial, dibujamos el "CERRADO"
+                    return (
+                      <td key={caja.id} className="p-2 border-b border-l border-slate-200 bg-slate-50/50">
+                        <div className="h-16 bg-red-50/80 border-2 border-dashed border-red-100 rounded-xl flex flex-col items-center justify-center text-red-300">
+                          <Lock size={16} className="mb-1" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">No Aplica</span>
+                        </div>
+                      </td>
+                    );
+                  }
                 }
 
+                // --- LÓGICA PARA CAJAS NORMALES ---
                 const participanteNorm = getParticipante(turno?.participanteId || null);
+                
                 return (
                   <td key={caja.id} className="p-2 border-b border-l border-slate-200 bg-white">
-                    {turno?.participanteId === 'CERRADO' ? (
-                      <div className="h-16 bg-red-50 border-2 border-dashed border-red-100 rounded-xl flex items-center justify-center text-red-300">
-                        <Lock size={16} />
-                      </div>
-                    ) : participanteNorm ? (
+                    {participanteNorm ? (
                       <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 relative group transition-transform hover:scale-[1.02]">
                         <button 
                           onClick={() => onQuitar(caja.id, turno!.id, participanteNorm.id)} 

@@ -4,7 +4,7 @@ import {
   ShieldCheck, Plus, Settings, Edit2,
   Map as MapIcon, Key, Calendar, Eye, 
   DatabaseZap, Trash2, Download, Link, UploadCloud,
-  ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp
+  ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp, LogOut // <-- Agregamos LogOut icon
 } from 'lucide-react';
 
 import { useSuperAdminLogic } from '../../hooks/useSuperAdminLogic';
@@ -14,7 +14,7 @@ import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
-// --- 1. DEFINICIÓN DE TIPOS (Para eliminar los "any") ---
+// --- 1. DEFINICIÓN DE TIPOS ---
 export interface AdminItem {
   id: string;
   name: string;
@@ -33,7 +33,7 @@ export interface EventoItem {
   id: string;
   nombre: string;
   metodoGuardado: string;
-  passwordGeneral: string;
+  passwordGeneral: string; 
   admins: AdminItem[];
 }
 
@@ -54,7 +54,6 @@ const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure,
     metodoGuardado: 'Firebase'
   });
 
-  // Solución al error de Vercel (Cascading Renders): Usamos setTimeout para diferir la actualización
   useEffect(() => {
     if (initialData && isOpen) {
       const timer = setTimeout(() => {
@@ -244,8 +243,6 @@ const EventoSection = ({
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 8; 
 
-  // Solución al error de Vercel (Cascading Renders): Evitamos usar useEffect para setear la página.
-  // Calculamos la "página segura" directamente durante el renderizado.
   const totalPages = Math.max(1, Math.ceil(evento.admins.length / ITEMS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
   
@@ -369,7 +366,17 @@ const SuperAdminPanel = () => {
   } = useSuperAdminLogic();
 
   const handleVerAdmin = (adminId: string) => {
-    navigate(`/admin/${adminId}`); 
+    // AQUÍ ESTÁ EL CAMBIO CLAVE PARA EL BOTÓN DE REGRESAR:
+    // Le pasamos un "estado" oculto a la ruta del admin
+    navigate(`/admin/${adminId}`, { state: { openedBySuperAdmin: true } }); 
+  };
+
+  // --- FUNCIÓN DE CERRAR SESIÓN ---
+  const handleLogout = () => {
+    // Borramos los datos de sesión del SuperAdmin
+    localStorage.removeItem('user_role');
+    // Mandamos al Login
+    navigate('/');
   };
 
   return (
@@ -385,13 +392,25 @@ const SuperAdminPanel = () => {
             <p className="text-slate-400 text-[10px] sm:text-xs font-bold tracking-widest uppercase">Panel de Control Global</p>
           </div>
         </div>
-        <button 
-          onClick={() => setShowNewEvent(!showNewEvent)}
-          className={`px-5 py-2.5 rounded-xl font-black flex items-center gap-2 transition shadow-md border-2 ${showNewEvent ? 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700' : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500'}`}
-        >
-          <Plus size={18} className={showNewEvent ? 'rotate-45 transition-transform' : 'transition-transform'} /> 
-          {showNewEvent ? "CERRAR PANEL" : "CREAR EVENTO"}
-        </button>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end pt-3 sm:pt-0 border-t sm:border-none border-slate-700">
+            <button 
+              onClick={() => setShowNewEvent(!showNewEvent)}
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-black flex items-center justify-center gap-2 transition shadow-md border-2 ${showNewEvent ? 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700' : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500'}`}
+            >
+              <Plus size={18} className={showNewEvent ? 'rotate-45 transition-transform' : 'transition-transform'} /> 
+              {showNewEvent ? "CERRAR PANEL" : "CREAR EVENTO"}
+            </button>
+            
+            {/* AGREGAMOS EL BOTÓN DE CERRAR SESIÓN AQUÍ */}
+            <button 
+              onClick={handleLogout}
+              className="px-3.5 py-2.5 bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-xl transition shadow-md border border-slate-600"
+              title="Cerrar Sesión Master"
+            >
+              <LogOut size={18} />
+            </button>
+        </div>
       </header>
 
       {showNewEvent && (

@@ -6,31 +6,44 @@ const LoginScreen = () => {
   const navigate = useNavigate();
   const [codigo, setCodigo] = useState('');
   const [password, setPassword] = useState('');
-  const [mostrarPassword, setMostrarPassword] = useState(false); // Estado para el "ojito"
+  const [mostrarPassword, setMostrarPassword] = useState(false); 
+
+  // LEEMOS LAS VARIABLES AQUÍ ARRIBA (Asegurando que las detecte Vite)
+  const SUPERADMIN_USER = import.meta.env.VITE_SUPERADMIN_USER;
+  const SUPERADMIN_PASSWORD = import.meta.env.VITE_SUPERADMIN_PASSWORD;
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const cod = codigo.toLowerCase().trim();
+    // Normalizamos los textos
+    const cod = codigo.trim();
     const pass = password.trim();
     
-    // 1. LEER VARIABLES DE ENTORNO PARA EL SUPER ADMIN
-    const superUser = import.meta.env.VITE_SUPERADMIN_USER;
-    const superPass = import.meta.env.VITE_SUPERADMIN_PASSWORD;
+    // Limpiamos cualquier sesión antigua por seguridad
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('current_admin_id');
 
-    // 2. VALIDACIÓN DEL SUPER ADMIN
-    if (cod === superUser && pass === superPass) {
-      // Si coinciden exactamente con el .env, entra el Jefe de Jefes
+    // 1. VALIDACIÓN DEL SUPER ADMIN
+    if (cod === SUPERADMIN_USER && pass === SUPERADMIN_PASSWORD) {
+      // Guardamos la sesión del Jefe de Jefes en localStorage
+      localStorage.setItem('user_role', 'superadmin');
       navigate('/super-admin');
     } 
-    // 3. LÓGICA TEMPORAL PARA ADMINS Y PARTICIPANTES
+    // 2. LÓGICA TEMPORAL PARA ADMINS
     else if (pass !== '') {
-      // Si pone contraseña pero no es el SuperAdmin, asumimos que es Administrador de Evento
+      // Guardamos la sesión del Administrador de Evento
+      localStorage.setItem('user_role', 'admin');
+      // Guardamos su ID para usarlo en la vista (ej. 'demo' o 'a1')
+      localStorage.setItem('current_admin_id', codigo || 'demo'); 
       navigate(`/admin/${codigo || 'demo'}`);
-    } else if (cod !== '') {
-      // Si SOLO pone código (sin contraseña), es un Participante
+    } 
+    // 3. LÓGICA TEMPORAL PARA PARTICIPANTES
+    else if (cod !== '') {
+      // Los participantes no necesitan guardar rol de sesión por ahora
       navigate(`/turno/${codigo}`);
-    } else {
+    } 
+    // 4. SI TODO ESTÁ VACÍO
+    else {
       alert('Por favor ingresa un código de acceso.');
     }
   };
@@ -63,7 +76,7 @@ const LoginScreen = () => {
               </label>
               <input 
                 type="text" 
-                placeholder="Ej. ev_12345 o a1" 
+                placeholder="Ej. Gestor1314" 
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value)}
                 className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700 shadow-sm transition-all focus:shadow-md focus:bg-white" 
@@ -76,14 +89,12 @@ const LoginScreen = () => {
               </label>
               <div className="relative">
                 <input 
-                  // AQUÍ CAMBIA EL TIPO DEPENDIENDO DEL ESTADO "mostrarPassword"
                   type={mostrarPassword ? "text" : "password"} 
                   placeholder="••••••••" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700 shadow-sm transition-all focus:shadow-md focus:bg-white" 
                 />
-                {/* BOTÓN DEL OJITO */}
                 <button
                   type="button"
                   onClick={() => setMostrarPassword(!mostrarPassword)}

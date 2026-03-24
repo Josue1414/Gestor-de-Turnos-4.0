@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Calendar, Map as MapIcon, Settings, Users, Star, CheckCircle, Bird, ShieldCheck } from 'lucide-react';
+import { useState, } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Map as MapIcon, Settings, Users, Star, CheckCircle, Bird, ShieldCheck, LogOut } from 'lucide-react';
 import type { DiaEvento, Participante } from '../../types';
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
 import ModalInfoUsuario from '../../components/ModalInfoUsuario';
@@ -7,7 +8,6 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 
-// Creamos un "tipo" específico para los datos de tu perfil en lugar de usar "any"
 type PerfilUsuario = {
   id: string;
   name: string;
@@ -20,68 +20,38 @@ type PerfilUsuario = {
 };
 
 const ParticipantPanel = () => {
+  const navigate = useNavigate();
   const [diaActivo, setDiaActivo] = useState(0);
   const [downloadModal, setDownloadModal] = useState(false);
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
   const [showDirectorio, setShowDirectorio] = useState(false);
   const [showCroquis, setShowCroquis] = useState(false);
 
+  // Perfil inicial vacío (Se llenará con Firebase luego)
   const [misDatosParticipante, setMisDatosParticipante] = useState<PerfilUsuario>({
-    id: 'p2', name: 'Juan Pérez', role: 'Participante', phone: '+52 899 111 2222',
-    supportArea: '', notes: 'Llegaré 10 mins tarde el viernes.', organizationLabel: 'Congregación', organization: 'Centro Sur'
+    id: '', name: 'Cargando Usuario...', role: 'Participante', phone: '',
+    supportArea: '', notes: '', organizationLabel: 'Organización', organization: ''
   });
 
-  // --- BASE DE DATOS SIMULADA CONECTADA A LOCALSTORAGE ---
-  const [participantes, setParticipantes] = useState<Participante[]>(() => {
-    const guardados = localStorage.getItem('gestor_participantes');
-    if (guardados) return JSON.parse(guardados);
-    return [
-      { id: 'p1', nombre: 'Roberto Sánchez', linkUnico: '...', estado: 'Libre' },
-      { id: 'p2', nombre: 'Juan Pérez', linkUnico: '...', estado: 'Libre' },
-      { id: 'p3', nombre: 'Sofía Martínez', linkUnico: '...', estado: 'Libre' },
-      { id: 'p4', nombre: 'María López', linkUnico: '...', estado: 'Libre' },
-    ];
-  });
+  // Listas vacías (Se llenarán con Firebase luego)
+  const [participantes, setParticipantes] = useState<Participante[]>([]);
+  const [dias, setDias] = useState<DiaEvento[]>([]);
 
-  const [dias, setDias] = useState<DiaEvento[]>(() => {
-    const guardados = localStorage.getItem('gestor_dias');
-    if (guardados) return JSON.parse(guardados);
-    return [
-      {
-        id: 'd1', fecha: '2026-03-15', nombreDia: 'Viernes 15',
-        horariosMaestros: ['08:00 - 10:00', '10:00 - 12:00', '12:00 - 14:00', '14:00 - 16:00'],
-        cajas: [
-          { id: 'c1', nombre: 'Caja 1', turnos: [{ id: 't1', horario: '08:00 - 10:00', participanteId: 'p2' }, { id: 't2', horario: '10:00 - 12:00', participanteId: null }, { id: 't2b', horario: '12:00 - 14:00', participanteId: 'CERRADO' }, { id: 't2c', horario: '14:00 - 16:00', participanteId: null }] },
-          { id: 'c2', nombre: 'Caja 2', turnos: [{ id: 't3', horario: '08:00 - 10:00', participanteId: 'p4' }, { id: 't4', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't4b', horario: '12:00 - 14:00', participanteId: null }, { id: 't4c', horario: '14:00 - 16:00', participanteId: null }] },
-          // Quitamos el "as any"
-          { id: 'spec1', nombre: 'Staff VIP', esEspecial: true, turnos: [{ id: 'ts1', horario: '08:00 - 16:00', participanteId: 'p1' }] } 
-        ]
-      },
-      {
-        id: 'd2', fecha: '2026-03-16', nombreDia: 'Sábado 16',
-        horariosMaestros: ['09:00 - 11:00', '11:00 - 13:00', '13:00 - 15:00'],
-        cajas: [
-          { id: 'c3', nombre: 'Caja 1', turnos: [{ id: 't5', horario: '09:00 - 11:00', participanteId: 'p2' }, { id: 't6', horario: '11:00 - 13:00', participanteId: 'p1' }, { id: 't7', horario: '13:00 - 15:00', participanteId: null }] },
-          { id: 'c4', nombre: 'Caja 2', turnos: [{ id: 't9', horario: '09:00 - 11:00', participanteId: null }, { id: 't10', horario: '11:00 - 13:00', participanteId: 'p3' }, { id: 't11', horario: '13:00 - 15:00', participanteId: 'p4' }] }
-        ]
-      },
-      {
-        id: 'd3', fecha: '2026-03-17', nombreDia: 'Domingo 17',
-        horariosMaestros: ['10:00 - 12:00', '12:00 - 14:00'],
-        cajas: [
-          { id: 'c5', nombre: 'Caja Principal', turnos: [{ id: 't13', horario: '10:00 - 12:00', participanteId: 'p2' }, { id: 't14', horario: '12:00 - 14:00', participanteId: null }] },
-          // Quitamos el "as any"
-          { id: 'spec2', nombre: 'Estacionamiento', esEspecial: true, turnos: [{ id: 'ts2', horario: '09:00 - 15:00', participanteId: 'p3' }] } 
-        ]
-      }
-    ];
-  });
-
-  // Guardar en disco cada que haya un cambio
-  useEffect(() => { localStorage.setItem('gestor_participantes', JSON.stringify(participantes)); }, [participantes]);
-  useEffect(() => { localStorage.setItem('gestor_dias', JSON.stringify(dias)); }, [dias]);
+  // TODO: Aquí irá el useEffect de Firebase onSnapshot próximamente
 
   const diaActual = dias[diaActivo];
+
+  // Pantalla de carga mientras no haya días configurados
+  if (!diaActual) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
+        <ShieldCheck size={48} className="text-slate-300 mb-4 animate-pulse" />
+        <h2 className="text-xl font-black text-slate-700">Cargando Evento...</h2>
+        <p className="text-sm text-slate-500 mt-2">Conectando con la base de datos.</p>
+        <button onClick={() => navigate('/')} className="mt-6 px-4 py-2 bg-slate-200 text-slate-600 rounded-lg font-bold text-sm hover:bg-slate-300 transition">Volver al Inicio</button>
+      </div>
+    );
+  }
 
   const participantesEnriquecidos = participantes.map(p => {
     const ubicaciones: string[] = [];
@@ -95,7 +65,6 @@ const ParticipantPanel = () => {
 
   const getParticipante = (id: string | null) => participantesEnriquecidos.find(p => p.id === id);
 
-  // --- NUEVA ETIQUETA GLOBAL ---
   const totalMisTurnosGlobales = dias.reduce((accDia, dia) => 
     accDia + dia.cajas.reduce((accCaja, caja) => 
       accCaja + caja.turnos.filter(t => t.participanteId === misDatosParticipante.id).length, 0
@@ -121,11 +90,15 @@ const ParticipantPanel = () => {
     }
   };
 
-  // Reemplazamos el "any" por el tipo PerfilUsuario
   const handleGuardarPerfil = (datosActualizados: PerfilUsuario) => {
     setMisDatosParticipante(datosActualizados);
     setParticipantes(prev => prev.map(p => p.id === datosActualizados.id ? { ...p, nombre: datosActualizados.name } : p));
     setIsUsuarioModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user_role');
+    navigate('/');
   };
 
   const datosParaModal = { ...misDatosParticipante, supportArea: getParticipante(misDatosParticipante.id)?.ubicaciones?.join(', ') || 'Sin área asignada' };
@@ -149,7 +122,8 @@ const ParticipantPanel = () => {
             <p className="text-sm font-bold text-slate-800">{misDatosParticipante.organization || 'Sin Organización'}</p>
             <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{misDatosParticipante.organizationLabel}</p>
           </div>
-          <button onClick={() => setIsUsuarioModalOpen(true)} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition border border-slate-200 shadow-sm"><Settings size={20} /></button>
+          <button onClick={() => setIsUsuarioModalOpen(true)} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition border border-slate-200 shadow-sm" title="Ajustes de Perfil"><Settings size={20} /></button>
+          <button onClick={handleLogout} className="p-3 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition border border-slate-200 hover:border-red-200 shadow-sm" title="Cerrar Sesión"><LogOut size={20} /></button>
         </div>
       </header>
 
@@ -192,12 +166,7 @@ const ParticipantPanel = () => {
 
       <DownloadScheduleModal isOpen={downloadModal} onClose={() => setDownloadModal(false)} type="personal" seccionName="Accesos Principales" dias={dias} diaActivo={diaActivo} participantes={participantesEnriquecidos} targetUserId={misDatosParticipante.id} />
       
-      <CroquisModal 
-        isOpen={showCroquis} 
-        onClose={() => setShowCroquis(false)} 
-        isAdmin={false} 
-      />
-    
+      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} isAdmin={false} />
     </div>
   );
 };
