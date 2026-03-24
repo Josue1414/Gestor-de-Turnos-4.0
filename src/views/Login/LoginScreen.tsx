@@ -1,23 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Key, User, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Key, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 const LoginScreen = () => {
   const navigate = useNavigate();
   const [codigo, setCodigo] = useState('');
   const [password, setPassword] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false); // Estado para el "ojito"
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // --- LÓGICA TEMPORAL (Se reemplazará cuando conectemos Firebase) ---
     const cod = codigo.toLowerCase().trim();
+    const pass = password.trim();
     
-    if (cod === 'super' && password === 'admin') {
-      // Si es el Jefe de Jefes
+    // 1. LEER VARIABLES DE ENTORNO PARA EL SUPER ADMIN
+    const superUser = import.meta.env.VITE_SUPERADMIN_USER;
+    const superPass = import.meta.env.VITE_SUPERADMIN_PASSWORD;
+
+    // 2. VALIDACIÓN DEL SUPER ADMIN
+    if (cod === superUser && pass === superPass) {
+      // Si coinciden exactamente con el .env, entra el Jefe de Jefes
       navigate('/super-admin');
-    } else if (password.trim() !== '') {
-      // Si pone contraseña, asumimos que es un Administrador de Evento
+    } 
+    // 3. LÓGICA TEMPORAL PARA ADMINS Y PARTICIPANTES
+    else if (pass !== '') {
+      // Si pone contraseña pero no es el SuperAdmin, asumimos que es Administrador de Evento
       navigate(`/admin/${codigo || 'demo'}`);
     } else if (cod !== '') {
       // Si SOLO pone código (sin contraseña), es un Participante
@@ -66,13 +74,25 @@ const LoginScreen = () => {
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
                 <Key size={14} /> Contraseña <span className="text-slate-300 font-medium normal-case">(Opcional para participantes)</span>
               </label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700 shadow-sm transition-all focus:shadow-md focus:bg-white" 
-              />
+              <div className="relative">
+                <input 
+                  // AQUÍ CAMBIA EL TIPO DEPENDIENDO DEL ESTADO "mostrarPassword"
+                  type={mostrarPassword ? "text" : "password"} 
+                  placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700 shadow-sm transition-all focus:shadow-md focus:bg-white" 
+                />
+                {/* BOTÓN DEL OJITO */}
+                <button
+                  type="button"
+                  onClick={() => setMostrarPassword(!mostrarPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors focus:outline-none"
+                  title={mostrarPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button 
