@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
-// IMPORTAMOS FIREBASE
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -10,7 +9,7 @@ const LoginScreen = () => {
   const [codigo, setCodigo] = useState('');
   const [password, setPassword] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false); 
-  const [isLoading, setIsLoading] = useState(false); // Para mostrar que está buscando
+  const [isLoading, setIsLoading] = useState(false);
 
   const SUPERADMIN_USER = import.meta.env.VITE_SUPERADMIN_USER;
   const SUPERADMIN_PASSWORD = import.meta.env.VITE_SUPERADMIN_PASSWORD;
@@ -32,8 +31,12 @@ const LoginScreen = () => {
       return;
     } 
 
-    // 2. BUSCAR EN FIREBASE (SI TIENE CONTRASEÑA, ASUMIMOS QUE ES ADMIN)
-    if (pass !== '') {
+    // 2. BUSCAR EN FIREBASE (SI PONE CONTRASEÑA O SU ID EMPIEZA CON ADMIN)
+    if (pass !== '' || cod.toLowerCase().startsWith('admin-')) {
+      if (pass === '') {
+        return alert('Por favor ingresa tu contraseña de Administrador.');
+      }
+
       setIsLoading(true);
       try {
         const eventosRef = collection(db, 'eventos');
@@ -43,7 +46,6 @@ const LoginScreen = () => {
         let eventoIdFound = '';
         let adminIdFound = '';
 
-        // Buscamos en todos los eventos si hay un admin con ese ID y Contraseña
         snapshot.forEach(doc => {
           const evento = doc.data();
           const admins = evento.admins || [];
@@ -52,7 +54,7 @@ const LoginScreen = () => {
 
           if (matchedAdmin) {
             adminFound = true;
-            eventoIdFound = doc.id; // El ID del Evento real en Firebase
+            eventoIdFound = doc.id; 
             adminIdFound = matchedAdmin.id;
           }
         });
@@ -60,7 +62,7 @@ const LoginScreen = () => {
         if (adminFound) {
           localStorage.setItem('user_role', 'admin');
           localStorage.setItem('current_admin_id', adminIdFound);
-          navigate(`/admin/${eventoIdFound}`); // ¡AHORA SÍ VA A LA RUTA CORRECTA!
+          navigate(`/admin/${eventoIdFound}`); 
         } else {
           alert('Credenciales incorrectas. Verifica tu ID y contraseña.');
         }
@@ -70,11 +72,11 @@ const LoginScreen = () => {
       } finally {
         setIsLoading(false);
       }
+      return; // Detiene la ejecución para que no pase al código de Participante
     } 
-    // 3. LÓGICA TEMPORAL PARTICIPANTES
-    else {
-      navigate(`/turno/${codigo}`);
-    }
+    
+    // 3. SI SOLO PONE ID (SIN CONTRASEÑA), ES UN PARTICIPANTE
+    navigate(`/turno/${codigo}`);
   };
 
   return (
@@ -98,7 +100,7 @@ const LoginScreen = () => {
                 <User size={14} /> Código de Acceso / ID
               </label>
               <input 
-                type="text" placeholder="Ej. admin-1A2B o Gestor1314" value={codigo} onChange={(e) => setCodigo(e.target.value)}
+                type="text" placeholder="Ej. admin-A3B9 o Gestor1314" value={codigo} onChange={(e) => setCodigo(e.target.value)}
                 className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
               />
             </div>

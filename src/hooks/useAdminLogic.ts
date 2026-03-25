@@ -33,7 +33,6 @@ const hayChoqueDeHorario = (rango1: string, rango2: string) => {
   }
 };
 
-// --- AHORA RECIBIMOS EL ID DEL EVENTO POR PARÁMETRO ---
 export const useAdminLogic = (eventoId: string) => {
   const [diaActivo, setDiaActivo] = useState(0);
   const [showDirectorio, setShowDirectorio] = useState(false);
@@ -53,49 +52,54 @@ export const useAdminLogic = (eventoId: string) => {
     id: 'admin_1', name: 'Admin', role: 'Administrador', phone: '', supportArea: '', notes: '', organizationLabel: 'Organización', organization: ''
   });
 
-  // --- ESTADOS DE DATOS REALES ---
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [dias, setDias] = useState<DiaEvento[]>([]);
   const [loading, setLoading] = useState(true);
 
-// --- 1. ESCUCHAR FIREBASE EN TIEMPO REAL ---
+  // OBTENEMOS EL ID DEL ADMIN ACTUAL DESDE EL ALMACENAMIENTO LOCAL
+  const currentAdminId = localStorage.getItem('current_admin_id');
+
   useEffect(() => {
     if (!eventoId || eventoId === 'demo') {
-      // Usamos el setTimeout para evitar el "Cascading Render"
-      const timer = setTimeout(() => {
-        setLoading(false);
-      }, 0);
+      const timer = setTimeout(() => { setLoading(false); }, 0);
       return () => clearTimeout(timer);
     }
 
     const eventoRef = doc(db, 'eventos', eventoId);
     
-    // onSnapshot es asíncrono por naturaleza, así que aquí setLoading(false) sí está permitido
     const unsubscribe = onSnapshot(eventoRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setDias(data.dias || []);
-        setParticipantes(data.participantes || []);
+        if (currentAdminId) {
+          // AHORA LEE SOLO SUS PROPIOS DÍAS Y PARTICIPANTES
+          setDias(data.diasPorAdmin?.[currentAdminId] || []);
+          setParticipantes(data.participantesPorAdmin?.[currentAdminId] || []);
+        }
         if (data.nombre) setSeccionName(data.nombre);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [eventoId]);
+  }, [eventoId, currentAdminId]);
 
-  // --- 2. FUNCIONES PARA GUARDAR EN FIREBASE ---
   const syncDias = async (nuevosDias: DiaEvento[]) => {
-    setDias(nuevosDias); // Actualiza la pantalla al instante
-    if (eventoId && eventoId !== 'demo') {
-      await updateDoc(doc(db, 'eventos', eventoId), { dias: nuevosDias }); // Lo sube a la nube
+    setDias(nuevosDias);
+    if (eventoId && eventoId !== 'demo' && currentAdminId) {
+      // GUARDA SOLO EN SU CARPETA
+      await updateDoc(doc(db, 'eventos', eventoId), {
+        [`diasPorAdmin.${currentAdminId}`]: nuevosDias
+      });
     }
   };
 
   const syncParticipantes = async (nuevosParticipantes: Participante[]) => {
     setParticipantes(nuevosParticipantes);
-    if (eventoId && eventoId !== 'demo') {
-      await updateDoc(doc(db, 'eventos', eventoId), { participantes: nuevosParticipantes });
+    if (eventoId && eventoId !== 'demo' && currentAdminId) {
+      // GUARDA SOLO EN SU CARPETA
+      await updateDoc(doc(db, 'eventos', eventoId), {
+        [`participantesPorAdmin.${currentAdminId}`]: nuevosParticipantes
+      });
     }
   };
 
@@ -125,7 +129,7 @@ export const useAdminLogic = (eventoId: string) => {
     if (!diaActual) return;
     const nuevosDias = [...dias]; const caja = nuevosDias[diaActivo].cajas.find(c => c.id === modalAsignacion.cajaId);
     if (caja) { const turno = caja.turnos.find(t => t.id === modalAsignacion.turnoId); if (turno) turno.participanteId = participanteId; }
-    syncDias(nuevosDias); // GUARDAMOS EN LA NUBE
+    syncDias(nuevosDias); 
   };
 
   const asignarUsuarioExistente = (participanteId: string) => { actualizarTurnoVisual(participanteId); cerrarModalAsignacion(); };
@@ -135,7 +139,7 @@ export const useAdminLogic = (eventoId: string) => {
     if (handleCheckNameDuplicate(nombre, '')) { alert('Este participante ya existe.'); return; }
     const nuevoId = 'p_' + Date.now();
     const nuevosParticipantes = [...participantes, { id: nuevoId, nombre, linkUnico: '...', estado: 'Libre' as const }];
-    syncParticipantes(nuevosParticipantes); // GUARDAMOS EN LA NUBE
+    syncParticipantes(nuevosParticipantes); 
     actualizarTurnoVisual(nuevoId); 
     cerrarModalAsignacion();
   };
@@ -144,7 +148,7 @@ export const useAdminLogic = (eventoId: string) => {
     if (!diaActual) return;
     const nuevosDias = [...dias]; const caja = nuevosDias[diaActivo].cajas.find(c => c.id === cajaId);
     if (caja) { const turno = caja.turnos.find(t => t.id === turnoId); if (turno) turno.participanteId = null; }
-    syncDias(nuevosDias); // GUARDAMOS EN LA NUBE
+    syncDias(nuevosDias); 
   };
 
   const handleCrearCaja = () => {
@@ -231,7 +235,7 @@ export const useAdminLogic = (eventoId: string) => {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
     isEditingTitle, setIsEditingTitle, seccionName, setSeccionName, showSpecialModal, setShowSpecialModal,
     editModal, setEditModal, isUsuarioModalOpen, setIsUsuarioModalOpen, usuarioActivo, isViewingSelf, modalAsignacion,
-    downloadModal, setDownloadModal, loading, // <-- Agregamos loading para saber si está cargando
+    downloadModal, setDownloadModal, loading, 
     diaActual, participantesEnriquecidos, getParticipante, totalCajas, turnosActivos, turnosLibres, totalParticipantes: participantes.length,
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
     handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,

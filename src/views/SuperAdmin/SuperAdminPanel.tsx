@@ -3,50 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, Plus, Settings, Edit2,
   Map as MapIcon, Key, Calendar, Eye, 
-  DatabaseZap, Trash2, Download, Link, UploadCloud,
-  ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp, LogOut // <-- Agregamos LogOut icon
+  DatabaseZap, Trash2, Download, UploadCloud,
+  ChevronLeft, ChevronRight, X, ChevronDown, ChevronUp, LogOut
 } from 'lucide-react';
 
-import { useSuperAdminLogic } from '../../hooks/useSuperAdminLogic';
+// IMPORTAMOS LAS INTERFACES DIRECTAMENTE DESDE EL HOOK PARA QUE SEAN 100% IDÉNTICAS
+import { useSuperAdminLogic, type EventoData, type AdminData } from '../../hooks/useSuperAdminLogic';
+
 import CroquisModal from '../../components/CroquisModal';
 import ModalInfoUsuario from '../../components/ModalInfoUsuario';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
-// --- 1. DEFINICIÓN DE TIPOS ---
-export interface AdminItem {
-  id: string;
-  name: string;
-  area: string;
-  org: string;
-  cajas: number;
-  horarios: number;
-  turnosTotales: number;
-  disponibles: number;
-  necesarios: number;
-  inactivos: number;
-  password?: string;
-}
-
-export interface EventoItem {
-  id: string;
-  nombre: string;
-  metodoGuardado: string;
-  passwordGeneral: string; 
-  admins: AdminItem[];
-}
-
 interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: EventoItem) => void;
-  initialData: EventoItem | null;
+  onSave: (data: EventoData) => void;
+  initialData: EventoData | null;
   onOpenStructure: () => void;
   onOpenCroquis: () => void;
 }
 
-// --- MODAL PARA EDITAR EL EVENTO ---
 const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure, onOpenCroquis }: EditEventModalProps) => {
   const [formData, setFormData] = useState({
     nombre: '',
@@ -148,96 +126,93 @@ const EditEventModal = ({ isOpen, onClose, onSave, initialData, onOpenStructure,
 };
 
 const StatBadge = ({ label, value, colorClass }: { label: string, value: string | number, colorClass: string }) => (
-  <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 text-center flex flex-col justify-center">
+  <div className="bg-slate-50 border border-slate-100 rounded-lg p-1.5 text-center flex flex-col justify-center shadow-sm">
     <span className="text-[8px] sm:text-[9px] font-black uppercase text-slate-400 tracking-wider leading-tight">{label}</span>
     <span className={`text-sm font-black ${colorClass} leading-none mt-0.5`}>{value}</span>
   </div>
 );
 
 interface AdminFicheProps {
-  data: AdminItem;
-  onOpenSettings: (data: AdminItem) => void;
+  data: AdminData;
+  stats: { cajas: number, horarios: number, totales: number, disponibles: number, participantes: number };
+  onOpenSettings: (data: AdminData) => void;
   onDownload: (id: string) => void;
   onView: (id: string) => void;
   onDelete: (id: string, name: string) => void;
 }
 
-const AdminFiche = ({ data, onOpenSettings, onDownload, onView, onDelete }: AdminFicheProps) => (
-  <div className="w-full sm:w-[280px] bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all rounded-xl flex flex-col overflow-hidden">
-    <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-start">
-      <div className="pr-2 w-full overflow-hidden">
-        <h4 className="font-black text-slate-800 leading-tight text-sm truncate">{data.name}</h4>
-        <p className="text-[10px] text-blue-600 font-bold uppercase truncate">{data.area}</p>
-        <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{data.org}</p>
+const AdminFiche = ({ data, stats, onOpenSettings, onDownload, onView, onDelete }: AdminFicheProps) => (
+  <div className="w-full sm:w-[280px] bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 transition-all rounded-xl flex flex-col overflow-hidden">
+    
+    <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-col">
+      <div className="flex justify-between items-start mb-2">
+        <div className="pr-2 w-full overflow-hidden">
+          <h4 className="font-black text-slate-800 leading-tight text-base truncate">{data.name}</h4>
+          <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{data.org || 'Sin Organización'}</p>
+        </div>
+        
+        <div className="flex gap-1.5 shrink-0">
+          <button onClick={() => onOpenSettings(data)} className="p-1.5 bg-white border border-slate-200 text-slate-500 rounded-md hover:bg-slate-100 transition shadow-sm" title="Ajustes">
+            <Settings size={14} />
+          </button>
+          <button onClick={() => onDelete(data.id, data.name)} className="p-1.5 bg-red-50 border border-red-100 text-red-500 rounded-md hover:bg-red-100 transition shadow-sm" title="Eliminar Admin">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
-      
-      <div className="flex flex-col gap-1.5 shrink-0 ml-2">
-        <button onClick={() => onView(data.id)} className="w-full p-1.5 bg-white border border-slate-200 text-slate-500 rounded-md hover:bg-blue-50 hover:text-blue-600 transition shadow-sm flex items-center justify-center gap-1 text-[10px] font-bold">
-          <Eye size={12} /> Ver
-        </button>
-        <div className="flex gap-1.5">
-          <button onClick={() => onOpenSettings(data)} className="p-1.5 bg-white border border-slate-200 text-slate-500 rounded-md hover:bg-slate-100 hover:text-slate-800 transition shadow-sm flex items-center justify-center">
-            <Settings size={12} />
-          </button>
-          <button onClick={() => onDelete(data.id, data.name)} className="p-1.5 bg-red-50 border border-red-100 text-red-500 rounded-md hover:bg-red-100 transition shadow-sm flex items-center justify-center" title="Eliminar Admin">
-            <Trash2 size={12} />
-          </button>
+
+      <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3 mt-2 shadow-sm">
+        <p className="text-[10px] font-black text-blue-600 uppercase mb-2 flex items-center gap-1">
+          <Key size={12} /> Datos de Acceso
+        </p>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Usuario (ID):</span>
+            <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all">{data.id}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Contraseña:</span>
+            <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all">{data.password}</span>
+          </div>
         </div>
       </div>
     </div>
 
     <div className="p-3 grid grid-cols-2 gap-2 bg-white">
-      <StatBadge label="Cajas" value={data.cajas} colorClass="text-slate-700" />
-      <StatBadge label="Total Horarios" value={data.horarios} colorClass="text-slate-700" />
-      <StatBadge label="Turnos Totales" value={data.turnosTotales} colorClass="text-indigo-600" />
-      <StatBadge label="Turnos Disp." value={data.disponibles} colorClass="text-emerald-500" />
-      <StatBadge label="Participantes" value={data.necesarios} colorClass="text-slate-700" />
-      <StatBadge label="Part. Inactivos" value={data.inactivos} colorClass="text-red-500" />
+      <StatBadge label="Cajas" value={stats.cajas} colorClass="text-slate-700" />
+      <StatBadge label="Total Horarios" value={stats.horarios} colorClass="text-slate-700" />
+      <StatBadge label="Turnos Totales" value={stats.totales} colorClass="text-indigo-600" />
+      <StatBadge label="Turnos Disp." value={stats.disponibles} colorClass="text-emerald-500" />
+      <StatBadge label="Participantes" value={stats.participantes} colorClass="text-slate-700" />
+      <StatBadge label="Part. Inactivos" value={0} colorClass="text-slate-300" />
     </div>
 
-    <div className="px-3 pb-3 flex gap-2">
-      <button onClick={() => onDownload(data.id)} className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 p-2 rounded-lg flex items-center justify-center gap-1.5 transition text-[10px] font-bold uppercase shadow-sm">
-        <Download size={14} className="text-blue-500" /> Tabla
+    <div className="p-3 flex gap-2 bg-slate-50 border-t border-slate-100">
+      <button onClick={() => onView(data.id)} className="flex-[2] p-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition shadow-sm flex items-center justify-center gap-1 text-[11px] font-bold uppercase">
+        <Eye size={14} /> Ver Panel
       </button>
-      <button className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 p-2 rounded-lg flex items-center justify-center gap-1.5 transition text-[10px] font-bold uppercase shadow-sm">
-        <Link size={14} className="text-indigo-500" /> Link
-      </button>
-    </div>
-
-    <div className="mt-auto p-2 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-      <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-slate-200">
-        <Key size={12} className="text-amber-500" />
-        <span className="text-[10px] font-mono font-bold text-slate-600">{data.password}</span>
-      </div>
-      <button className="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase px-2 py-1 hover:bg-blue-50 rounded transition">
-        Editar Clave
+      <button onClick={() => onDownload(data.id)} className="flex-1 bg-white border border-slate-200 text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition flex items-center justify-center shadow-sm" title="Descargar Tabla">
+        <Download size={14} />
       </button>
     </div>
   </div>
 );
 
 interface EventoSectionProps {
-  evento: EventoItem;
+  evento: EventoData;
   isDefaultExpanded: boolean;
   onDeleteEvent: (id: string, name: string) => void;
-  onOpenSettings: (data: AdminItem) => void;
+  onOpenSettings: (data: AdminData) => void;
   onDownload: (id: string) => void;
   onView: (id: string) => void;
   onDeleteAdmin: (eventoId: string, adminId: string, adminName: string) => void;
   onAddAdmin: (eventoId: string) => void;
-  onEditEvent: (evento: EventoItem) => void;
+  onEditEvent: (evento: EventoData) => void;
 }
 
 const EventoSection = ({ 
-  evento, 
-  isDefaultExpanded, 
-  onDeleteEvent, 
-  onOpenSettings, 
-  onDownload, 
-  onView, 
-  onDeleteAdmin,
-  onAddAdmin,
-  onEditEvent
+  evento, isDefaultExpanded, onDeleteEvent, onOpenSettings, 
+  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent
 }: EventoSectionProps) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const [page, setPage] = useState(1);
@@ -245,20 +220,15 @@ const EventoSection = ({
 
   const totalPages = Math.max(1, Math.ceil(evento.admins.length / ITEMS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
-  
   const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
   const currentItems = evento.admins.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
     <section className="bg-white border-2 border-slate-300 shadow-sm rounded-2xl flex flex-col overflow-hidden transition-all duration-300">
       
-      {/* HEADER DEL EVENTO */}
       <div className="bg-slate-800 p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-700">
         
-        <div 
-          className="flex items-center gap-3 flex-1 cursor-pointer group w-full lg:w-auto"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
+        <div className="flex items-center gap-3 flex-1 cursor-pointer group w-full lg:w-auto" onClick={() => setIsExpanded(!isExpanded)}>
           <button className="text-slate-400 group-hover:text-white transition bg-slate-700/50 p-1.5 rounded-lg">
             {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </button>
@@ -272,13 +242,7 @@ const EventoSection = ({
                 <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight truncate group-hover:text-blue-300 transition">
                   {evento.nombre}
                 </h2>
-                <button 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onAddAdmin(evento.id);
-                    }} 
-                    className="bg-blue-600 hover:bg-blue-500 text-white p-2 px-3 rounded-lg transition shadow-md border border-blue-500 flex items-center gap-1.5 text-xs font-bold shrink-0"
-                >
+                <button onClick={(e) => { e.stopPropagation(); onAddAdmin(evento.id); }} className="bg-blue-600 hover:bg-blue-500 text-white p-2 px-3 rounded-lg transition shadow-md border border-blue-500 flex items-center gap-1.5 text-xs font-bold shrink-0">
                     <Plus size={14} /> Añadir Admin
                 </button>
             </div>
@@ -300,21 +264,48 @@ const EventoSection = ({
         </div>
       </div>
 
-      {/* CONTENIDO DEL EVENTO */}
       {isExpanded && (
         <div className="p-4 bg-slate-50/50 flex flex-col min-h-[220px] animate-in slide-in-from-top-2 duration-200">
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
-              {currentItems.map((item: AdminItem) => (
-                  <AdminFiche 
-                      key={item.id} 
-                      data={item} 
-                      onOpenSettings={onOpenSettings}
-                      onDownload={onDownload}
-                      onView={onView} 
-                      onDelete={(adminId: string, adminName: string) => onDeleteAdmin(evento.id, adminId, adminName)} 
-                  />
-              ))}
+              {currentItems.map((item: AdminData) => {
+                  
+                  const adminDias = evento.diasPorAdmin?.[item.id] || [];
+                  const adminParticipantes = evento.participantesPorAdmin?.[item.id] || [];
+
+                  let calcTotales = 0;
+                  let calcDisponibles = 0;
+                  const calcCajas = adminDias[0]?.cajas?.length || 0;
+                  const calcHorarios = adminDias[0]?.horariosMaestros?.length || 0;
+                  const calcParticipantesLength = adminParticipantes.length;
+
+                  adminDias.forEach((dia) => {
+                    dia.cajas?.forEach((caja) => {
+                      calcTotales += caja.turnos?.length || 0;
+                      calcDisponibles += caja.turnos?.filter(t => t.participanteId === null || t.participanteId === '').length || 0;
+                    });
+                  });
+
+                  const dynamicStats = {
+                    cajas: calcCajas,
+                    horarios: calcHorarios,
+                    totales: calcTotales,
+                    disponibles: calcDisponibles,
+                    participantes: calcParticipantesLength
+                  };
+
+                  return (
+                    <AdminFiche 
+                        key={item.id} 
+                        data={item} 
+                        stats={dynamicStats}
+                        onOpenSettings={onOpenSettings}
+                        onDownload={onDownload}
+                        onView={onView} 
+                        onDelete={(adminId: string, adminName: string) => onDeleteAdmin(evento.id, adminId, adminName)} 
+                    />
+                  );
+              })}
               </div>
           ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400 min-h-[150px] w-full border-2 border-dashed border-slate-200 rounded-2xl bg-white">
@@ -347,7 +338,6 @@ const EventoSection = ({
   );
 };
 
-// --- PANEL PRINCIPAL ---
 const SuperAdminPanel = () => {
   const navigate = useNavigate();
 
@@ -365,20 +355,25 @@ const SuperAdminPanel = () => {
     editEventModalState, setEditEventModalState, handleSaveEditEvent
   } = useSuperAdminLogic();
 
-  // --- FUNCIÓN ARREGLADA PARA EL BOTÓN VER ---
   const handleVerAdmin = (eventoId: string, adminId: string) => {
     localStorage.setItem('current_admin_id', adminId);
-    // IMPORTANTE: Mandamos el eventoId a la URL, no el adminId
     navigate(`/admin/${eventoId}`, { state: { openedBySuperAdmin: true } }); 
   };
 
-  // --- FUNCIÓN DE CERRAR SESIÓN ---
   const handleLogout = () => {
-    // Borramos los datos de sesión del SuperAdmin
     localStorage.removeItem('user_role');
-    // Mandamos al Login
     navigate('/');
   };
+
+  const modalUsuarioMapeado = infoUsuarioState.data ? {
+    id: infoUsuarioState.data.id,
+    name: infoUsuarioState.data.name,
+    role: 'Administrador' as const,
+    phone: '',
+    supportArea: infoUsuarioState.data.area,
+    notes: '',
+    organization: infoUsuarioState.data.org
+  } : null;
 
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col gap-6">
@@ -403,7 +398,6 @@ const SuperAdminPanel = () => {
               {showNewEvent ? "CERRAR PANEL" : "CREAR EVENTO"}
             </button>
             
-            {/* AGREGAMOS EL BOTÓN DE CERRAR SESIÓN AQUÍ */}
             <button 
               onClick={handleLogout}
               className="px-3.5 py-2.5 bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-xl transition shadow-md border border-slate-600"
@@ -465,7 +459,7 @@ const SuperAdminPanel = () => {
       )}
 
       <div className="flex flex-col gap-6 flex-1 overflow-y-auto pb-10">
-        {eventos.map((evento: EventoItem, index: number) => (
+        {eventos.map((evento: EventoData, index: number) => (
           <EventoSection 
             key={evento.id} 
             evento={evento}
@@ -473,28 +467,28 @@ const SuperAdminPanel = () => {
             onDeleteEvent={(id: string, name: string) => setDeleteModalState({ isOpen: true, type: 'evento', eventoId: id, targetId: id, targetName: name })}
             onOpenSettings={handleOpenAjustesAdmin}
             onDownload={(id: string) => setDownloadModalState({ isOpen: true, adminId: id })}
-            // AQUÍ ESTÁ EL CAMBIO DE ONVIEW
             onView={(adminId: string) => handleVerAdmin(evento.id, adminId)}
             onDeleteAdmin={(eventoId: string, adminId: string, adminName: string) => setDeleteModalState({ isOpen: true, type: 'admin', eventoId, targetId: adminId, targetName: adminName })}
             onAddAdmin={handleAddAdmin}
-            onEditEvent={(eventData: EventoItem) => setEditEventModalState({ isOpen: true, eventData })}
+            onEditEvent={(eventData: EventoData) => setEditEventModalState({ isOpen: true, eventData })}
           />
         ))}
       </div>
 
-      {/* MODALES EXTERNOS */}
       <CroquisModal isOpen={croquisModalState} onClose={() => setCroquisModalState(false)} isAdmin={true} />
       
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <ModalInfoUsuario 
-        isOpen={infoUsuarioState.isOpen} 
-        onClose={() => setInfoUsuarioState({ isOpen: false, data: null })} 
-        data={infoUsuarioState.data as never} 
-        isViewingSelf={false} 
-        currentUserRole="Administrador" 
-        onSave={handleGuardarAjustesAdmin} 
-        checkNameExists={() => false} 
-      />
+      {modalUsuarioMapeado && (
+        <ModalInfoUsuario 
+          isOpen={infoUsuarioState.isOpen} 
+          onClose={() => setInfoUsuarioState({ isOpen: false, data: null })} 
+          data={modalUsuarioMapeado} 
+          isViewingSelf={false} 
+          currentUserRole="Administrador" 
+          onSave={handleGuardarAjustesAdmin} 
+          checkNameExists={() => false} 
+        />
+      )}
+      
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />
       
       <BaseStructureModal 

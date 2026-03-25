@@ -16,12 +16,42 @@ export interface AdminData {
   password?: string;
 }
 
+// Interfaces estrictas para evitar el "any"
+export interface TurnoData {
+  id: string;
+  horario: string;
+  participanteId: string | null;
+}
+
+export interface CajaData {
+  id: string;
+  nombre: string;
+  esEspecial: boolean;
+  turnos: TurnoData[];
+}
+
+export interface DiaData {
+  id: string;
+  fecha: string;
+  nombreDia: string;
+  horariosMaestros: string[];
+  cajas: CajaData[];
+}
+
+export interface ParticipanteData {
+  id: string;
+  nombre: string;
+  estado: string;
+}
+
 export interface EventoData {
   id: string;
   nombre: string;
   passwordGeneral: string;
   metodoGuardado: string;
   admins: AdminData[];
+  diasPorAdmin?: Record<string, DiaData[]>;
+  participantesPorAdmin?: Record<string, ParticipanteData[]>;
   createdAt?: string;
 }
 
@@ -58,26 +88,12 @@ export const useSuperAdminLogic = () => {
     if (!nuevoEventoForm.nombre.trim()) return alert("Por favor, ingresa un nombre.");
 
     const cantidadAdmins = parseInt(nuevoEventoForm.numAdmins) || 0;
-    const nuevosAdmins: AdminData[] = [];
     const cantCajas = estructuraGuardada ? estructuraGuardada.cajas.length : 0;
     const cantHorarios = estructuraGuardada ? estructuraGuardada.horarios.length : 0;
     const totalTurnos = cantCajas * cantHorarios;
 
-    for (let i = 0; i < cantidadAdmins; i++) {
-      // ID MÁS CORTITO PARA EL LOGIN (Ej. admin-A3B9)
-      const shortId = Math.random().toString(36).substring(2, 6).toUpperCase(); 
-      nuevosAdmins.push({
-        id: `admin-${shortId}`, 
-        name: `Nuevo Admin ${i + 1}`, 
-        area: 'Sin asignar', org: 'Sin asignar',
-        cajas: cantCajas, horarios: cantHorarios, turnosTotales: totalTurnos, necesarios: totalTurnos, disponibles: totalTurnos,
-        inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
-      });
-    }
-
-    // CONSTRUIMOS LOS DÍAS A PARTIR DE LA ESTRUCTURA BASE PARA GUARDARLOS EN FIREBASE
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let diasIniciales: any[] = [];
+    // Construimos los días estrictamente tipados
+    let diasIniciales: DiaData[] = [];
     if (estructuraGuardada) {
       diasIniciales = estructuraGuardada.dias.map((nombreDia, index) => ({
         id: `d_${Date.now()}_${index}`,
@@ -97,13 +113,31 @@ export const useSuperAdminLogic = () => {
       }));
     }
 
+    const nuevosAdmins: AdminData[] = [];
+    const diasPorAdmin: Record<string, DiaData[]> = {};
+    const participantesPorAdmin: Record<string, ParticipanteData[]> = {};
+
+    for (let i = 0; i < cantidadAdmins; i++) {
+      const shortId = Math.random().toString(36).substring(2, 6).toUpperCase(); 
+      const adminId = `admin-${shortId}`;
+      nuevosAdmins.push({
+        id: adminId, 
+        name: `Nuevo Admin ${i + 1}`, 
+        area: 'Sin asignar', org: 'Sin asignar',
+        cajas: cantCajas, horarios: cantHorarios, turnosTotales: totalTurnos, necesarios: totalTurnos, disponibles: totalTurnos,
+        inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
+      });
+      diasPorAdmin[adminId] = diasIniciales;
+      participantesPorAdmin[adminId] = [];
+    }
+
     const nuevoEvento = {
       nombre: nuevoEventoForm.nombre,
       passwordGeneral: nuevoEventoForm.passwordGeneral,
       metodoGuardado: nuevoEventoForm.metodoGuardado,
       admins: nuevosAdmins,
-      dias: diasIniciales, // <--- GUARDAMOS LA TABLA AQUÍ
-      participantes: [],
+      diasPorAdmin,
+      participantesPorAdmin,
       createdAt: new Date().toISOString()
     };
 
@@ -139,18 +173,23 @@ export const useSuperAdminLogic = () => {
     const ev = eventos.find(e => e.id === eventoId);
     if (!ev) return;
 
-    const baseAdmin = ev.admins.length > 0 ? ev.admins[0] : null;
+    const baseAdminId = ev.admins.length > 0 ? ev.admins[0].id : null;
+    const baseDias = baseAdminId && ev.diasPorAdmin ? ev.diasPorAdmin[baseAdminId] : [];
+    
     const shortId = Math.random().toString(36).substring(2, 6).toUpperCase(); 
     const nuevoAdmin: AdminData = {
       id: `admin-${shortId}`,
       name: `Nuevo Admin ${ev.admins.length + 1}`,
       area: 'Sin asignar', org: 'Sin asignar',
-      cajas: baseAdmin ? baseAdmin.cajas : 0, horarios: baseAdmin ? baseAdmin.horarios : 0, 
-      turnosTotales: baseAdmin ? baseAdmin.turnosTotales : 0, necesarios: baseAdmin ? baseAdmin.turnosTotales : 0, 
-      disponibles: baseAdmin ? baseAdmin.turnosTotales : 0, inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
+      cajas: 0, horarios: 0, turnosTotales: 0, necesarios: 0, 
+      disponibles: 0, inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
     };
 
-    await updateDoc(doc(db, 'eventos', eventoId), { admins: [...ev.admins, nuevoAdmin] });
+    await updateDoc(doc(db, 'eventos', eventoId), { 
+      admins: [...ev.admins, nuevoAdmin],
+      [`diasPorAdmin.${nuevoAdmin.id}`]: baseDias,
+      [`participantesPorAdmin.${nuevoAdmin.id}`]: []
+    });
   };
 
   const handleSaveEditEvent = async (editedEventData: EventoData) => {
