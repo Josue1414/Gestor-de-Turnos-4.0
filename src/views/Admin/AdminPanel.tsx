@@ -1,5 +1,5 @@
-import { Calendar, Plus, LogOut, ArrowLeft, ShieldCheck } from 'lucide-react'; // <-- Agregué ShieldCheck
-import { useLocation, useNavigate, useParams } from 'react-router-dom'; // <-- Agregué useParams
+import { Calendar, Plus, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAdminLogic } from '../../hooks/useAdminLogic';
 
@@ -18,11 +18,9 @@ import CroquisModal from '../../components/CroquisModal';
 const AdminPanel = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  // 1. LEEMOS EL ID DEL EVENTO DE LA URL (ej. /admin/12345)
   const { id: eventoId } = useParams(); 
   const openedBySuperAdmin = location.state?.openedBySuperAdmin || false;
 
-  // 2. SE LO PASAMOS A LA LÓGICA
   const {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
     isEditingTitle, setIsEditingTitle, seccionName, setSeccionName, showSpecialModal, setShowSpecialModal,
@@ -40,7 +38,6 @@ const AdminPanel = () => {
     navigate('/');
   };
 
-  // 3. PANTALLA DE CARGA MIENTRAS DESCARGA DE FIREBASE
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -51,7 +48,6 @@ const AdminPanel = () => {
     );
   }
 
-  // 4. SI EL EVENTO AÚN NO TIENE DÍAS CREADOS
   if (!diaActual && !loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -59,7 +55,6 @@ const AdminPanel = () => {
         <h2 className="text-xl font-black text-slate-700">El evento está vacío</h2>
         <p className="text-sm text-slate-500 mt-2 mb-6">Aún no se han configurado los días para este evento.</p>
         
-        {/* Mostramos el botón de Regresar si es el SuperAdmin */}
         {openedBySuperAdmin ? (
           <button onClick={() => navigate('/super-admin')} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition">
             <ArrowLeft size={16} /> Regresar a SuperAdmin
@@ -74,53 +69,43 @@ const AdminPanel = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative">
+    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
       
-      {/* --- BOTONES SUPERIORES: REGRESAR / CERRAR SESIÓN --- */}
-      <div className="flex justify-between items-center mb-4">
-        {openedBySuperAdmin ? (
-          <button 
-            onClick={() => navigate('/super-admin')}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition"
-          >
-            <ArrowLeft size={16} /> Regresar a SuperAdmin
-          </button>
-        ) : (
-          <div></div> // Espacio vacío para mantener el layout si no hay botón
-        )}
-
-        {/* Solo mostramos Cerrar Sesión si NO somos el SuperAdmin espiando */}
-        {!openedBySuperAdmin && (
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-white hover:bg-red-50 text-slate-500 hover:text-red-500 border border-slate-200 hover:border-red-200 px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition"
-          >
-            <LogOut size={16} /> Cerrar Sesión
-          </button>
-        )}
-      </div>
-
+      {/* HEADER CENTRALIZADO (Ahora tiene Croquis, Participantes, Salir y Ajustes) */}
       <AdminHeader 
         seccionName={seccionName} setSeccionName={setSeccionName}
         isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle}
-        onOpenProfile={handleAbrirMiPerfil} onSave={() => alert("Guardado")} 
+        onOpenProfile={handleAbrirMiPerfil} onSave={() => {}} 
+        onShowCroquis={() => setShowCroquis(true)}
+        onShowDirectorio={() => setShowDirectorio(true)}
+        isSuperAdminViewing={openedBySuperAdmin}
+        onBack={() => navigate('/super-admin')}
+        onLogout={handleLogout}
       />
 
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0">
-        {dias.map((dia, idx) => (
-          <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-5 py-2 rounded-xl font-bold transition whitespace-nowrap ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
-            <Calendar size={16} /> {dia.nombreDia}
+      {/* FILA DE DÍAS Y ESTADÍSTICAS (Ahora están todas en la misma línea) */}
+      <div className="flex flex-col xl:flex-row xl:items-center gap-4 mb-4 shrink-0 w-full overflow-x-auto pb-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {dias.map((dia, idx) => (
+            <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-5 py-2.5 rounded-xl font-bold transition whitespace-nowrap ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
+              <Calendar size={16} /> {dia.nombreDia}
+            </button>
+          ))}
+          <button onClick={() => setShowSpecialModal(true)} className="px-4 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-100 transition font-bold text-sm flex items-center gap-2 whitespace-nowrap shadow-sm">
+            <Plus size={16} /> Caja Especial
           </button>
-        ))}
-        <button onClick={() => setShowSpecialModal(true)} className="px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-100 transition font-bold text-sm flex items-center gap-2 whitespace-nowrap shadow-sm"><Plus size={16} /> Caja Especial</button>
+        </div>
+
+        {/* BARRA DE ESTADÍSTICAS (Kiosco y recuadros alineados a la derecha si hay espacio) */}
+        <div className="xl:ml-auto shrink-0">
+          <AdminStatsBar 
+            totalCajas={totalCajas} turnosActivos={turnosActivos} turnosLibres={turnosLibres} totalParticipantes={totalParticipantes}
+            onCrearCaja={handleCrearCaja}
+          />
+        </div>
       </div>
 
       <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-        <AdminStatsBar 
-          totalCajas={totalCajas} turnosActivos={turnosActivos} turnosLibres={turnosLibres} totalParticipantes={totalParticipantes}
-          onCrearCaja={handleCrearCaja} onShowCroquis={() => setShowCroquis(true)} onShowDirectorio={() => setShowDirectorio(true)}
-        />
-
         <MatrizTurnos 
           diaActual={diaActual} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante}
           onCrearCaja={handleCrearCaja} onCrearHorario={handleCrearHorario} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario}
