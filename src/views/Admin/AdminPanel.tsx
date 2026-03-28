@@ -1,7 +1,13 @@
+import { useState } from 'react';
 import { Calendar, Plus, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import type { DiaEvento, Participante } from '../../types';
 
 import { useAdminLogic } from '../../hooks/useAdminLogic';
+
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
 import AssignUserModal from '../../components/AssignUserModal';
 import ParticipantDrawer from '../../components/ParticipantDrawer';
@@ -9,11 +15,33 @@ import MatrizTurnos from '../../components/MatrizTurnos';
 import EditNameModal from '../../components/EditNameModal';
 import SpecialBoxModal from '../../components/SpecialBoxModal';
 import EditShiftModal from '../../components/EditShiftModal';
-import ModalInfoUsuario from '../../components/ModalInfoUsuario';
+import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalInfoUsuario';
 import AdminHeader from '../../components/AdminHeader';
 import AdminStatsBar from '../../components/AdminStatsBar';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
+
+// Interfaz para acceder a campos extra del Participante guardados en DB
+interface ParticipanteExtendidoDb extends Participante {
+  telefono?: string;
+  codigoPais?: string;
+  notas?: string;
+  organizacion?: string;
+  organizationLabel?: string;
+  ubicaciones?: string[];
+}
+
+interface AdminInDB {
+  id: string;
+  name?: string;
+  phone?: string;
+  countryCode?: string;
+  notes?: string;
+  organization?: string;
+  organizationLabel?: string;
+  supportArea?: string;
+  [key: string]: unknown;
+}
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -29,8 +57,148 @@ const AdminPanel = () => {
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
     handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, getBusyUserIdsForModal, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
-    handleGuardarUsuario, handleCheckNameDuplicate, downloadModal, setDownloadModal, loading
+    handleCheckNameDuplicate, downloadModal, setDownloadModal, loading
   } = useAdminLogic(eventoId || 'demo'); 
+
+  // ==========================================
+  // BORRADO DE PARTICIPANTE
+  // ==========================================
+  const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
+
+  const handleConfirmDeleteParticipante = async () => {
+    if (!eventoId || !deletePartModal.id) return;
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      
+      const data = docSnap.data();
+      const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+      
+      const participantesDelAdmin: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
+      const participantesFiltrados = participantesDelAdmin.filter((p) => p.id !== deletePartModal.id);
+
+      const diasDelAdmin: DiaEvento[] = data.diasPorAdmin?.[adminIdL] || [];
+      const diasLimpios = diasDelAdmin.map((dia) => ({
+        ...dia,
+        cajas: dia.cajas.map((caja) => ({
+          ...caja,
+          turnos: caja.turnos.map((turno) => ({
+            ...turno,
+            participanteId: turno.participanteId === deletePartModal.id ? null : turno.participanteId
+          }))
+        }))
+      }));
+
+      await updateDoc(docRef, {
+        [`participantesPorAdmin.${adminIdL}`]: participantesFiltrados,
+        [`diasPorAdmin.${adminIdL}`]: diasLimpios
+      });
+
+    } catch (error) {
+      console.error("Error al borrar participante:", error);
+      alert("Hubo un error al borrar el participante.");
+    }
+  };
+
+  // ==========================================
+  // GUARDADO COMPLETO EN FIREBASE
+  // ==========================================
+  const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
+    if (!eventoId) return;
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      
+      const data = docSnap.data();
+      const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+
+      if (datosActualizados.role === 'Participante') {
+        const participantesDelAdmin: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
+        
+        const actualizados = participantesDelAdmin.map((p) => 
+          p.id === datosActualizados.id 
+            ? { 
+                ...p, 
+                nombre: datosActualizados.name, 
+                telefono: datosActualizados.phone, 
+                codigoPais: datosActualizados.countryCode,
+                notas: datosActualizados.notes,
+                organizacion: datosActualizados.organization,
+                organizationLabel: datosActualizados.organizationLabel
+              } 
+            : p
+        );
+
+        await updateDoc(docRef, {
+          [`participantesPorAdmin.${adminIdL}`]: actualizados
+        });
+      } 
+      else if (datosActualizados.role === 'Administrador' || datosActualizados.role === 'SuperAdmin') {
+        const admins: AdminInDB[] = data.admins || [];
+        const actualizados = admins.map((a) => 
+          a.id === datosActualizados.id 
+            ? { 
+                ...a, 
+                name: datosActualizados.name, 
+                phone: datosActualizados.phone, 
+                countryCode: datosActualizados.countryCode,
+                notes: datosActualizados.notes,
+                organization: datosActualizados.organization,
+                organizationLabel: datosActualizados.organizationLabel
+              }
+            : a
+        );
+
+        await updateDoc(docRef, { admins: actualizados });
+      }
+
+      setIsUsuarioModalOpen(false); 
+    } catch (error) {
+      console.error("Error al guardar el perfil:", error);
+      alert("Hubo un error al guardar. Intenta de nuevo.");
+    }
+  };
+
+  // ==========================================
+  // INTERCEPTOR: EXTRAER DATOS FRESCOS PARA EL MODAL
+  // ==========================================
+  const getDatosParaModal = (): UsuarioModalData | null => {
+    if (!usuarioActivo) return null;
+
+    if (usuarioActivo.role === 'Participante') {
+      const p = participantesEnriquecidos.find(x => x.id === usuarioActivo.id) as ParticipanteExtendidoDb | undefined;
+      return {
+        id: usuarioActivo.id,
+        name: p?.nombre || usuarioActivo.name,
+        role: 'Participante',
+        phone: p?.telefono || '',
+        countryCode: p?.codigoPais || '+52',
+        supportArea: usuarioActivo.supportArea || '',
+        notes: p?.notas || '',
+        organization: p?.organizacion || '',
+        organizationLabel: p?.organizationLabel || 'Congregación',
+        ubicaciones: p?.ubicaciones || []
+      };
+    }
+
+    const a = usuarioActivo as unknown as AdminInDB;
+    return {
+      id: usuarioActivo.id,
+      name: a.name || usuarioActivo.name,
+      role: usuarioActivo.role,
+      phone: a.phone || '',
+      countryCode: a.countryCode || '+52',
+      supportArea: a.supportArea || '',
+      notes: a.notes || '',
+      organization: a.organization || '',
+      organizationLabel: a.organizationLabel || 'Congregación',
+      ubicaciones: []
+    };
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('user_role');
@@ -71,7 +239,6 @@ const AdminPanel = () => {
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
       
-      {/* HEADER CENTRALIZADO (Ahora tiene Croquis, Participantes, Salir y Ajustes) */}
       <AdminHeader 
         seccionName={seccionName} setSeccionName={setSeccionName}
         isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle}
@@ -83,7 +250,6 @@ const AdminPanel = () => {
         onLogout={handleLogout}
       />
 
-      {/* FILA DE DÍAS Y ESTADÍSTICAS (Ahora están todas en la misma línea) */}
       <div className="flex flex-col xl:flex-row xl:items-center gap-4 mb-4 shrink-0 w-full overflow-x-auto pb-2">
         <div className="flex items-center gap-2 shrink-0">
           {dias.map((dia, idx) => (
@@ -96,7 +262,6 @@ const AdminPanel = () => {
           </button>
         </div>
 
-        {/* BARRA DE ESTADÍSTICAS (Kiosco y recuadros alineados a la derecha si hay espacio) */}
         <div className="xl:ml-auto shrink-0">
           <AdminStatsBar 
             totalCajas={totalCajas} turnosActivos={turnosActivos} turnosLibres={turnosLibres} totalParticipantes={totalParticipantes}
@@ -114,47 +279,51 @@ const AdminPanel = () => {
         />
       </div>
 
-      {/* MODALES */}
       <AssignUserModal isOpen={modalAsignacion.isOpen} onClose={cerrarModalAsignacion} horario={modalAsignacion.horario} cajaNombre={modalAsignacion.cajaNombre} participantes={participantesEnriquecidos} busyUserIds={getBusyUserIdsForModal()} onAssign={asignarUsuarioExistente} onCreateAndAssign={crearYAsignarUsuario} />
-      <ParticipantDrawer isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} currentUserRole="Administrador" onEditParticipante={handleAbrirPerfilParticipante} />
+      
+      <ParticipantDrawer 
+        isOpen={showDirectorio} 
+        onClose={() => setShowDirectorio(false)} 
+        participantes={participantesEnriquecidos} 
+        currentUserRole="Administrador" 
+        onEditParticipante={handleAbrirPerfilParticipante} 
+        onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })}
+        eventoId={eventoId} 
+        adminId={localStorage.getItem('current_admin_id') || 'demo'}
+      />
+
       <EditNameModal isOpen={editModal.isOpen && editModal.type === 'caja'} title={editModal.title} initialValue={editModal.initialValue} label={editModal.label} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
       <EditShiftModal isOpen={editModal.isOpen && editModal.type === 'horario'} initialRange={editModal.initialValue} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
       <SpecialBoxModal isOpen={showSpecialModal} onClose={() => setShowSpecialModal(false)} onCreate={handleCrearCajaEspecial} />
       
+      <CountdownDeleteModal 
+        isOpen={deletePartModal.isOpen} 
+        onClose={() => setDeletePartModal({ isOpen: false, id: '', nombre: '' })} 
+        onConfirm={handleConfirmDeleteParticipante} 
+        title={deletePartModal.nombre} 
+        message="Se eliminará su perfil y se liberarán todos los turnos que tenía asignados."
+      />
+
+      {/* AQUÍ ESTAMOS PASANDO LOS DATOS YA ENRIQUECIDOS DESDE FIREBASE */}
       <ModalInfoUsuario 
         isOpen={isUsuarioModalOpen} 
         onClose={() => setIsUsuarioModalOpen(false)} 
-        data={usuarioActivo} 
+        data={getDatosParaModal()} 
         isViewingSelf={isViewingSelf} 
         currentUserRole="Administrador" 
-        onSave={handleGuardarUsuario} 
+        onSave={handleGuardarPerfilAjustado} 
         checkNameExists={handleCheckNameDuplicate} 
         onDownloadImage={() => {
-          setDownloadModal({
-            isOpen: true,
-            type: isViewingSelf ? 'general' : 'personal',
-            targetUserId: usuarioActivo?.id
-          });
+          setDownloadModal({ isOpen: true, type: isViewingSelf ? 'general' : 'personal', targetUserId: usuarioActivo?.id });
           setIsUsuarioModalOpen(false); 
         }} 
       />
 
       <DownloadScheduleModal
-        isOpen={downloadModal.isOpen}
-        onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })}
-        type={downloadModal.type}
-        seccionName={seccionName}
-        dias={dias}
-        diaActivo={diaActivo}
-        participantes={participantesEnriquecidos}
-        targetUserId={downloadModal.targetUserId}
+        isOpen={downloadModal.isOpen} onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })} type={downloadModal.type} seccionName={seccionName} dias={dias} diaActivo={diaActivo} participantes={participantesEnriquecidos} targetUserId={downloadModal.targetUserId}
       />
 
-      <CroquisModal 
-        isOpen={showCroquis} 
-        onClose={() => setShowCroquis(false)} 
-        isAdmin={true} 
-      />
+      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} isAdmin={true} />
     </div>
   );
 };
