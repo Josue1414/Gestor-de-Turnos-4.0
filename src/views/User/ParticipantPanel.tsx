@@ -19,10 +19,11 @@ interface ParticipanteExtendidoDb extends Participante {
   organizacion?: string;
   organizationLabel?: string;
   ubicaciones?: string[];
+  fechaNacimiento?: string;
 }
 
 const ParticipantPanel = () => {
-  const { eventoId, adminId, participanteId } = useParams();
+  const { eventoId, adminId, participanteId } = useParams<{ eventoId: string; adminId: string; participanteId: string }>();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -32,9 +33,10 @@ const ParticipantPanel = () => {
   
   const [diaActivo, setDiaActivo] = useState(0);
   const [downloadModal, setDownloadModal] = useState(false);
-  const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
   const [showDirectorio, setShowDirectorio] = useState(false);
   const [showCroquis, setShowCroquis] = useState(false);
+  
+  const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
 
   useEffect(() => {
     if (!eventoId || !adminId) return;
@@ -43,97 +45,22 @@ const ParticipantPanel = () => {
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setEventoNombre(data.nombre || 'Evento');
-        
         setDias(data.diasPorAdmin?.[adminId] || []);
         setParticipantes(data.participantesPorAdmin?.[adminId] || []);
-        setLoading(false);
+        if (data.nombre) setEventoNombre(data.nombre);
       } else {
         alert("El evento no existe.");
         navigate('/');
       }
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, [eventoId, adminId, navigate]);
 
   const miUsuario = participantes.find(p => p.id === participanteId);
-  const diaActual = dias[diaActivo];
 
-  const getParticipante = (id: string | null) => participantes.find(p => p.id === id);
-
-  const handleAsignarme = async (cajaId: string, turnoId: string) => {
-    if (!miUsuario || !diaActual) return;
-    
-    const nuevosDias = [...dias];
-    const diaIndex = diaActivo;
-    const cajaIndex = nuevosDias[diaIndex].cajas.findIndex(c => c.id === cajaId);
-    const turnoIndex = nuevosDias[diaIndex].cajas[cajaIndex].turnos.findIndex(t => t.id === turnoId);
-
-    nuevosDias[diaIndex].cajas[cajaIndex].turnos[turnoIndex].participanteId = miUsuario.id;
-
-    await updateDoc(doc(db, 'eventos', eventoId!), {
-      [`diasPorAdmin.${adminId}`]: nuevosDias
-    });
-  };
-
-  const handleQuitarme = async (cajaId: string, turnoId: string) => {
-    if (!miUsuario || !diaActual) return;
-
-    const nuevosDias = [...dias];
-    const diaIndex = diaActivo;
-    const cajaIndex = nuevosDias[diaIndex].cajas.findIndex(c => c.id === cajaId);
-    const turnoIndex = nuevosDias[diaIndex].cajas[cajaIndex].turnos.findIndex(t => t.id === turnoId);
-
-    if (nuevosDias[diaIndex].cajas[cajaIndex].turnos[turnoIndex].participanteId === miUsuario.id) {
-      nuevosDias[diaIndex].cajas[cajaIndex].turnos[turnoIndex].participanteId = null;
-
-      await updateDoc(doc(db, 'eventos', eventoId!), {
-        [`diasPorAdmin.${adminId}`]: nuevosDias
-      });
-    }
-  };
-
-  const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
-    if (!miUsuario) return;
-
-    // VALIDACIÓN DE NOMBRE DUPLICADO (Excluyendo a uno mismo)
-    const nameExists = participantes.some(
-      p => p.nombre.toLowerCase() === datosActualizados.name.toLowerCase().trim() && p.id !== datosActualizados.id
-    );
-
-    if (nameExists) {
-      alert("Este nombre ya está en uso por otro participante. Por favor elige otro para evitar confusiones.");
-      return;
-    }
-
-    const participantesActualizados = participantes.map(p => 
-      p.id === miUsuario.id 
-        ? { 
-            ...p, 
-            nombre: datosActualizados.name, 
-            telefono: datosActualizados.phone, 
-            codigoPais: datosActualizados.countryCode,
-            notas: datosActualizados.notes,
-            organizacion: datosActualizados.organization
-            // No sobreescribimos organizationLabel porque el participante no puede cambiar la etiqueta
-          } 
-        : p
-    );
-
-    await updateDoc(doc(db, 'eventos', eventoId!), {
-      [`participantesPorAdmin.${adminId}`]: participantesActualizados
-    });
-    setIsUsuarioModalOpen(false);
-  };
-
-  const handleLogout = () => {
-    // Redirigir a la pantalla de Invitación como pediste
-    navigate(`/invite/${eventoId}/${adminId}`);
-  };
-
-  // Preparamos los datos frescos (useMemo evita renders infinitos en el Modal)
-  const datosParaModal = useMemo((): UsuarioModalData | null => {
+  const datosParaModal: UsuarioModalData | null = useMemo(() => {
     if (!miUsuario) return null;
     return {
       id: miUsuario.id,
@@ -141,60 +68,151 @@ const ParticipantPanel = () => {
       role: 'Participante',
       phone: miUsuario.telefono || '',
       countryCode: miUsuario.codigoPais || '+52',
-      supportArea: '',
+      supportArea: miUsuario.ubicaciones?.length ? miUsuario.ubicaciones.join(', ') : 'Libre',
       notes: miUsuario.notas || '',
       organization: miUsuario.organizacion || '',
       organizationLabel: miUsuario.organizationLabel || 'Congregación',
-      ubicaciones: miUsuario.ubicaciones || []
+      ubicaciones: miUsuario.ubicaciones || [],
+      birthDate: miUsuario.fechaNacimiento || '' 
     };
   }, [miUsuario]);
 
-  if (loading || !miUsuario) {
+  if (!miUsuario && !loading) {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
-        <ShieldCheck size={48} className="text-blue-500 mb-4 animate-pulse" />
-        <h2 className="text-xl font-black text-slate-700">Cargando tu panel...</h2>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-bold text-slate-600">Sincronizando acceso...</p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
+  const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
+    if (!eventoId || !adminId || !miUsuario) return;
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const actualizados = participantes.map((p) => 
+        p.id === miUsuario.id 
+          ? { 
+              ...p, 
+              nombre: datosActualizados.name, 
+              telefono: datosActualizados.phone, 
+              codigoPais: datosActualizados.countryCode,
+              notas: datosActualizados.notes,
+              organizacion: datosActualizados.organization,
+              organizationLabel: datosActualizados.organizationLabel,
+              fechaNacimiento: datosActualizados.birthDate
+            } 
+          : p
+      );
+
+      await updateDoc(docRef, {
+        [`participantesPorAdmin.${adminId}`]: actualizados
+      });
       
-      <header className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-4 shrink-0">
+      setIsUsuarioModalOpen(false);
+    } catch (error) {
+      console.error("Error guardando perfil:", error);
+      alert("Hubo un error al guardar tu perfil.");
+    }
+  };
+
+  const diaActual = dias[diaActivo];
+
+  const syncEvent = async (nuevosDias: DiaEvento[]) => {
+    if (!eventoId || !adminId) return;
+    await updateDoc(doc(db, 'eventos', eventoId), {
+      [`diasPorAdmin.${adminId}`]: nuevosDias
+    });
+  };
+
+  const handleAsignarme = (cajaId: string, turnoId: string) => {
+    if (!miUsuario) return;
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: miUsuario.id } : t)
+      } : c)
+    } : d);
+    syncEvent(nuevosDias);
+  };
+
+  const handleQuitarme = (cajaId: string, turnoId: string) => {
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: null } : t)
+      } : c)
+    } : d);
+    syncEvent(nuevosDias);
+  };
+
+  // AQUÍ ESTÁ LA CORRECCIÓN: Ahora te devuelve a tu link de invitación
+  const handleLogout = () => {
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('current_admin_id');
+    if (eventoId && adminId) {
+      navigate(`/invite/${eventoId}/${adminId}`);
+    } else {
+      navigate('/');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center">
+        <ShieldCheck size={48} className="text-blue-500 animate-pulse mb-4" />
+        <h2 className="text-xl font-black text-slate-700">Cargando evento...</h2>
+      </div>
+    );
+  }
+
+  if (!miUsuario) return null;
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen overflow-x-hidden">
+      
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-4 shrink-0 gap-4">
         <div>
-          <h1 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            ¡Hola, {miUsuario.nombre.split(' ')[0]}!
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight mb-1">
+            Hola, <span className="text-blue-600">{miUsuario.nombre}</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">{eventoNombre}</p>
+          <p className="text-xs sm:text-sm font-bold text-slate-500">{eventoNombre}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-xl transition" title="Cerrar sesión">
-            <LogOut size={20} />
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button onClick={() => setShowCroquis(true)} className="bg-white border border-slate-300 text-slate-700 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1 sm:gap-2 transition shadow-sm hover:bg-slate-50 flex-1 justify-center sm:flex-none">
+            📍 <span className="hidden sm:inline">Croquis</span>
+          </button>
+          
+          <button onClick={() => setShowDirectorio(true)} className="bg-slate-800 text-white px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1 sm:gap-2 hover:bg-slate-700 transition shadow-sm flex-1 sm:flex-none">
+            <Users size={16} className="sm:w-4 sm:h-4" /> Directorio
+          </button>
+
+          <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+
+          <button onClick={() => setIsUsuarioModalOpen(true)} className="bg-indigo-50 text-indigo-600 px-3 py-2 sm:py-2.5 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1 sm:gap-2 hover:bg-indigo-100 transition shadow-sm flex-1 sm:flex-none">
+             Mi Perfil
+          </button>
+
+          <button onClick={handleLogout} className="bg-white text-red-600 border border-slate-200 hover:border-red-200 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition flex-1 sm:flex-none flex items-center justify-center">
+            <LogOut size={16} className="sm:w-4 sm:h-4 sm:mr-1" /> <span className="hidden sm:inline">Salir</span>
           </button>
         </div>
       </header>
 
-      <div className="flex flex-col xl:flex-row xl:items-center gap-4 mb-4 shrink-0 w-full overflow-x-auto pb-2">
-        <div className="flex items-center gap-2 shrink-0">
-          {dias.map((dia, idx) => (
-            <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-5 py-2.5 rounded-xl font-bold transition whitespace-nowrap ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
-              <Calendar size={16} /> {dia.nombreDia}
-            </button>
-          ))}
-        </div>
-        <div className="xl:ml-auto shrink-0 flex gap-2 w-full xl:w-auto">
-          <button onClick={() => setShowDirectorio(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition hover:bg-slate-700 shadow-md">
-            <Users size={16} /> Participantes
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 shrink-0">
+        {dias.map((dia, idx) => (
+          <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold transition whitespace-nowrap text-xs sm:text-sm ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
+            <div className="flex items-center gap-2">
+              <Calendar size={16} className="sm:w-4 sm:h-4" /> {dia.nombreDia}
+            </div>
           </button>
-        </div>
+        ))}
       </div>
 
       <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
         {diaActual ? (
           <MatrizTurnosParticipante 
             diaActual={diaActual} 
-            getParticipante={getParticipante} 
+            getParticipante={(id) => participantes.find(p => p.id === id)} 
             miUsuarioId={miUsuario.id} 
             onAsignarme={handleAsignarme} 
             onQuitarme={handleQuitarme} 
@@ -214,7 +232,7 @@ const ParticipantPanel = () => {
         currentUserId={miUsuario.id} 
         currentUserRole="Participante" 
         onEditParticipante={(id) => { if (id === miUsuario.id) setIsUsuarioModalOpen(true); }}
-        onDeleteParticipante={() => {}} // Tapón: Participante no borra a nadie, evita error TS
+        onDeleteParticipante={() => {}} 
         eventoId={eventoId}
         adminId={adminId}
       />
@@ -239,8 +257,12 @@ const ParticipantPanel = () => {
         participantes={participantes} 
         targetUserId={miUsuario.id} 
       />
-      
-      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} isAdmin={false} />
+
+      <CroquisModal 
+        isOpen={showCroquis} 
+        onClose={() => setShowCroquis(false)} 
+        isAdmin={false} 
+      />
     </div>
   );
 };

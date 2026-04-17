@@ -21,7 +21,6 @@ import AdminStatsBar from '../../components/AdminStatsBar';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 
-// Interfaz para acceder a campos extra del Participante guardados en DB
 interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
   codigoPais?: string;
@@ -29,6 +28,7 @@ interface ParticipanteExtendidoDb extends Participante {
   organizacion?: string;
   organizationLabel?: string;
   ubicaciones?: string[];
+  fechaNacimiento?: string;
 }
 
 interface AdminInDB {
@@ -60,9 +60,6 @@ const AdminPanel = () => {
     handleCheckNameDuplicate, downloadModal, setDownloadModal, loading
   } = useAdminLogic(eventoId || 'demo'); 
 
-  // ==========================================
-  // BORRADO DE PARTICIPANTE
-  // ==========================================
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
 
   const handleConfirmDeleteParticipante = async () => {
@@ -96,15 +93,12 @@ const AdminPanel = () => {
         [`diasPorAdmin.${adminIdL}`]: diasLimpios
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error al borrar participante:", error);
       alert("Hubo un error al borrar el participante.");
     }
   };
 
-  // ==========================================
-  // GUARDADO COMPLETO EN FIREBASE
-  // ==========================================
   const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
     if (!eventoId) return;
     
@@ -117,7 +111,7 @@ const AdminPanel = () => {
       const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
 
       if (datosActualizados.role === 'Participante') {
-        const participantesDelAdmin: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
+        const participantesDelAdmin: ParticipanteExtendidoDb[] = data.participantesPorAdmin?.[adminIdL] || [];
         
         const actualizados = participantesDelAdmin.map((p) => 
           p.id === datosActualizados.id 
@@ -128,7 +122,8 @@ const AdminPanel = () => {
                 codigoPais: datosActualizados.countryCode,
                 notas: datosActualizados.notes,
                 organizacion: datosActualizados.organization,
-                organizationLabel: datosActualizados.organizationLabel
+                organizationLabel: datosActualizados.organizationLabel,
+                fechaNacimiento: datosActualizados.birthDate 
               } 
             : p
         );
@@ -157,15 +152,12 @@ const AdminPanel = () => {
       }
 
       setIsUsuarioModalOpen(false); 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error al guardar el perfil:", error);
       alert("Hubo un error al guardar. Intenta de nuevo.");
     }
   };
 
-  // ==========================================
-  // INTERCEPTOR: EXTRAER DATOS FRESCOS PARA EL MODAL
-  // ==========================================
   const getDatosParaModal = (): UsuarioModalData | null => {
     if (!usuarioActivo) return null;
 
@@ -181,7 +173,8 @@ const AdminPanel = () => {
         notes: p?.notas || '',
         organization: p?.organizacion || '',
         organizationLabel: p?.organizationLabel || 'Congregación',
-        ubicaciones: p?.ubicaciones || []
+        ubicaciones: p?.ubicaciones || [],
+        birthDate: p?.fechaNacimiento || '' 
       };
     }
 
@@ -204,6 +197,17 @@ const AdminPanel = () => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
     navigate('/');
+  };
+
+  const handleSaveEventName = async (): Promise<void> => {
+    setIsEditingTitle(false);
+    if (!eventoId || !seccionName.trim()) return;
+    try {
+      const eventoRef = doc(db, 'eventos', eventoId);
+      await updateDoc(eventoRef, { nombre: seccionName.trim() });
+    } catch (error: unknown) {
+      console.error("Error al actualizar el nombre del evento:", error);
+    }
   };
 
   if (loading) {
@@ -240,14 +244,16 @@ const AdminPanel = () => {
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
       
       <AdminHeader 
-        seccionName={seccionName} setSeccionName={setSeccionName}
-        isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle}
-        onOpenProfile={handleAbrirMiPerfil} onSave={() => {}} 
-        onShowCroquis={() => setShowCroquis(true)}
-        onShowDirectorio={() => setShowDirectorio(true)}
-        isSuperAdminViewing={openedBySuperAdmin}
-        onBack={() => navigate('/super-admin')}
-        onLogout={handleLogout}
+        seccionName={seccionName} 
+        setSeccionName={setSeccionName} 
+        isEditingTitle={isEditingTitle} 
+        setIsEditingTitle={setIsEditingTitle} 
+        onOpenProfile={handleAbrirMiPerfil} 
+        onSave={handleSaveEventName} 
+        onShowCroquis={() => setShowCroquis(true)} 
+        onBack={openedBySuperAdmin ? () => navigate('/super-admin') : undefined} 
+        onLogout={!openedBySuperAdmin ? handleLogout : undefined} 
+        isSuperAdminViewing={openedBySuperAdmin} 
       />
 
       <div className="flex flex-col xl:flex-row xl:items-center gap-4 mb-4 shrink-0 w-full overflow-x-auto pb-2">
@@ -264,8 +270,12 @@ const AdminPanel = () => {
 
         <div className="xl:ml-auto shrink-0">
           <AdminStatsBar 
-            totalCajas={totalCajas} turnosActivos={turnosActivos} turnosLibres={turnosLibres} totalParticipantes={totalParticipantes}
-            onCrearCaja={handleCrearCaja}
+            totalCajas={totalCajas} 
+            turnosActivos={turnosActivos} 
+            turnosLibres={turnosLibres} 
+            totalParticipantes={totalParticipantes} 
+            onCrearCaja={handleCrearCaja} 
+            onShowDirectorio={() => setShowDirectorio(true)} 
           />
         </div>
       </div>
@@ -288,7 +298,7 @@ const AdminPanel = () => {
         currentUserRole="Administrador" 
         onEditParticipante={handleAbrirPerfilParticipante} 
         onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })}
-        eventoId={eventoId} 
+        eventoId={eventoId}
         adminId={localStorage.getItem('current_admin_id') || 'demo'}
       />
 
@@ -304,7 +314,6 @@ const AdminPanel = () => {
         message="Se eliminará su perfil y se liberarán todos los turnos que tenía asignados."
       />
 
-      {/* AQUÍ ESTAMOS PASANDO LOS DATOS YA ENRIQUECIDOS DESDE FIREBASE */}
       <ModalInfoUsuario 
         isOpen={isUsuarioModalOpen} 
         onClose={() => setIsUsuarioModalOpen(false)} 

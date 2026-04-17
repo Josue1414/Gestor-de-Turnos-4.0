@@ -2,7 +2,17 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { DiaEvento, Participante } from '../types';
-import { isNameDuplicate } from '../utils/validations';
+
+// Interfaz estricta para reemplazar el "any" del admin
+interface AdminDB {
+  id: string;
+  name?: string;
+  phone?: string;
+  area?: string;
+  notes?: string;
+  organizationLabel?: string;
+  organization?: string;
+}
 
 interface UsuarioPerfil {
   id: string;
@@ -13,6 +23,7 @@ interface UsuarioPerfil {
   notes: string;
   organizationLabel?: string;
   organization?: string;
+  birthDate?: string;
 }
 
 interface TurnoEspecialConfig {
@@ -22,11 +33,17 @@ interface TurnoEspecialConfig {
 
 const hayChoqueDeHorario = (rango1: string, rango2: string) => {
   try {
-    const [inicio1, fin1] = rango1.split('-').map(t => t.trim());
-    const [inicio2, fin2] = rango2.split('-').map(t => t.trim());
-    const aMin = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
-    const i1 = aMin(inicio1), f1 = aMin(fin1);
-    const i2 = aMin(inicio2), f2 = aMin(fin2);
+    const parse = (t: string) => {
+      if (!t) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const r1 = rango1.split('-');
+    const r2 = rango2.split('-');
+    const i1 = parse(r1[0].trim());
+    const f1 = r1.length > 1 ? parse(r1[1].trim()) : i1 + 59; 
+    const i2 = parse(r2[0].trim());
+    const f2 = r2.length > 1 ? parse(r2[1].trim()) : i2 + 59;
     return i1 < f2 && i2 < f1;
   } catch { 
     return false; 
@@ -34,201 +51,232 @@ const hayChoqueDeHorario = (rango1: string, rango2: string) => {
 };
 
 export const useAdminLogic = (eventoId: string) => {
+  const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+
+  const [dias, setDias] = useState<DiaEvento[]>([]);
   const [diaActivo, setDiaActivo] = useState(0);
+  const [participantes, setParticipantes] = useState<Participante[]>([]);
+  const [seccionName, setSeccionName] = useState('Mi Evento');
+  
   const [showDirectorio, setShowDirectorio] = useState(false);
   const [showCroquis, setShowCroquis] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [seccionName, setSeccionName] = useState('Accesos Principales');
   const [showSpecialModal, setShowSpecialModal] = useState(false);
-  const [editModal, setEditModal] = useState({ isOpen: false, title: '', initialValue: '', label: '', type: '' as 'caja' | 'horario', id: '' });
+  
+  const [editModal, setEditModal] = useState<{isOpen: boolean; type: 'caja' | 'horario'; title: string; initialValue: string; label: string; targetId?: string}>({
+    isOpen: false, type: 'caja', title: '', initialValue: '', label: ''
+  });
   
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
   const [usuarioActivo, setUsuarioActivo] = useState<UsuarioPerfil | null>(null);
   const [isViewingSelf, setIsViewingSelf] = useState(false);
-  const [modalAsignacion, setModalAsignacion] = useState({ isOpen: false, cajaId: '', turnoId: '', horario: '', cajaNombre: '' });
-  const [downloadModal, setDownloadModal] = useState<{ isOpen: boolean; type: 'personal' | 'general'; targetUserId?: string; }>({ isOpen: false, type: 'personal' });
-
-  const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil>({
-    id: 'admin_1', name: 'Admin', role: 'Administrador', phone: '', supportArea: '', notes: '', organizationLabel: 'Organización', organization: ''
-  });
-
-  const [participantes, setParticipantes] = useState<Participante[]>([]);
-  const [dias, setDias] = useState<DiaEvento[]>([]);
+  
+  const [modalAsignacion, setModalAsignacion] = useState({ isOpen: false, cajaId: '', cajaNombre: '', turnoId: '', horario: '' });
+  const [downloadModal, setDownloadModal] = useState<{isOpen: boolean; type: 'general'|'personal'; targetUserId?: string}>({ isOpen: false, type: 'general' });
   const [loading, setLoading] = useState(true);
-
-  // OBTENEMOS EL ID DEL ADMIN ACTUAL DESDE EL ALMACENAMIENTO LOCAL
-  const currentAdminId = localStorage.getItem('current_admin_id');
+  const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil | null>(null);
 
   useEffect(() => {
-    if (!eventoId || eventoId === 'demo') {
-      const timer = setTimeout(() => { setLoading(false); }, 0);
-      return () => clearTimeout(timer);
-    }
-
-    const eventoRef = doc(db, 'eventos', eventoId);
+    if (!eventoId) return;
+    const docRef = doc(db, 'eventos', eventoId);
     
-    const unsubscribe = onSnapshot(eventoRef, (docSnap) => {
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (currentAdminId) {
-          // AHORA LEE SOLO SUS PROPIOS DÍAS Y PARTICIPANTES
-          setDias(data.diasPorAdmin?.[currentAdminId] || []);
-          setParticipantes(data.participantesPorAdmin?.[currentAdminId] || []);
-        }
+        setDias(data.diasPorAdmin?.[adminIdL] || []);
+        setParticipantes(data.participantesPorAdmin?.[adminIdL] || []);
         if (data.nombre) setSeccionName(data.nombre);
+
+        // Se reemplazó a:any por AdminDB
+        const currentAdmin = data.admins?.find((a: AdminDB) => a.id === adminIdL);
+        if (currentAdmin) {
+          setMisDatosAdmin({
+            id: currentAdmin.id,
+            name: currentAdmin.name || 'Admin',
+            role: 'Administrador',
+            phone: currentAdmin.phone || '',
+            supportArea: currentAdmin.area || 'General',
+            notes: currentAdmin.notes || '',
+            organizationLabel: currentAdmin.organizationLabel,
+            organization: currentAdmin.organization
+          });
+        }
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [eventoId, currentAdminId]);
+  }, [eventoId, adminIdL]);
 
-  const syncDias = async (nuevosDias: DiaEvento[]) => {
-    setDias(nuevosDias);
-    if (eventoId && eventoId !== 'demo' && currentAdminId) {
-      // GUARDA SOLO EN SU CARPETA
-      await updateDoc(doc(db, 'eventos', eventoId), {
-        [`diasPorAdmin.${currentAdminId}`]: nuevosDias
-      });
-    }
+  const syncEvent = async (nuevosDias: DiaEvento[]) => {
+    await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
   };
-
   const syncParticipantes = async (nuevosParticipantes: Participante[]) => {
-    setParticipantes(nuevosParticipantes);
-    if (eventoId && eventoId !== 'demo' && currentAdminId) {
-      // GUARDA SOLO EN SU CARPETA
-      await updateDoc(doc(db, 'eventos', eventoId), {
-        [`participantesPorAdmin.${currentAdminId}`]: nuevosParticipantes
-      });
-    }
+    await updateDoc(doc(db, 'eventos', eventoId), { [`participantesPorAdmin.${adminIdL}`]: nuevosParticipantes });
   };
 
-  const diaActual = dias[diaActivo] || null;
+  const diaActual = dias[diaActivo];
+
+  const getParticipante = (id: string | null) => participantes.find(p => p.id === id);
 
   const participantesEnriquecidos = participantes.map(p => {
     const ubicaciones: string[] = [];
-    if (diaActual) {
-      diaActual.cajas.forEach(caja => { 
-        caja.turnos.forEach(turno => { 
-          if (turno.participanteId === p.id) ubicaciones.push(`${caja.nombre} - ${turno.horario}`); 
-        }); 
+    dias.forEach((dia) => {
+      dia.cajas.forEach(caja => {
+        caja.turnos.forEach(turno => {
+          if (turno.participanteId === p.id) {
+            ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${caja.nombre}`);
+          }
+        });
       });
-    }
-    return { ...p, estado: ubicaciones.length > 0 ? 'Asignado' : 'Libre', ubicaciones } as Participante;
+    });
+    return { ...p, estado: ubicaciones.length > 0 ? 'Asignado' : 'Libre', ubicaciones };
   });
 
-  const getParticipante = (id: string | null) => participantesEnriquecidos.find(p => p.id === id);
-  const totalCajas = diaActual ? diaActual.cajas.length : 0;
-  const turnosActivos = diaActual ? diaActual.cajas.reduce((acc, c) => acc + c.turnos.filter(t => t.participanteId !== 'CERRADO' && t.participanteId !== null).length, 0) : 0;
-  const turnosLibres = diaActual ? diaActual.cajas.reduce((acc, c) => acc + c.turnos.filter(t => t.participanteId === null).length, 0) : 0;
-
-  const abrirModalAsignacion = (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => setModalAsignacion({ isOpen: true, cajaId, turnoId, horario, cajaNombre });
-  const cerrarModalAsignacion = () => setModalAsignacion({ ...modalAsignacion, isOpen: false });
-
-  const actualizarTurnoVisual = (participanteId: string | null) => {
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; const caja = nuevosDias[diaActivo].cajas.find(c => c.id === modalAsignacion.cajaId);
-    if (caja) { const turno = caja.turnos.find(t => t.id === modalAsignacion.turnoId); if (turno) turno.participanteId = participanteId; }
-    syncDias(nuevosDias); 
-  };
-
-  const asignarUsuarioExistente = (participanteId: string) => { actualizarTurnoVisual(participanteId); cerrarModalAsignacion(); };
-  const handleCheckNameDuplicate = (newName: string, currentId: string) => isNameDuplicate(newName, participantes.map(p => ({ id: p.id, nombre: p.nombre })), currentId);
-
-  const crearYAsignarUsuario = (nombre: string) => {
-    if (handleCheckNameDuplicate(nombre, '')) { alert('Este participante ya existe.'); return; }
-    const nuevoId = 'p_' + Date.now();
-    const nuevosParticipantes = [...participantes, { id: nuevoId, nombre, linkUnico: '...', estado: 'Libre' as const }];
-    syncParticipantes(nuevosParticipantes); 
-    actualizarTurnoVisual(nuevoId); 
-    cerrarModalAsignacion();
-  };
-
-  const quitarParticipante = (cajaId: string, turnoId: string) => {
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; const caja = nuevosDias[diaActivo].cajas.find(c => c.id === cajaId);
-    if (caja) { const turno = caja.turnos.find(t => t.id === turnoId); if (turno) turno.participanteId = null; }
-    syncDias(nuevosDias); 
-  };
+  let totalCajas = 0, turnosActivos = 0, turnosLibres = 0;
+  if (diaActual) {
+    totalCajas = diaActual.cajas.length;
+    diaActual.cajas.forEach(caja => {
+      caja.turnos.forEach(turno => {
+        if (turno.participanteId) turnosActivos++;
+        else turnosLibres++;
+      });
+    });
+  }
 
   const handleCrearCaja = () => {
     if (!diaActual) return;
-    const nuevosDias = [...dias]; const dia = nuevosDias[diaActivo];
-    dia.cajas.push({ id: `c_${Date.now()}`, nombre: `Caja ${dia.cajas.length + 1}`, turnos: dia.horariosMaestros.map(h => ({ id: `t_${Date.now()}_${Math.random()}`, horario: h, participanteId: null })) });
-    syncDias(nuevosDias);
+    const horarios = diaActual.cajas.length > 0 ? Array.from(new Set(diaActual.cajas.flatMap(c => c.turnos.map(t => t.horario)))) : ['09:00 - 10:00'];
+    const nuevaCaja = {
+      id: `caja_${Date.now()}`,
+      nombre: `Caja ${diaActual.cajas.length + 1}`,
+      turnos: horarios.map(h => ({ id: `t_${Date.now()}_${Math.random()}`, horario: h, participanteId: null }))
+    };
+    syncEvent(dias.map((d, i) => i === diaActivo ? { ...d, cajas: [...d.cajas, nuevaCaja] } : d));
   };
 
   const handleCrearCajaEspecial = (nombre: string, turnosConfig: TurnoEspecialConfig[]) => {
     if (!diaActual) return;
-    const nuevosDias = [...dias]; const dia = nuevosDias[diaActivo];
-    dia.cajas.push({ id: `special_${Date.now()}`, nombre: nombre, esEspecial: true, turnos: turnosConfig.map((config) => ({ id: `t_spec_${Date.now()}_${Math.random()}`, horario: `${config.inicio} - ${config.fin}`, participanteId: null })) });
-    syncDias(nuevosDias);
+    const nuevaCajaEspecial = {
+      id: `especial_${Date.now()}`,
+      nombre,
+      isEspecial: true,
+      turnos: turnosConfig.map(t => ({
+        id: `t_${Date.now()}_${Math.random()}`,
+        horario: `${t.inicio} - ${t.fin}`,
+        participanteId: null
+      }))
+    };
+    syncEvent(dias.map((d, i) => i === diaActivo ? { ...d, cajas: [...d.cajas, nuevaCajaEspecial] } : d));
+    setShowSpecialModal(false);
   };
 
   const handleCrearHorario = () => {
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; const dia = nuevosDias[diaActivo];
-    let nuevoHorarioText = "08:00 - 10:00";
-    if (dia.horariosMaestros.length > 0) {
-      const partes = dia.horariosMaestros[dia.horariosMaestros.length - 1].split('-');
-      if (partes.length === 2) { const hFin = parseInt(partes[1].trim().split(':')[0]); if (!isNaN(hFin)) nuevoHorarioText = `${hFin.toString().padStart(2, '0')}:00 - ${(hFin + 2).toString().padStart(2, '0')}:00`; }
-    }
-    dia.horariosMaestros.push(nuevoHorarioText); dia.horariosMaestros.sort((a, b) => a.substring(0, 5).localeCompare(b.substring(0, 5)));
-    dia.cajas.forEach(caja => {
-      if (!caja.esEspecial) { caja.turnos.push({ id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorarioText, participanteId: null }); caja.turnos.sort((a, b) => a.horario.substring(0, 5).localeCompare(b.horario.substring(0, 5))); }
+    if (!diaActual || diaActual.cajas.length === 0) return;
+    const ultHorario = diaActual.cajas[0].turnos[diaActual.cajas[0].turnos.length - 1]?.horario || '09:00';
+    const nuevoHorario = `${parseInt(ultHorario) + 1}:00`;
+    syncEvent(dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => ({
+        ...c, turnos: [...c.turnos, { id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorario, participanteId: null }]
+      }))
+    } : d));
+  };
+
+  const handleEliminarCaja = (cajaId: string) => {
+    syncEvent(dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.filter(c => c.id !== cajaId) } : d));
+  };
+
+  const handleEliminarHorario = (horario: string) => {
+    syncEvent(dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => ({ ...c, turnos: c.turnos.filter(t => t.horario !== horario) }))
+    } : d));
+  };
+
+  const abrirEditor = (type: 'caja' | 'horario', idOrValue: string, initialValue: string) => {
+    setEditModal({
+      isOpen: true, type,
+      title: type === 'caja' ? 'Renombrar Caja' : 'Editar Horario',
+      label: type === 'caja' ? 'Nombre de la Caja' : 'Rango de Horario',
+      initialValue, targetId: type === 'caja' ? idOrValue : undefined
     });
-    syncDias(nuevosDias);
   };
-
-  const handleEliminarCaja = (cajaId: string) => { 
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; nuevosDias[diaActivo].cajas = nuevosDias[diaActivo].cajas.filter(c => c.id !== cajaId); 
-    syncDias(nuevosDias); 
-  };
-  
-  const handleEliminarHorario = (horarioText: string) => {
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; nuevosDias[diaActivo].horariosMaestros = nuevosDias[diaActivo].horariosMaestros.filter(h => h !== horarioText);
-    nuevosDias[diaActivo].cajas.forEach(caja => { caja.turnos = caja.turnos.filter(t => t.horario !== horarioText); }); 
-    syncDias(nuevosDias);
-  };
-
-  const abrirEditor = (type: 'caja' | 'horario', id: string, currentVal: string) => setEditModal({ isOpen: true, type, id, initialValue: currentVal, title: type === 'caja' ? 'Editar Nombre de Caja' : 'Editar Horario', label: type === 'caja' ? 'Nombre de la ubicación' : 'Rango de tiempo' });
 
   const handleSaveEdit = (newValue: string) => {
-    if (!diaActual) return;
-    const nuevosDias = [...dias]; const dia = nuevosDias[diaActivo];
-    if (editModal.type === 'caja') { const caja = dia.cajas.find(c => c.id === editModal.id); if (caja) caja.nombre = newValue; } 
-    else {
-      dia.horariosMaestros = dia.horariosMaestros.map(h => h === editModal.id ? newValue : h); dia.horariosMaestros.sort((a, b) => a.substring(0, 5).localeCompare(b.substring(0, 5)));
-      dia.cajas.forEach(caja => { caja.turnos.forEach(t => { if (t.horario === editModal.id) t.horario = newValue; }); caja.turnos.sort((a, b) => a.horario.substring(0, 5).localeCompare(b.horario.substring(0, 5))); });
+    if (editModal.type === 'caja') {
+      syncEvent(dias.map((d, i) => i === diaActivo ? {
+        ...d, cajas: d.cajas.map(c => c.id === editModal.targetId ? { ...c, nombre: newValue } : c)
+      } : d));
+    } else {
+      syncEvent(dias.map((d, i) => i === diaActivo ? {
+        ...d, cajas: d.cajas.map(c => ({
+          ...c, turnos: c.turnos.map(t => t.horario === editModal.initialValue ? { ...t, horario: newValue } : t)
+        }))
+      } : d));
     }
-    syncDias(nuevosDias); 
     setEditModal({ ...editModal, isOpen: false });
   };
 
+  const abrirModalAsignacion = (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => {
+    setModalAsignacion({ isOpen: true, cajaId, cajaNombre, turnoId, horario });
+  };
+
+  const cerrarModalAsignacion = () => setModalAsignacion({ ...modalAsignacion, isOpen: false });
+
   const getBusyUserIdsForModal = () => {
-    if (!modalAsignacion.horario || !diaActual) return [];
-    const ocupados: string[] = [];
-    diaActual.cajas.forEach(caja => { caja.turnos.forEach(turno => { if (turno.participanteId && turno.participanteId !== 'CERRADO' && hayChoqueDeHorario(modalAsignacion.horario, turno.horario)) ocupados.push(turno.participanteId); }); });
-    return ocupados;
+    const { horario } = modalAsignacion;
+    if (!diaActual || !horario) return [];
+    
+    const busyIds = new Set<string>();
+    diaActual.cajas.forEach(caja => {
+      caja.turnos.forEach(turno => {
+        if (turno.participanteId && hayChoqueDeHorario(turno.horario, horario)) {
+          busyIds.add(turno.participanteId);
+        }
+      });
+    });
+    return Array.from(busyIds);
+  };
+
+  const asignarUsuarioExistente = (participanteId: string) => {
+    syncEvent(dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => c.id === modalAsignacion.cajaId ? {
+        ...c, turnos: c.turnos.map(t => t.id === modalAsignacion.turnoId ? { ...t, participanteId } : t)
+      } : c)
+    } : d));
+    cerrarModalAsignacion();
+  };
+
+  const crearYAsignarUsuario = (nombre: string) => {
+    const nuevoId = `part_${Date.now()}`;
+    // SE CORRIGIÓ EL ERROR: Se agregó el linkUnico obligatorio por la interfaz
+    syncParticipantes([...participantes, { 
+      id: nuevoId, 
+      nombre, 
+      estado: 'Libre',
+      linkUnico: `inv-${nuevoId}` 
+    }]);
+    asignarUsuarioExistente(nuevoId);
+  };
+
+  const quitarParticipante = (cajaId: string, turnoId: string) => {
+    syncEvent(dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: null } : t)
+      } : c)
+    } : d));
   };
 
   const handleAbrirMiPerfil = () => { setUsuarioActivo(misDatosAdmin); setIsViewingSelf(true); setIsUsuarioModalOpen(true); };
   
-  const handleAbrirPerfilParticipante = (idParticipante: string) => {
-    const p = participantesEnriquecidos.find(x => x.id === idParticipante);
+  const handleAbrirPerfilParticipante = (id: string) => {
+    const p = participantesEnriquecidos.find(x => x.id === id);
     if (p) { setUsuarioActivo({ id: p.id, name: p.nombre, role: 'Participante', phone: '', supportArea: p.ubicaciones?.join(', ') || 'Sin área asignada', notes: '' }); setIsViewingSelf(false); setIsUsuarioModalOpen(true); }
   };
   
-  const handleGuardarUsuario = (datosActualizados: UsuarioPerfil) => {
-    if (isViewingSelf) {
-      setMisDatosAdmin(datosActualizados);
-    } else {
-      const nuevosParticipantes = participantes.map(p => p.id === datosActualizados.id ? { ...p, nombre: datosActualizados.name } : p);
-      syncParticipantes(nuevosParticipantes);
-    }
-    setIsUsuarioModalOpen(false);
+  // SE CORRIGIÓ EL ERROR DE ARGUMENTOS: Validación directa a prueba de fallos
+  const handleCheckNameDuplicate = (name: string, currentId: string) => {
+    const lowerName = name.trim().toLowerCase();
+    return participantes.some(p => p.id !== currentId && p.nombre.trim().toLowerCase() === lowerName);
   };
 
   return {
@@ -240,6 +288,6 @@ export const useAdminLogic = (eventoId: string) => {
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
     handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, getBusyUserIdsForModal, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
-    handleGuardarUsuario, handleCheckNameDuplicate
+    handleCheckNameDuplicate
   };
 };
