@@ -11,7 +11,7 @@ interface AdminStatsBarProps {
 }
 
 const AdminStatsBar: React.FC<AdminStatsBarProps> = ({
-  totalCajas, turnosActivos, turnosLibres, totalParticipantes, onCrearCaja, onShowDirectorio
+  totalCajas, turnosActivos, totalParticipantes, onCrearCaja, onShowDirectorio
 }) => {
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold text-slate-600">
