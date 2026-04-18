@@ -62,6 +62,23 @@ const ParticipantPanel = () => {
 
   const datosParaModal: UsuarioModalData | null = useMemo(() => {
     if (!miUsuario) return null;
+
+    // Calculamos los turnos aquí mismo para que React Vercel no marque errores
+    const misTurnos: { dia: string; horario: string; caja: string }[] = [];
+    dias.forEach(dia => {
+      dia.cajas.forEach(caja => {
+        caja.turnos.forEach(turno => {
+          if (turno.participanteId === miUsuario.id) {
+            misTurnos.push({
+              dia: dia.nombreDia || 'Día',
+              horario: turno.horario,
+              caja: caja.nombre
+            });
+          }
+        });
+      });
+    });
+
     return {
       id: miUsuario.id,
       name: miUsuario.nombre,
@@ -73,10 +90,10 @@ const ParticipantPanel = () => {
       organization: miUsuario.organizacion || '',
       organizationLabel: miUsuario.organizationLabel || 'Congregación',
       ubicaciones: miUsuario.ubicaciones || [],
-      birthDate: miUsuario.fechaNacimiento || '' 
+      birthDate: miUsuario.fechaNacimiento || '',
+      turnosAsignados: misTurnos // <-- Aquí se inyectan para que el modal los dibuje
     };
-  }, [miUsuario]);
-
+  }, [miUsuario, dias]);
   if (!miUsuario && !loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">

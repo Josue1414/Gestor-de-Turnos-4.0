@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Phone, StickyNote, X, Download, MapPin, Calendar } from 'lucide-react';
+import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock } from 'lucide-react';
 
 export interface UsuarioModalData {
   id: string; 
@@ -13,6 +13,7 @@ export interface UsuarioModalData {
   organization?: string;
   ubicaciones?: string[];
   birthDate?: string; 
+  turnosAsignados?: { dia: string; horario: string; caja: string }[]; // <-- Agregado para los turnos
 }
 
 interface ModalInfoUsuarioProps {
@@ -36,11 +37,9 @@ const FieldItem = ({ icon, label, children }: { icon: React.ReactNode, label: st
 );
 
 // --- COMPONENTE HIJO (El contenido real del formulario) ---
-// Al separarlo, podemos inicializar el estado directamente sin usar useEffect
 const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { data: UsuarioModalData }> = ({
   onClose, onSave, data, isViewingSelf, checkNameExists, currentUserRole = 'Administrador', onDownloadImage
 }) => {
-  // Inicializamos el estado limpiamente y de forma directa. ¡Adiós useEffect!
   const [formData, setFormData] = useState<UsuarioModalData>({
     ...data,
     birthDate: data.birthDate || ''
@@ -48,6 +47,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
   const [errorName, setErrorName] = useState('');
 
   const isEditable = isViewingSelf || (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin');
+  const isAdmin = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
 
   const handleSave = () => {
     if (!formData.name.trim()) return;
@@ -120,10 +120,48 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          <FieldItem icon={<MapPin size={18} />} label={formData.role === 'Participante' ? 'Turnos Asignados' : 'Área / Rol'}>
-            <span className="font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
-              {formData.supportArea || 'No tiene turnos'}
-            </span>
+          {/* DINÁMICO: Etiqueta administrada por el Admin, valor escrito por el participante */}
+          <FieldItem icon={<Briefcase size={18} />} label={formData.organizationLabel || "Congregación"}>
+            {isEditable ? (
+              <div className="space-y-2">
+                {/* SOLO EL ADMIN PUEDE CAMBIAR LA PALABRA "CONGREGACIÓN" */}
+                {isAdmin && (
+                  <input 
+                    type="text"
+                    placeholder="Cambiar etiqueta (ej: Empresa)"
+                    value={formData.organizationLabel || ''}
+                    onChange={(e) => setFormData({...formData, organizationLabel: e.target.value})}
+                    className="w-full text-[10px] text-indigo-500 bg-indigo-50 font-black uppercase rounded-lg p-2 border border-indigo-100"
+                  />
+                )}
+                {/* EL PARTICIPANTE PUEDE ESCRIBIR EL NOMBRE DE SU EMPRESA */}
+                <input 
+                  type="text" 
+                  value={formData.organization || ''} 
+                  onChange={(e) => setFormData({...formData, organization: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-blue-400 font-bold text-slate-700 transition"
+                  placeholder={`Nombre de tu ${formData.organizationLabel || 'Congregación'}`}
+                />
+              </div>
+            ) : (
+              <span className="font-bold text-slate-800 text-sm">{formData.organization || 'No especificada'}</span>
+            )}
+          </FieldItem>
+
+          {/* TURNOS ASIGNADOS MUY COMPACTOS */}
+          <FieldItem icon={<Clock size={18} />} label="Turnos Asignados">
+            {formData.turnosAsignados && formData.turnosAsignados.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {formData.turnosAsignados.map((turno, idx) => (
+                  <div key={idx} className="bg-indigo-50 border border-indigo-100 rounded-lg p-2 flex justify-between items-center shadow-sm">
+                    <span className="text-[11px] font-bold text-indigo-900">{turno.dia}: {turno.horario}</span>
+                    <span className="text-[9px] font-black text-indigo-600 uppercase bg-indigo-100/50 px-2 py-0.5 rounded border border-indigo-200 max-w-[120px] truncate">{turno.caja}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs font-medium text-slate-400 italic">No tiene turnos asignados aún.</span>
+            )}
           </FieldItem>
 
           <FieldItem icon={<StickyNote size={18} />} label="Notas Internas">
@@ -140,6 +178,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
+          {/* BOTÓN DESCARGAR INTACTO */}
           {onDownloadImage && (
             <div className="pt-4 border-t border-slate-100">
               <button 
@@ -166,12 +205,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
 
 // --- COMPONENTE CONTENEDOR (El que exportamos) ---
 const ModalInfoUsuario: React.FC<ModalInfoUsuarioProps> = ({ isOpen, data, ...props }) => {
-  // Si está cerrado o no hay datos, no pintamos nada en pantalla.
   if (!isOpen || !data) return null;
-
-  // El truco maestro de React: 'key={data.id}' 
-  // Obliga a React a renderizar ModalContent de cero cuando el ID cambia, 
-  // dándonos un estado 100% fresco sin necesidad de usar useEffect.
   return <ModalContent key={data.id} data={data} {...props} />;
 };
 
