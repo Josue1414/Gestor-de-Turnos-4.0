@@ -33,10 +33,13 @@ const SuperAdminPanel = () => {
     editEventModalState, setEditEventModalState, handleSaveEditEvent
   } = useSuperAdminLogic();
 
+  // ====== AQUÍ ESTÁ EL ÚNICO CAMBIO PARA ARREGLAR EL ERROR DE F5 ======
   const handleVerAdmin = (eventoId: string, adminId: string) => {
     localStorage.setItem('current_admin_id', adminId);
-    navigate(`/admin/${eventoId}`, { state: { openedBySuperAdmin: true } }); 
+    sessionStorage.setItem('visor_externo_tipo', 'SuperAdmin'); // Guarda la sesión persistente
+    navigate(`/admin/${eventoId}`); // Quitamos el state temporal
   };
+  // ====================================================================
 
   const handleLogout = () => {
     localStorage.removeItem('user_role');

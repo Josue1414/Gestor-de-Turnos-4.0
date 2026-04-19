@@ -1,11 +1,5 @@
-/**
- * RESUMEN: SeccionSupervisor
- * Permite al SuperAdmin ver y editar las credenciales del supervisor
- * de un evento específico. Incluye validación de guardado en Firebase.
- */
-
 import React, { useState } from 'react';
-import { ShieldCheck, Eye, EyeOff, Save,} from 'lucide-react';
+import { ShieldCheck, Eye, EyeOff, Save } from 'lucide-react';
 
 interface SeccionSupervisorProps {
   eventoId: string;
@@ -27,7 +21,14 @@ const SeccionSupervisor: React.FC<SeccionSupervisorProps> = ({ datosActuales, on
           <span className="text-sm font-black text-indigo-900 uppercase tracking-tight">Supervisor del Evento</span>
         </div>
         <button 
-          onClick={() => editando ? (onUpdate(usuario, pass), setEditando(false)) : setEditando(true)}
+          onClick={() => {
+            if (editando) {
+              onUpdate(usuario, pass);
+              setEditando(false);
+            } else {
+              setEditando(true);
+            }
+          }}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
             editando ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-indigo-600 border border-indigo-200'
           }`}

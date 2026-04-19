@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { EventoData, AdminData } from '../hooks/useSuperAdminLogic';
 import AdminFiche from './AdminFiche';
+import SeccionSupervisor from './SeccionSupervisor';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface EventoSectionProps {
   evento: EventoData;
@@ -13,6 +16,14 @@ interface EventoSectionProps {
   onDeleteAdmin: (eventoId: string, adminId: string, adminName: string) => void;
   onAddAdmin: (eventoId: string) => void;
   onEditEvent: (evento: EventoData) => void;
+}
+
+// TIPADO ESTRICTO: Interfaz local para extraer de forma segura el supervisor sin usar "any"
+interface EventoConSupervisor {
+  supervisor?: {
+    usuario?: string;
+    password?: string;
+  };
 }
 
 const EventoSection: React.FC<EventoSectionProps> = ({ 
@@ -27,6 +38,21 @@ const EventoSection: React.FC<EventoSectionProps> = ({
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
   const currentItems = evento.admins.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handleUpdateSupervisor = async (nuevoUsuario: string, nuevoPass: string) => {
+    try {
+      const eventoRef = doc(db, 'eventos', evento.id);
+      await updateDoc(eventoRef, {
+        supervisor: { usuario: nuevoUsuario, password: nuevoPass }
+      });
+      alert("Credenciales del supervisor actualizadas.");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // Extracción segura del supervisor usando type casting estricto
+  const supervisorData = (evento as unknown as EventoConSupervisor).supervisor;
 
   return (
     <section className="bg-white border-2 border-slate-300 shadow-sm rounded-2xl flex flex-col overflow-hidden transition-all duration-300">
@@ -68,9 +94,20 @@ const EventoSection: React.FC<EventoSectionProps> = ({
             </button>
         </div>
       </div>
+      
 
       {isExpanded && (
         <div className="p-4 bg-slate-50/50 flex flex-col min-h-[220px] animate-in slide-in-from-top-2 duration-200">
+          
+          {/* AQUÍ INYECTAMOS LA SECCIÓN DEL SUPERVISOR ESTRICTAMENTE TIPADA */}
+          <div className="mb-6">
+            <SeccionSupervisor 
+              eventoId={evento.id} 
+              datosActuales={supervisorData} 
+              onUpdate={handleUpdateSupervisor} 
+            />
+          </div>
+
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
               {currentItems.map((item: AdminData) => {

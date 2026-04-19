@@ -1,7 +1,6 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Calendar, Plus, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom'; // Se eliminó useLocation
 import type { DiaEvento, Participante } from '../../types';
 import ModalInputHorario from '../../components/ModalInputHorario';
 import ModalAlertaChoque from '../../components/ModalAlertaChoque';
@@ -47,10 +46,12 @@ interface AdminInDB {
 }
 
 const AdminPanel = () => {
-  const location = useLocation();
   const navigate = useNavigate();
   const { id: eventoId } = useParams(); 
-  const openedBySuperAdmin = location.state?.openedBySuperAdmin || false;
+  
+  // NUEVO: Persistencia para que al recargar la página (F5) no se pierda el rol
+  const visorTipo = sessionStorage.getItem('visor_externo_tipo'); // Puede ser 'SuperAdmin' o 'Supervisor'
+  const isExternalViewer = !!visorTipo;
 
   const {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
@@ -139,7 +140,6 @@ const AdminPanel = () => {
 
       const nuevaEtiqueta = datosActualizados.organizationLabel || 'Congregación';
       
-      // CORRECCIÓN 1: Usamos 'unknown' en lugar de 'any' para complacer a TypeScript
       const updatePayload: Record<string, unknown> = {};
 
       if (datosActualizados.role === 'Participante') {
@@ -237,10 +237,10 @@ const AdminPanel = () => {
     };
   };
 
-  // CORRECCIÓN 2: Envolvemos handleLogout en useCallback
   const handleLogout = useCallback(() => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
+    sessionStorage.removeItem('visor_externo_tipo'); // Limpiamos la sesión externa al salir
     navigate('/');
   }, [navigate]);
 
@@ -269,7 +269,7 @@ const AdminPanel = () => {
     
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [handleLogout]); // Y aquí agregamos la dependencia que pedía Vercel
+  }, [handleLogout]);
 
   if (loading) {
     return (
@@ -288,9 +288,13 @@ const AdminPanel = () => {
         <h2 className="text-xl font-black text-slate-700">El evento está vacío</h2>
         <p className="text-sm text-slate-500 mt-2 mb-6">Aún no se han configurado los días para este evento.</p>
         
-        {openedBySuperAdmin ? (
-          <button onClick={() => navigate('/super-admin')} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition">
-            <ArrowLeft size={16} /> Regresar a SuperAdmin
+        {isExternalViewer ? (
+          <button onClick={() => {
+            const destino = visorTipo === 'SuperAdmin' ? '/super-admin' : `/supervisor/${eventoId}`;
+            sessionStorage.removeItem('visor_externo_tipo');
+            navigate(destino);
+          }} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition">
+            <ArrowLeft size={16} /> Regresar a {visorTipo === 'SuperAdmin' ? 'SuperAdmin' : 'Supervisor'}
           </button>
         ) : (
           <button onClick={() => handleCrearCaja()} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">
@@ -300,8 +304,6 @@ const AdminPanel = () => {
       </div>
     );
   }
-
-  
 
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
@@ -314,9 +316,13 @@ const AdminPanel = () => {
         onOpenProfile={handleAbrirMiPerfil} 
         onSave={handleSaveEventName} 
         onShowCroquis={() => setShowCroquis(true)} 
-        onBack={openedBySuperAdmin ? () => navigate('/super-admin') : undefined} 
-        onLogout={!openedBySuperAdmin ? handleLogout : undefined} 
-        isSuperAdminViewing={openedBySuperAdmin} 
+        onBack={isExternalViewer ? () => {
+          const destino = visorTipo === 'SuperAdmin' ? '/super-admin' : `/supervisor/${eventoId}`;
+          sessionStorage.removeItem('visor_externo_tipo');
+          navigate(destino);
+        } : undefined} 
+        onLogout={!isExternalViewer ? handleLogout : undefined} 
+        isSuperAdminViewing={isExternalViewer} 
       />
 
       <div className="flex flex-col xl:flex-row xl:items-center gap-4 mb-4 shrink-0 w-full overflow-x-auto pb-2">
@@ -338,7 +344,7 @@ const AdminPanel = () => {
             turnosLibres={turnosLibres} 
             totalParticipantes={totalParticipantes} 
             onCrearCaja={handleCrearCaja} 
-            onCrearHorario={handleCrearHorario} /* <-- SE AÑADE AQUÍ */
+            onCrearHorario={handleCrearHorario} 
             onShowDirectorio={() => setShowDirectorio(true)} 
           />
         </div>
@@ -348,8 +354,7 @@ const AdminPanel = () => {
         <MatrizTurnos 
           diaActual={diaActual} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante}
           onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario}
-          /* onCrearHorario={handleCrearHorario} <-- SE ELIMINA DE AQUÍ */
-          onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre); }}
+          onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }}
           onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
           onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
           onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 

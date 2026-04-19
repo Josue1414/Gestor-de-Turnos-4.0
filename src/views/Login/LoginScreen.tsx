@@ -4,6 +4,22 @@ import { ShieldCheck, Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 
+// TIPADOS ESTRICTOS (Cero "any")
+interface AdminLoginData {
+  id: string;
+  password?: string;
+}
+
+interface SupervisorLoginData {
+  usuario?: string;
+  password?: string;
+}
+
+interface EventoLoginData {
+  admins?: AdminLoginData[];
+  supervisor?: SupervisorLoginData;
+}
+
 const LoginScreen = () => {
   const navigate = useNavigate();
   const [codigo, setCodigo] = useState('');
@@ -19,8 +35,10 @@ const LoginScreen = () => {
     const cod = codigo.trim();
     const pass = password.trim();
     
+    // Limpiamos memorias antiguas por seguridad
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
+    sessionStorage.removeItem('visor_externo_tipo');
 
     if (!cod) return alert('Por favor ingresa un código de acceso o ID.');
 
@@ -31,10 +49,10 @@ const LoginScreen = () => {
       return;
     } 
 
-    // 2. BUSCAR EN FIREBASE (SI PONE CONTRASEÑA O SU ID EMPIEZA CON ADMIN)
+    // 2. BUSCAR EN FIREBASE (Si pone contraseña o su ID indica que es admin)
     if (pass !== '' || cod.toLowerCase().startsWith('admin-')) {
       if (pass === '') {
-        return alert('Por favor ingresa tu contraseña de Administrador.');
+        return alert('Por favor ingresa tu contraseña.');
       }
 
       setIsLoading(true);
@@ -43,14 +61,22 @@ const LoginScreen = () => {
         const snapshot = await getDocs(eventosRef);
         
         let adminFound = false;
+        let supervisorFound = false;
         let eventoIdFound = '';
         let adminIdFound = '';
 
         snapshot.forEach(doc => {
-          const evento = doc.data();
+          const evento = doc.data() as EventoLoginData;
+          
+          // 2.1 REVISAR SI ES SUPERVISOR
+          if (evento.supervisor && evento.supervisor.usuario === cod && evento.supervisor.password === pass) {
+            supervisorFound = true;
+            eventoIdFound = doc.id;
+          }
+
+          // 2.2 REVISAR SI ES ADMINISTRADOR NORMAL
           const admins = evento.admins || [];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const matchedAdmin = admins.find((a: any) => a.id === cod && a.password === pass);
+          const matchedAdmin = admins.find((a) => a.id === cod && a.password === pass);
 
           if (matchedAdmin) {
             adminFound = true;
@@ -59,23 +85,29 @@ const LoginScreen = () => {
           }
         });
 
-        if (adminFound) {
+        // 3. DECISIÓN DE RUTAS BASADA EN EL ROL ENCONTRADO
+        if (supervisorFound) {
+          localStorage.setItem('user_role', 'supervisor');
+          navigate(`/supervisor/${eventoIdFound}`);
+        } else if (adminFound) {
           localStorage.setItem('user_role', 'admin');
           localStorage.setItem('current_admin_id', adminIdFound);
           navigate(`/admin/${eventoIdFound}`); 
         } else {
-          alert('Credenciales incorrectas. Verifica tu ID y contraseña.');
+          alert('Credenciales incorrectas. Verifica tu usuario y contraseña.');
         }
+
       } catch (error) {
         console.error("Error al iniciar sesión:", error);
         alert('Hubo un error al conectar con el servidor.');
       } finally {
         setIsLoading(false);
       }
-      return; // Detiene la ejecución para que no pase al código de Participante
+      return; 
     } 
     
-    // 3. SI SOLO PONE ID (SIN CONTRASEÑA), ES UN PARTICIPANTE
+    // 4. SI SOLO PONE ID (SIN CONTRASEÑA), ES UN PARTICIPANTE
+    // (Asegúrate de que esta lógica siga siendo válida para tu nueva estructura de participantes)
     navigate(`/turno/${codigo}`);
   };
 
@@ -97,10 +129,10 @@ const LoginScreen = () => {
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-                <User size={14} /> Código de Acceso / ID
+                <User size={14} /> Usuario / ID
               </label>
               <input 
-                type="text" placeholder="Ej. admin-A3B9 o Gestor1314" value={codigo} onChange={(e) => setCodigo(e.target.value)}
+                type="text" placeholder="Ej. admin-A3B9 o supervisor1" value={codigo} onChange={(e) => setCodigo(e.target.value)}
                 className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
               />
             </div>

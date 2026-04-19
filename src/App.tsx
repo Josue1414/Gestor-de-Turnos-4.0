@@ -3,7 +3,9 @@ import SuperAdminPanel from './views/SuperAdmin/SuperAdminPanel';
 import AdminPanel from './views/Admin/AdminPanel';
 import ParticipantPanel from './views/User/ParticipantPanel';
 import LoginScreen from './views/Login/LoginScreen'; 
-import InviteScreen from './views/User/InviteScreen'; // <-- IMPORTAMOS LA PANTALLA DE INVITACIÓN
+import InviteScreen from './views/User/InviteScreen';
+// <-- NUEVA IMPORTACIÓN DEL SUPERVISOR -->
+import SupervisorPanel from './views/Supervisor/SupervisorPanel';
 
 function App() {
   return (
@@ -11,6 +13,9 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginScreen />} /> 
         <Route path="/super-admin" element={<SuperAdminPanel />} />
+        
+        {/* <-- RUTA DEL SUPERVISOR --> */}
+        <Route path="/supervisor/:id" element={<SupervisorPanel />} />
         
         <Route path="/admin/:id" element={<AdminPanel />} />
 
