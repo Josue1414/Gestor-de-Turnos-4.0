@@ -11,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginScreen />} /> 
         <Route path="/super-admin" element={<SuperAdminPanel />} />
+        
         <Route path="/admin/:id" element={<AdminPanel />} />
 
         {/* --- NUEVAS RUTAS PARA PARTICIPANTES E INVITADOS --- */}

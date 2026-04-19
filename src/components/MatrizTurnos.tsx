@@ -1,3 +1,10 @@
+/**
+ * RESUMEN: MatrizTurnos
+ * Renderiza la tabla principal. Incluye la columna de horarios con 
+ * formato AM/PM coloreado y botones de acción visibles en móviles.
+ */
+
+
 import React from 'react';
 import { Plus, User, X, Clock, Lock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
@@ -10,18 +17,19 @@ interface MatrizTurnosProps {
   onAsignar: (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => void;
   onQuitar: (cajaId: string, turnoId: string, participanteId: string) => void;
   onCrearCaja: () => void;
-  onCrearHorario: () => void;
   onDeleteCaja: (cajaId: string) => void;
   onDeleteHorario: (horario: string) => void;
   onEditCaja: (cajaId: string) => void;
   onEditHorario: (horario: string) => void;
+  onDeleteTurnoEspecial?: (cajaId: string, turnoId: string) => void;
+  onEditTurnoEspecial?: (cajaId: string, turnoId: string) => void;
 }
 
 interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; nombre?: unknown; }
 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
-  diaActual, getParticipante, onAsignar, onQuitar, onCrearHorario,
-  onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario
+  diaActual, getParticipante, onAsignar, onQuitar,
+  onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial
 }) => {
 
   // Detective tipado sin "any"
@@ -39,8 +47,56 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
   const cajasNormales = diaActual.cajas.filter(c => !checkIsEspecial(c));
   const cajasEspeciales = diaActual.cajas.filter(c => checkIsEspecial(c));
 
-  const horariosUnicos = Array.from(new Set(cajasNormales.flatMap(caja => caja.turnos.map(t => t.horario))))
-    .sort((a, b) => (parseInt(a.split(':')[0]) || 0) - (parseInt(b.split(':')[0]) || 0));
+// 1. EXTRAER Y ORDENAR HORARIOS CRONOLÓGICAMENTE (Recuperamos el nombre horariosUnicos)
+  const getMinutos = (rango: string) => {
+    const horaInicio = rango.split('-')[0].trim();
+    const [h, m] = horaInicio.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const horariosUnicos = Array.from(new Set(cajasNormales.flatMap(c => c.turnos.map(t => t.horario))))
+    .sort((a, b) => getMinutos(a) - getMinutos(b));
+
+  // 2. FORMATEADOR VISUAL DE HORA PERFECCIONADO (Alineación rígida y responsiva)
+  const formatHorarioVisual = (rango: string) => {
+    const partes = rango.split('-').map(p => p.trim());
+    if (partes.length !== 2) return <span className="text-sm font-black text-slate-700">{rango}</span>;
+
+    const formatearHora = (horaStr: string) => {
+      const [hStr, mStr] = horaStr.split(':');
+      let h = parseInt(hStr, 10);
+      const m = mStr || '00';
+      const isPM = h >= 12;
+      
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+
+      return {
+        texto: `${h}:${m}`,
+        colorClass: isPM ? 'text-blue-800' : 'text-cyan-500'
+      };
+    };
+
+    const inicio = formatearHora(partes[0]);
+    const fin = formatearHora(partes[1]);
+
+    return (
+      // En celular: Se apilan (flex-col) con el guion en medio. En PC: Quedan en fila (flex-row).
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 w-full">
+        {/* El w-10 y text-right forza a que el inicio siempre ocupe el mismo espacio visual */}
+        <span className={`font-black text-[12px] sm:text-sm w-full sm:w-10 text-center sm:text-right ${inicio.colorClass}`}>
+          {inicio.texto}
+        </span>
+        
+        <span className="text-slate-300 text-[10px] sm:text-sm leading-none">-</span>
+        
+        {/* El w-10 y text-left forza a que el fin siempre ocupe el mismo espacio visual */}
+        <span className={`font-black text-[12px] sm:text-sm w-full sm:w-10 text-center sm:text-left ${fin.colorClass}`}>
+          {fin.texto}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 bg-slate-50 font-sans h-full overflow-y-auto p-4 sm:p-6">
@@ -53,8 +109,9 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         onEditCaja={onEditCaja}
         onDeleteCaja={onDeleteCaja}
         onAsignar={onAsignar}
-        onQuitar={onQuitar}
-        // onDeleteTurnoEspecial={onDeleteTurnoEspecial} <- Cuando crees esta función, descoméntala
+        onQuitar={onQuitar} 
+        onDeleteTurnoEspecial={onDeleteTurnoEspecial}
+        onEditTurnoEspecial={onEditTurnoEspecial}
       />
 
       {/* SECCIÓN 2: TABLA NORMAL */}
@@ -64,30 +121,55 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
             <table className="w-full table-fixed border-separate border-spacing-0 min-w-max">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-3 w-[80px] sm:w-[120px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                    <button onClick={onCrearHorario} className="mx-auto w-full max-w-[80px] h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center gap-1 hover:bg-blue-200 transition-colors shadow-sm mb-2">
-                      <Plus size={14} /> <span className="text-[10px] font-black uppercase">Turno</span>
-                    </button>
-                    <div className="flex items-center justify-center gap-1.5 text-slate-500 font-black text-xs uppercase tracking-wider">
-                      <Clock size={14} /> Horario
+                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-2 sm:p-3 w-[65px] sm:w-[90px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-middle">
+                    <div className="flex flex-col items-center justify-center gap-1 text-slate-500 font-black text-[10px] uppercase tracking-wider h-full">
+                      <div className="flex items-center gap-1"><Clock size={12} /> <span className="hidden sm:inline">HORARIO</span></div>
+                      {/* LEYENDA DE COLORES AM / PM */}
+                      <div className="flex gap-1 sm:gap-2 mt-1">
+                        <span className="text-cyan-500 bg-cyan-50 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">AM</span>
+                        <span className="text-blue-800 bg-blue-100 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">PM</span>
+                      </div>
                     </div>
                   </th>
                   {cajasNormales.map(caja => (
-                    <th key={caja.id} className="border-b border-slate-200 bg-white p-1.5 sm:p-3 w-[110px] sm:w-[200px] border-l">
-                      <div className="flex justify-between items-start gap-1 sm:gap-2">
-                        <span className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight break-words">{caja.nombre}</span>
-                        <ActionMenu onEdit={() => onEditCaja(caja.id)} onDelete={() => onDeleteCaja(caja.id)} direccion="derecha" />
+                    <th key={caja.id as string} className="group border-b border-slate-200 bg-white p-1.5 sm:p-3 w-[110px] sm:w-[200px] border-l align-top">
+                      <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[40px]">
+                        <span 
+                          className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" 
+                          title={caja.nombre as string}
+                        >
+                          {caja.nombre as string}
+                        </span>
+                        
+                        {/* Botones abajo, visibles en móvil, hover en PC */}
+                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
+                          <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
+                        </div>
                       </div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {horariosUnicos.map((horario, rowIndex) => (
-                  <tr key={horario} className={rowIndex % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
-                    <td className="sticky left-0 z-10 bg-slate-50 border-b border-slate-100 p-3 w-[80px] sm:w-[120px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-top">
-                      <span className="font-black text-slate-700 text-xs sm:text-base block mb-2">{horario}</span>
-                      <ActionMenu onEdit={() => onEditHorario(horario)} onDelete={() => onDeleteHorario(horario)} direccion="derecha" />
+                {/* Asegúrate de mapear usando horariosUnicos */}
+                {horariosUnicos.map((horario) => (
+                  <tr key={horario} className="group hover:bg-slate-50/50 transition-colors">
+                    
+                    {/* Celda del Horario y Botones (Alineada y Visible en móvil) */}
+                    <td className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 p-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                      <div className="flex flex-col items-center justify-center gap-2 min-h-[50px]">
+                        {/* La Hora */}
+                        <div className="w-full">{formatHorarioVisual(horario)}</div>
+                        
+                        {/* Botones: Visibles siempre en móvil, hover en PC */}
+                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <ActionMenu 
+                            onEdit={() => onEditHorario(horario)} 
+                            onDelete={() => onDeleteHorario(horario)} 
+                            direccion="derecha" 
+                          />
+                        </div>
+                      </div>
                     </td>
                     {cajasNormales.map(caja => {
                       const turnosEnEsteHorario = caja.turnos.filter(t => t.horario === horario);

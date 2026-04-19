@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Calendar, Users, ShieldCheck, LogOut } from 'lucide-react';
 import { db } from '../../firebase';
@@ -63,7 +63,6 @@ const ParticipantPanel = () => {
   const datosParaModal: UsuarioModalData | null = useMemo(() => {
     if (!miUsuario) return null;
 
-    // Calculamos los turnos aquí mismo para que React Vercel no marque errores
     const misTurnos: { dia: string; horario: string; caja: string }[] = [];
     dias.forEach(dia => {
       dia.cajas.forEach(caja => {
@@ -91,17 +90,9 @@ const ParticipantPanel = () => {
       organizationLabel: miUsuario.organizationLabel || 'Congregación',
       ubicaciones: miUsuario.ubicaciones || [],
       birthDate: miUsuario.fechaNacimiento || '',
-      turnosAsignados: misTurnos // <-- Aquí se inyectan para que el modal los dibuje
+      turnosAsignados: misTurnos 
     };
   }, [miUsuario, dias]);
-  if (!miUsuario && !loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-bold text-slate-600">Sincronizando acceso...</p>
-      </div>
-    );
-  }
 
   const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
     if (!eventoId || !adminId || !miUsuario) return;
@@ -162,8 +153,8 @@ const ParticipantPanel = () => {
     syncEvent(nuevosDias);
   };
 
-  // AQUÍ ESTÁ LA CORRECCIÓN: Ahora te devuelve a tu link de invitación
-  const handleLogout = () => {
+  // Envolvemos en useCallback para que Vercel no marque errores en el useEffect de abajo
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
     if (eventoId && adminId) {
@@ -171,7 +162,25 @@ const ParticipantPanel = () => {
     } else {
       navigate('/');
     }
-  };
+  }, [eventoId, adminId, navigate]);
+
+  // --- ALERTA DE SEGURIDAD BOTÓN ATRÁS (MÓVIL) ---
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    
+    const handlePopState = () => {
+      const confirmar = window.confirm("¿Seguro que deseas salir de tu sesión actual?");
+      if (confirmar) {
+        handleLogout(); 
+      } else {
+        // Si cancela, volvemos a empujar el estado para bloquear la salida
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [handleLogout]); // Dependencia segura
 
   if (loading) {
     return (

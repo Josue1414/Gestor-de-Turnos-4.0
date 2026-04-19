@@ -1,7 +1,10 @@
-import { useState } from 'react';
+
+import { useState, useEffect, useCallback } from 'react';
 import { Calendar, Plus, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { DiaEvento, Participante } from '../../types';
+import ModalInputHorario from '../../components/ModalInputHorario';
+import ModalAlertaChoque from '../../components/ModalAlertaChoque';
 
 import { useAdminLogic } from '../../hooks/useAdminLogic';
 
@@ -14,7 +17,7 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import MatrizTurnos from '../../components/MatrizTurnos';
 import EditNameModal from '../../components/EditNameModal';
 import SpecialBoxModal from '../../components/SpecialBoxModal';
-import EditShiftModal from '../../components/EditShiftModal';
+
 import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalInfoUsuario';
 import AdminHeader from '../../components/AdminHeader';
 import AdminStatsBar from '../../components/AdminStatsBar';
@@ -57,10 +60,12 @@ const AdminPanel = () => {
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
     handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, getBusyUserIdsForModal, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
-    handleCheckNameDuplicate, downloadModal, setDownloadModal, loading
+    handleCheckNameDuplicate, downloadModal, setDownloadModal, loading,createShiftModal,setCreateShiftModal,confirmarCrearHorario,
+    clashModal, setClashModal
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
+  const [deleteEspecialModal, setDeleteEspecialModal] = useState({ isOpen: false, cajaId: '', turnoId: '' });
 
   const handleConfirmDeleteParticipante = async () => {
     if (!eventoId || !deletePartModal.id) return;
@@ -99,6 +104,28 @@ const AdminPanel = () => {
     }
   };
 
+  const handleDeleteTurnoEspecial = async (cajaId: string, turnoId: string) => {
+    if (!diaActual || !eventoId) return;
+    
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+      ...d, 
+      cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c, 
+        turnos: c.turnos.filter(t => t.id !== turnoId)
+      } : c)
+    } : d);
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+      await updateDoc(docRef, {
+        [`diasPorAdmin.${adminIdL}`]: nuevosDias
+      });
+    } catch (error) {
+      console.error("Error al borrar turno especial:", error);
+    }
+  };
+
   const handleGuardarPerfilAjustado = async (datosActualizados: UsuarioModalData) => {
     if (!eventoId) return;
     
@@ -109,6 +136,11 @@ const AdminPanel = () => {
       
       const data = docSnap.data();
       const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+
+      const nuevaEtiqueta = datosActualizados.organizationLabel || 'Congregación';
+      
+      // CORRECCIÓN 1: Usamos 'unknown' en lugar de 'any' para complacer a TypeScript
+      const updatePayload: Record<string, unknown> = {};
 
       if (datosActualizados.role === 'Participante') {
         const participantesDelAdmin: ParticipanteExtendidoDb[] = data.participantesPorAdmin?.[adminIdL] || [];
@@ -122,19 +154,22 @@ const AdminPanel = () => {
                 codigoPais: datosActualizados.countryCode,
                 notas: datosActualizados.notes,
                 organizacion: datosActualizados.organization,
-                organizationLabel: datosActualizados.organizationLabel,
+                organizationLabel: nuevaEtiqueta,
                 fechaNacimiento: datosActualizados.birthDate 
               } 
-            : p
+            : { 
+                ...p, 
+                organizationLabel: nuevaEtiqueta
+              }
         );
 
-        await updateDoc(docRef, {
-          [`participantesPorAdmin.${adminIdL}`]: actualizados
-        });
+        updatePayload[`participantesPorAdmin.${adminIdL}`] = actualizados;
+        
       } 
       else if (datosActualizados.role === 'Administrador' || datosActualizados.role === 'SuperAdmin') {
         const admins: AdminInDB[] = data.admins || [];
-        const actualizados = admins.map((a) => 
+        
+        const actualizadosAdmins = admins.map((a) => 
           a.id === datosActualizados.id 
             ? { 
                 ...a, 
@@ -143,13 +178,22 @@ const AdminPanel = () => {
                 countryCode: datosActualizados.countryCode,
                 notes: datosActualizados.notes,
                 organization: datosActualizados.organization,
-                organizationLabel: datosActualizados.organizationLabel
+                organizationLabel: nuevaEtiqueta
               }
             : a
         );
 
-        await updateDoc(docRef, { admins: actualizados });
+        const participantesDelAdmin: ParticipanteExtendidoDb[] = data.participantesPorAdmin?.[adminIdL] || [];
+        const actualizadosParticipantes = participantesDelAdmin.map((p) => ({
+           ...p,
+           organizationLabel: nuevaEtiqueta
+        }));
+
+        updatePayload['admins'] = actualizadosAdmins;
+        updatePayload[`participantesPorAdmin.${adminIdL}`] = actualizadosParticipantes;
       }
+
+      await updateDoc(docRef, updatePayload);
 
       setIsUsuarioModalOpen(false); 
     } catch (error: unknown) {
@@ -193,11 +237,12 @@ const AdminPanel = () => {
     };
   };
 
-  const handleLogout = () => {
+  // CORRECCIÓN 2: Envolvemos handleLogout en useCallback
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
     navigate('/');
-  };
+  }, [navigate]);
 
   const handleSaveEventName = async (): Promise<void> => {
     setIsEditingTitle(false);
@@ -209,6 +254,22 @@ const AdminPanel = () => {
       console.error("Error al actualizar el nombre del evento:", error);
     }
   };
+
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    
+    const handlePopState = () => {
+      const confirmar = window.confirm("¿Seguro que deseas salir de tu sesión actual?");
+      if (confirmar) {
+        handleLogout(); 
+      } else {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [handleLogout]); // Y aquí agregamos la dependencia que pedía Vercel
 
   if (loading) {
     return (
@@ -239,6 +300,8 @@ const AdminPanel = () => {
       </div>
     );
   }
+
+  
 
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
@@ -275,6 +338,7 @@ const AdminPanel = () => {
             turnosLibres={turnosLibres} 
             totalParticipantes={totalParticipantes} 
             onCrearCaja={handleCrearCaja} 
+            onCrearHorario={handleCrearHorario} /* <-- SE AÑADE AQUÍ */
             onShowDirectorio={() => setShowDirectorio(true)} 
           />
         </div>
@@ -283,9 +347,12 @@ const AdminPanel = () => {
       <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
         <MatrizTurnos 
           diaActual={diaActual} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante}
-          onCrearCaja={handleCrearCaja} onCrearHorario={handleCrearHorario} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario}
+          onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario}
+          /* onCrearHorario={handleCrearHorario} <-- SE ELIMINA DE AQUÍ */
           onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre); }}
           onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
+          onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
+          onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
         />
       </div>
 
@@ -303,7 +370,6 @@ const AdminPanel = () => {
       />
 
       <EditNameModal isOpen={editModal.isOpen && editModal.type === 'caja'} title={editModal.title} initialValue={editModal.initialValue} label={editModal.label} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
-      <EditShiftModal isOpen={editModal.isOpen && editModal.type === 'horario'} initialRange={editModal.initialValue} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
       <SpecialBoxModal isOpen={showSpecialModal} onClose={() => setShowSpecialModal(false)} onCreate={handleCrearCajaEspecial} />
       
       <CountdownDeleteModal 
@@ -330,6 +396,35 @@ const AdminPanel = () => {
 
       <DownloadScheduleModal
         isOpen={downloadModal.isOpen} onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })} type={downloadModal.type} seccionName={seccionName} dias={dias} diaActivo={diaActivo} participantes={participantesEnriquecidos} targetUserId={downloadModal.targetUserId}
+      />
+
+      <ModalInputHorario
+        isOpen={createShiftModal?.isOpen || false}
+        onClose={() => setCreateShiftModal && setCreateShiftModal({ ...createShiftModal, isOpen: false })}
+        defaultStart={createShiftModal?.defaultStart || '08:00'}
+        defaultEnd={createShiftModal?.defaultEnd || '09:00'}
+        onConfirm={confirmarCrearHorario}
+      />
+
+      {/* MODAL: Cuenta regresiva para Turnos Especiales */}
+      <CountdownDeleteModal 
+        isOpen={deleteEspecialModal.isOpen} 
+        onClose={() => setDeleteEspecialModal({ isOpen: false, cajaId: '', turnoId: '' })} 
+        onConfirm={() => {
+          handleDeleteTurnoEspecial(deleteEspecialModal.cajaId, deleteEspecialModal.turnoId);
+          setDeleteEspecialModal({ isOpen: false, cajaId: '', turnoId: '' });
+        }} 
+        title="Eliminar Horario Especial" 
+        message="Se eliminará este bloque de horario especial. Esta acción no se puede deshacer."
+      />
+
+      {/* MODAL: Alerta de Choque de Horarios */}
+      <ModalAlertaChoque
+        isOpen={clashModal?.isOpen || false}
+        onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })}
+        horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`}
+        horarioCruzado={clashModal?.turnoCruzado || ''}
+        onConfirm={() => confirmarCrearHorario(clashModal!.inicio, clashModal!.fin, true)}
       />
 
       <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} isAdmin={true} />

@@ -1,3 +1,10 @@
+/**
+ * RESUMEN: Lógica de Horarios en useAdminLogic
+ * Maneja la apertura del modal, la validación de choques de tiempo 
+ * y el guardado (creación o edición) sincronizado con Firebase.
+ */
+
+
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -75,6 +82,10 @@ export const useAdminLogic = (eventoId: string) => {
   const [downloadModal, setDownloadModal] = useState<{isOpen: boolean; type: 'general'|'personal'; targetUserId?: string}>({ isOpen: false, type: 'general' });
   const [loading, setLoading] = useState(true);
   const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil | null>(null);
+
+  const [createShiftModal, setCreateShiftModal] = useState({ isOpen: false, defaultStart: '08:00', defaultEnd: '09:00' });
+
+  const [horarioEditando, setHorarioEditando] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventoId) return;
@@ -171,16 +182,77 @@ export const useAdminLogic = (eventoId: string) => {
     setShowSpecialModal(false);
   };
 
+  // 1. Abre el modal y calcula mágicamente la hora sugerida
   const handleCrearHorario = () => {
-    if (!diaActual || diaActual.cajas.length === 0) return;
-    const ultHorario = diaActual.cajas[0].turnos[diaActual.cajas[0].turnos.length - 1]?.horario || '09:00';
-    const nuevoHorario = `${parseInt(ultHorario) + 1}:00`;
-    syncEvent(dias.map((d, i) => i === diaActivo ? {
-      ...d, cajas: d.cajas.map(c => ({
-        ...c, turnos: [...c.turnos, { id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorario, participanteId: null }]
-      }))
-    } : d));
+  if (!diaActual || diaActual.cajas.length === 0) return;
+
+  const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+  let sugerenciaInicio = '08:00';
+  let sugerenciaFin = '09:00';
+
+  if (cajasNormales.length > 0 && cajasNormales[0].turnos.length > 0) {
+    const turnos = cajasNormales[0].turnos;
+    const ultimoTurno = turnos[turnos.length - 1].horario;
+    const partes = ultimoTurno.split('-');
+    if (partes.length === 2) {
+      sugerenciaInicio = partes[1].trim();
+      const [h, m] = sugerenciaInicio.split(':').map(Number);
+      sugerenciaFin = `${((h + 1) % 24).toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+  }
+  setHorarioEditando(null); // Estamos creando, no editando
+  setCreateShiftModal({ isOpen: true, defaultStart: sugerenciaInicio, defaultEnd: sugerenciaFin });
+};
+
+// Pon esto arriba en useAdminLogic
+const [clashModal, setClashModal] = useState({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
+
+// Sustituye tu confirmarCrearHorario actual por este:
+const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
+  if (!diaActual) return false;
+  const nuevoHorario = `${inicio} - ${fin}`;
+  const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+
+  if (!forzar && cajasNormales.length > 0) {
+    const turnosExistentes = cajasNormales[0].turnos;
+    const turnosAValidar = horarioEditando 
+      ? turnosExistentes.filter(t => t.horario !== horarioEditando)
+      : turnosExistentes;
+
+    const turnoCruzado = turnosAValidar.find(t => hayChoqueDeHorario(t.horario, nuevoHorario));
+    
+    // En lugar de window.confirm, abrimos el modal bonito
+    if (turnoCruzado) {
+      setClashModal({ isOpen: true, inicio, fin, turnoCruzado: turnoCruzado.horario });
+      return false; // Pausamos la creación
+    }
+  }
+
+  // --- LÓGICA DE GUARDADO ---
+  const getMinutos = (rango: string) => { /* Tu código actual de getMinutos */
+    const hora = rango.split('-')[0].trim();
+    const [h, m] = hora.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
   };
+
+  const nuevosDias = dias.map((d, idx) => {
+    if (idx !== diaActivo) return d;
+    return {
+      ...d, cajas: d.cajas.map(c => {
+        if ('isEspecial' in c && c.isEspecial) return c;
+        const turnosActualizados = horarioEditando 
+          ? c.turnos.map(t => t.horario === horarioEditando ? { ...t, horario: nuevoHorario } : t)
+          : [...c.turnos, { id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorario, participanteId: null }];
+        return { ...c, turnos: turnosActualizados.sort((a, b) => getMinutos(a.horario) - getMinutos(b.horario)) };
+      })
+    };
+  });
+
+  syncEvent(nuevosDias);
+  setCreateShiftModal({ ...createShiftModal, isOpen: false });
+  setClashModal({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
+  return true;
+};
 
   const handleEliminarCaja = (cajaId: string) => {
     syncEvent(dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.filter(c => c.id !== cajaId) } : d));
@@ -193,20 +265,49 @@ export const useAdminLogic = (eventoId: string) => {
   };
 
   const abrirEditor = (type: 'caja' | 'horario', idOrValue: string, initialValue: string) => {
+  if (type === 'horario') {
+    const [inicio, fin] = initialValue.split('-').map(s => s.trim());
+    setHorarioEditando(initialValue); // Guardamos cuál estamos editando
+    setCreateShiftModal({ isOpen: true, defaultStart: inicio, defaultEnd: fin });
+  } else {
     setEditModal({
       isOpen: true, type,
-      title: type === 'caja' ? 'Renombrar Caja' : 'Editar Horario',
-      label: type === 'caja' ? 'Nombre de la Caja' : 'Rango de Horario',
-      initialValue, targetId: type === 'caja' ? idOrValue : undefined
+      title: 'Renombrar Caja',
+      label: 'Nombre de la Caja',
+      initialValue, targetId: idOrValue
     });
-  };
+  }
+};
 
   const handleSaveEdit = (newValue: string) => {
     if (editModal.type === 'caja') {
+      const nombreLimpio = newValue.trim();
+      
+      // 1. Validar límite de caracteres
+      if (nombreLimpio.length > 20) {
+        alert("El nombre de la caja es muy largo. El límite son 20 caracteres.");
+        return;
+      }
+      
+      // 2. Validar que no haya nombres duplicados
+      if (diaActual) {
+        const duplicado = diaActual.cajas.some(c => 
+          c.id !== editModal.targetId && 
+          (c.nombre as string).toLowerCase() === nombreLimpio.toLowerCase()
+        );
+        
+        if (duplicado) {
+          alert("Ya existe una caja con ese nombre. Por favor, elige uno diferente.");
+          return;
+        }
+      }
+
+      // 3. Guardar si todo es correcto
       syncEvent(dias.map((d, i) => i === diaActivo ? {
-        ...d, cajas: d.cajas.map(c => c.id === editModal.targetId ? { ...c, nombre: newValue } : c)
+        ...d, cajas: d.cajas.map(c => c.id === editModal.targetId ? { ...c, nombre: nombreLimpio } : c)
       } : d));
     } else {
+      // Lógica de edición de horario...
       syncEvent(dias.map((d, i) => i === diaActivo ? {
         ...d, cajas: d.cajas.map(c => ({
           ...c, turnos: c.turnos.map(t => t.horario === editModal.initialValue ? { ...t, horario: newValue } : t)
@@ -288,6 +389,8 @@ export const useAdminLogic = (eventoId: string) => {
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
     handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, getBusyUserIdsForModal, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
-    handleCheckNameDuplicate
+    handleCheckNameDuplicate,createShiftModal, setCreateShiftModal, confirmarCrearHorario,horarioEditando,setHorarioEditando,
+    clashModal, setClashModal, misDatosAdmin
+  
   };
 };

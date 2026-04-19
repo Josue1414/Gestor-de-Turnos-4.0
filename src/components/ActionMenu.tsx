@@ -1,67 +1,58 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit2, Trash2 } from 'lucide-react';
+import CountdownDeleteModal from './CountdownDeleteModal';
 
 interface ActionMenuProps {
   onEdit: () => void;
   onDelete: () => void;
-  direccion?: 'derecha' | 'abajo';
+  direccion?: 'derecha' | 'abajo'; // Se mantiene para no romper otros componentes
   tituloEliminar?: string;
   mensajeEliminar?: string;
 }
 
-const ActionMenu: React.FC<ActionMenuProps> = ({ onEdit, onDelete, direccion = 'abajo' }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+const ActionMenu: React.FC<ActionMenuProps> = ({ 
+  onEdit, 
+  onDelete, 
+  tituloEliminar = 'Eliminar registro', 
+  mensajeEliminar = '¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.' 
+}) => {
+  // Estado local exclusivo para la alerta de este menú
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Cerrar al hacer click fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleConfirmDelete = () => {
+    onDelete();
+    setShowDeleteModal(false);
+  };
 
   return (
-    <div className="relative" ref={menuRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-1.5 hover:bg-slate-500/50 rounded-lg transition-colors border border-slate-400/30"
-      >
-        <MoreVertical size={16} className="text-slate-300" />
-      </button>
-
-      {isOpen && (
-        <div 
-          className={`absolute z-[100] w-40 bg-white rounded-xl shadow-2xl border border-slate-100 py-1 overflow-hidden
-            ${direccion === 'derecha' ? 'left-full top-0 ml-2' : 'right-0 mt-2'}
-          `}
+    <>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={onEdit}
+          className="text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 p-1.5 rounded-lg transition-colors border border-transparent hover:border-blue-100 shadow-sm"
+          title="Editar"
         >
-          <button
-            onClick={() => { onEdit(); setIsOpen(false); }}
-            className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-slate-50 transition-colors"
-          >
-            <Edit2 size={16} className="text-slate-500" />
-            <span className="text-slate-700 font-bold text-sm">Editar</span>
-          </button>
-          
-          <div className="h-[1px] bg-slate-100 mx-2" />
+          <Edit2 size={16} />
+        </button>
+        
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 p-1.5 rounded-lg transition-colors border border-transparent hover:border-red-100 shadow-sm"
+          title={tituloEliminar}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
 
-          <button
-            onClick={() => { 
-              if(window.confirm('¿Estás seguro?')) onDelete(); 
-              setIsOpen(false); 
-            }}
-            className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 size={16} className="text-red-500" />
-            <span className="text-red-600 font-bold text-sm">Eliminar</span>
-          </button>
-        </div>
-      )}
-    </div>
+      {/* El modal se queda encapsulado aquí, manteniendo el AdminPanel limpio */}
+      <CountdownDeleteModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        title={tituloEliminar}
+        message={mensajeEliminar}
+      />
+    </>
   );
 };
 
