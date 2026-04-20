@@ -4,14 +4,14 @@
  * ============================================================================
  * DESCRIPCIÓN: 
  * Este es el "Cerebro" del Panel de Supervisión. Se encarga de conectarse a Firebase
- * en tiempo real para leer un evento específico y controlar a sus Kioscos (Admins).
+ * en tiempo real para leer un evento específico y controlar a sus Administradores.
  * * FUNCIONES PRINCIPALES:
  * 1. Sincronización en tiempo real de los datos del evento.
  * 2. Cálculo matemático de estadísticas (cajas, turnos totales, disponibles) por Admin.
  * 3. Crear y Eliminar administradores en la base de datos.
  * 4. Modificar el Perfil de los admins (Nombre, Área, Empresa).
  * 5. Modificar el Acceso (ID/Password) con migración de datos si el ID cambia.
- * 6. Propagar una Estructura Global (nuevos días/cajas/horarios) a todos los Kioscos a la vez.
+ * 6. Propagar una Estructura Global (nuevos días/cajas/horarios) a todos los Administradores a la vez.
  * * TIPADO: 100% Estricto (Sin usos de 'any') para asegurar builds limpios en Vercel.
  * ============================================================================
  */
@@ -119,7 +119,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
     
     const newAdmin: AdminData = {
       id: `admin-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      name: `Admin ${adminNum}`, // <-- CAMBIADO: Antes era "Kiosco"
+      name: `Admin ${adminNum}`,
       password: Math.random().toString(36).slice(-6),
       area: 'Sin asignar',
       org: 'Sin asignar',
@@ -147,11 +147,11 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
     }
   };
 
-  // 5. Editar Perfil y Contraseña
+  // 5. Editar Perfil y Contraseña (Aquí se aplicó la corrección de evId)
   const handleSaveProfile = async (evId: string, updatedAdmin: AdminData) => {
-    if (!eventoId) return;
+    if (!evId) return;
     try {
-      const docRef = doc(db, 'eventos', eventoId);
+      const docRef = doc(db, 'eventos', evId);
       const snap = await getDoc(docRef);
       if (!snap.exists()) return;
 
@@ -166,7 +166,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   };
 
   const handleEditAccess = async (evId: string, oldId: string, newId: string, newPass: string): Promise<boolean> => {
-    if (!eventoId) return false;
+    if (!evId) return false;
     try {
       const isAvailable = await checkGlobalIdAvailable(newId, oldId);
       if (!isAvailable) {
@@ -174,7 +174,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
         return false;
       }
 
-      const docRef = doc(db, 'eventos', eventoId);
+      const docRef = doc(db, 'eventos', evId);
       const snap = await getDoc(docRef);
       if (!snap.exists()) return false;
       
@@ -251,7 +251,6 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       });
 
       await updateDoc(docRef, { diasPorAdmin: nuevosDias });
-      // <-- CAMBIADO: Mensaje actualizado a "Administradores"
       alert("Estructura global aplicada con éxito a todos los Administradores.");
       return true;
     } catch (e) {
