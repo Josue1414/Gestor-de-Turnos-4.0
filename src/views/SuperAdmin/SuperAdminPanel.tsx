@@ -1,17 +1,18 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, Plus, Calendar, UploadCloud, LogOut
 } from 'lucide-react';
 
-import { useSuperAdminLogic, type EventoData } from '../../hooks/useSuperAdminLogic';
+import { useSuperAdminLogic, type EventoData, type AdminData } from '../../hooks/useSuperAdminLogic';
 
 // NUEVOS COMPONENTES IMPORTADOS
 import EditEventModal from '../../components/EditEventModal';
 import EventoSection from '../../components/EventoSection';
+import AdminSettingsFlow from '../../components/AdminSettingsFlow'; // <-- EL NUEVO COMPONENTE
 
 // COMPONENTES EXISTENTES
 import CroquisModal from '../../components/CroquisModal';
-import ModalInfoUsuario from '../../components/ModalInfoUsuario';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
@@ -19,13 +20,20 @@ import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 const SuperAdminPanel = () => {
   const navigate = useNavigate();
 
+  // PROTECCIÓN DE RUTA: Expulsa a cualquiera que no sea SuperAdmin
+  useEffect(() => {
+    const role = localStorage.getItem('user_role');
+    if (role !== 'superadmin') {
+      navigate('/'); 
+    }
+  }, [navigate]);
+
   const {
     eventos, showNewEvent, setShowNewEvent,
     nuevoEventoForm, setNuevoEventoForm, handleCrearEvento,
     croquisModalState, setCroquisModalState,
-    infoUsuarioState, setInfoUsuarioState,
     downloadModalState, setDownloadModalState,
-    handleOpenAjustesAdmin, handleGuardarAjustesAdmin,
+    handleGuardarAjustesAdmin, handleUpdateAdminAccess,
     baseStructureModalState, setBaseStructureModalState,
     estructuraGuardada, setEstructuraGuardada,
     deleteModalState, setDeleteModalState, handleConfirmDelete,
@@ -33,28 +41,19 @@ const SuperAdminPanel = () => {
     editEventModalState, setEditEventModalState, handleSaveEditEvent
   } = useSuperAdminLogic();
 
-  // ====== AQUÍ ESTÁ EL ÚNICO CAMBIO PARA ARREGLAR EL ERROR DE F5 ======
+  // ESTADO COMPACTO: Maneja todo el flujo de ajustes con el nuevo componente
+  const [settingsFlow, setSettingsFlow] = useState<{isOpen: boolean, eventoId: string, admin: AdminData | null}>({isOpen: false, eventoId: '', admin: null});
+
   const handleVerAdmin = (eventoId: string, adminId: string) => {
     localStorage.setItem('current_admin_id', adminId);
-    sessionStorage.setItem('visor_externo_tipo', 'SuperAdmin'); // Guarda la sesión persistente
-    navigate(`/admin/${eventoId}`); // Quitamos el state temporal
+    sessionStorage.setItem('visor_externo_tipo', 'SuperAdmin'); 
+    navigate(`/admin/${eventoId}`); 
   };
-  // ====================================================================
 
   const handleLogout = () => {
     localStorage.removeItem('user_role');
     navigate('/');
   };
-
-  const modalUsuarioMapeado = infoUsuarioState.data ? {
-    id: infoUsuarioState.data.id,
-    name: infoUsuarioState.data.name,
-    role: 'Administrador' as const,
-    phone: '',
-    supportArea: infoUsuarioState.data.area,
-    notes: '',
-    organization: infoUsuarioState.data.org
-  } : null;
 
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col gap-6">
@@ -125,7 +124,7 @@ const SuperAdminPanel = () => {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Croquis Base (Opc.)</label>
-              <button onClick={() => setCroquisModalState(true)} className="w-full p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition">
+              <button onClick={() => setCroquisModalState({isOpen: true, eventoId: null})} className="w-full p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition">
                 <UploadCloud size={16} /> Agregar Croquis
               </button>
             </div>
@@ -146,29 +145,33 @@ const SuperAdminPanel = () => {
             evento={evento}
             isDefaultExpanded={index === 0} 
             onDeleteEvent={(id: string, name: string) => setDeleteModalState({ isOpen: true, type: 'evento', eventoId: id, targetId: id, targetName: name })}
-            onOpenSettings={handleOpenAjustesAdmin}
+            onOpenSettings={(admin) => setSettingsFlow({isOpen: true, eventoId: evento.id, admin})}
             onDownload={(id: string) => setDownloadModalState({ isOpen: true, adminId: id })}
             onView={(adminId: string) => handleVerAdmin(evento.id, adminId)}
             onDeleteAdmin={(eventoId: string, adminId: string, adminName: string) => setDeleteModalState({ isOpen: true, type: 'admin', eventoId, targetId: adminId, targetName: adminName })}
             onAddAdmin={handleAddAdmin}
             onEditEvent={(eventData: EventoData) => setEditEventModalState({ isOpen: true, eventData })}
+            onOpenCroquis={() => setCroquisModalState({isOpen: true, eventoId: evento.id})}
           />
         ))}
       </div>
 
-      <CroquisModal isOpen={croquisModalState} onClose={() => setCroquisModalState(false)} isAdmin={true} />
-      
-      {modalUsuarioMapeado && (
-        <ModalInfoUsuario 
-          isOpen={infoUsuarioState.isOpen} 
-          onClose={() => setInfoUsuarioState({ isOpen: false, data: null })} 
-          data={modalUsuarioMapeado} 
-          isViewingSelf={false} 
-          currentUserRole="Administrador" 
-          onSave={handleGuardarAjustesAdmin} 
-          checkNameExists={() => false} 
-        />
-      )}
+      {/* EL COMPONENTE MÁGICO QUE REEMPLAZA A TODOS LOS DEMÁS */}
+      <AdminSettingsFlow 
+        isOpen={settingsFlow.isOpen}
+        onClose={() => setSettingsFlow({isOpen: false, eventoId: '', admin: null})}
+        admin={settingsFlow.admin}
+        eventoId={settingsFlow.eventoId}
+        currentUserRole="SuperAdmin"
+        onSaveProfile={handleGuardarAjustesAdmin}
+        onSaveAccess={handleUpdateAdminAccess}
+      />
+
+      <CroquisModal 
+        isOpen={croquisModalState.isOpen} 
+        onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
+        isAdmin={true} 
+      />
       
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />
       
@@ -198,8 +201,9 @@ const SuperAdminPanel = () => {
             setBaseStructureModalState(true);
         }}
         onOpenCroquis={() => {
+            const evId = editEventModalState.eventData?.id || null;
             setEditEventModalState({ isOpen: false, eventData: null });
-            setCroquisModalState(true);
+            setCroquisModalState({isOpen: true, eventoId: evId});
         }}
       />
 

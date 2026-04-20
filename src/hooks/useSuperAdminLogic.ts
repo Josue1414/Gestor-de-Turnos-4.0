@@ -1,48 +1,29 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { checkGlobalIdAvailable } from '../utils/validations';
 
 export interface AdminData {
   id: string;
   name: string;
   area: string;
   org: string;
+  phone?: string;
+  notes?: string;
+  orgLabel?: string;
+  password?: string;
   cajas: number;
   horarios: number;
   turnosTotales: number;
   necesarios: number;
   disponibles: number;
   inactivos: number;
-  password?: string;
 }
 
-// Interfaces estrictas para evitar el "any"
-export interface TurnoData {
-  id: string;
-  horario: string;
-  participanteId: string | null;
-}
-
-export interface CajaData {
-  id: string;
-  nombre: string;
-  esEspecial: boolean;
-  turnos: TurnoData[];
-}
-
-export interface DiaData {
-  id: string;
-  fecha: string;
-  nombreDia: string;
-  horariosMaestros: string[];
-  cajas: CajaData[];
-}
-
-export interface ParticipanteData {
-  id: string;
-  nombre: string;
-  estado: string;
-}
+export interface TurnoData { id: string; horario: string; participanteId: string | null; }
+export interface CajaData { id: string; nombre: string; esEspecial: boolean; turnos: TurnoData[]; }
+export interface DiaData { id: string; fecha: string; nombreDia: string; horariosMaestros: string[]; cajas: CajaData[]; }
+export interface ParticipanteData { id: string; nombre: string; estado: string; }
 
 export interface EventoData {
   id: string;
@@ -52,12 +33,8 @@ export interface EventoData {
   admins: AdminData[];
   diasPorAdmin?: Record<string, DiaData[]>;
   participantesPorAdmin?: Record<string, ParticipanteData[]>;
+  croquisUrl?: string;
   createdAt?: string;
-}
-
-interface DeleteModalState {
-  isOpen: boolean; type: 'evento' | 'admin' | null;
-  eventoId: string | null; targetId: string | null; targetName: string;
 }
 
 export const useSuperAdminLogic = () => {
@@ -65,10 +42,8 @@ export const useSuperAdminLogic = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const colRef = collection(db, 'eventos');
-    const unsubscribe = onSnapshot(colRef, (snapshot) => {
-      const listaEventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as EventoData[];
-      setEventos(listaEventos);
+    const unsubscribe = onSnapshot(collection(db, 'eventos'), (snapshot) => {
+      setEventos(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as EventoData[]);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -76,12 +51,14 @@ export const useSuperAdminLogic = () => {
 
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [nuevoEventoForm, setNuevoEventoForm] = useState({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
-  const [croquisModalState, setCroquisModalState] = useState(false);
-  const [infoUsuarioState, setInfoUsuarioState] = useState<{isOpen: boolean, data: AdminData | null}>({ isOpen: false, data: null });
+  
+  const [croquisModalState, setCroquisModalState] = useState<{isOpen: boolean, eventoId: string | null}>({ isOpen: false, eventoId: null });
+  const [infoUsuarioState, setInfoUsuarioState] = useState<{isOpen: boolean, eventoId: string | null, data: AdminData | null}>({ isOpen: false, eventoId: null, data: null });
+  
   const [downloadModalState, setDownloadModalState] = useState<{isOpen: boolean, adminId?: string}>({ isOpen: false });
   const [baseStructureModalState, setBaseStructureModalState] = useState(false);
   const [estructuraGuardada, setEstructuraGuardada] = useState<{ dias: string[], horarios: string[], cajas: string[] } | null>(null);
-  const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
+  const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean, type: 'evento' | 'admin' | null, eventoId: string | null, targetId: string | null, targetName: string }>({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
   const [editEventModalState, setEditEventModalState] = useState<{isOpen: boolean, eventData: EventoData | null}>({ isOpen: false, eventData: null });
 
   const handleCrearEvento = async () => {
@@ -92,7 +69,6 @@ export const useSuperAdminLogic = () => {
     const cantHorarios = estructuraGuardada ? estructuraGuardada.horarios.length : 0;
     const totalTurnos = cantCajas * cantHorarios;
 
-    // Construimos los días estrictamente tipados
     let diasIniciales: DiaData[] = [];
     if (estructuraGuardada) {
       diasIniciales = estructuraGuardada.dias.map((nombreDia, index) => ({
@@ -124,6 +100,7 @@ export const useSuperAdminLogic = () => {
         id: adminId, 
         name: `Nuevo Admin ${i + 1}`, 
         area: 'Sin asignar', org: 'Sin asignar',
+        phone: '', notes: '', orgLabel: 'Empresa',
         cajas: cantCajas, horarios: cantHorarios, turnosTotales: totalTurnos, necesarios: totalTurnos, disponibles: totalTurnos,
         inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
       });
@@ -146,8 +123,8 @@ export const useSuperAdminLogic = () => {
       setNuevoEventoForm({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
       setEstructuraGuardada(null); 
       setShowNewEvent(false);
-    } catch (error) {
-      console.error("Error al guardar:", error);
+    } catch (err) {
+      console.error(err);
       alert("Error al conectar con la nube.");
     }
   };
@@ -163,7 +140,8 @@ export const useSuperAdminLogic = () => {
           await updateDoc(doc(db, 'eventos', deleteModalState.eventoId), { admins: nuevosAdmins });
         }
       }
-    } catch {
+    } catch (err) {
+      console.error(err);
       alert("No se pudo eliminar.");
     }
     setDeleteModalState({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
@@ -181,6 +159,7 @@ export const useSuperAdminLogic = () => {
       id: `admin-${shortId}`,
       name: `Nuevo Admin ${ev.admins.length + 1}`,
       area: 'Sin asignar', org: 'Sin asignar',
+      phone: '', notes: '', orgLabel: 'Empresa',
       cajas: 0, horarios: 0, turnosTotales: 0, necesarios: 0, 
       disponibles: 0, inactivos: 0, password: `admin${Math.floor(Math.random() * 1000)}`
     };
@@ -198,14 +177,66 @@ export const useSuperAdminLogic = () => {
     setEditEventModalState({ isOpen: false, eventData: null });
   };
 
-  const handleOpenAjustesAdmin = (adminData: AdminData) => setInfoUsuarioState({ isOpen: true, data: adminData });
-  const handleGuardarAjustesAdmin = () => { setInfoUsuarioState({ isOpen: false, data: null }); };
+  const handleGuardarAjustesAdmin = async (eventoId: string, updatedAdmin: AdminData) => {
+    try {
+      const ev = eventos.find(e => e.id === eventoId);
+      if (!ev) return;
+      const nuevosAdmins = ev.admins.map(a => a.id === updatedAdmin.id ? updatedAdmin : a);
+      await updateDoc(doc(db, 'eventos', eventoId), { admins: nuevosAdmins });
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar ajustes.");
+    }
+  };
+
+  const handleUpdateAdminAccess = async (eventoId: string, oldId: string, newId: string, newPass: string): Promise<boolean> => {
+    try {
+      const isAvailable = await checkGlobalIdAvailable(newId, oldId);
+      if (!isAvailable) {
+        alert("Este ID de acceso ya está en uso. Elige uno diferente.");
+        return false;
+      }
+      const docRef = doc(db, 'eventos', eventoId);
+      const snap = await getDoc(docRef);
+      const data = snap.data() as EventoData;
+
+      const nuevosAdmins = data.admins.map(a => a.id === oldId ? { ...a, id: newId, password: newPass } : a);
+      const updatePayload: Record<string, unknown> = { admins: nuevosAdmins };
+
+      if (oldId !== newId) {
+        if (data.diasPorAdmin?.[oldId]) {
+          updatePayload[`diasPorAdmin.${newId}`] = data.diasPorAdmin[oldId];
+          updatePayload[`diasPorAdmin.${oldId}`] = null;
+        }
+        if (data.participantesPorAdmin?.[oldId]) {
+          updatePayload[`participantesPorAdmin.${newId}`] = data.participantesPorAdmin[oldId];
+          updatePayload[`participantesPorAdmin.${oldId}`] = null;
+        }
+      }
+      await updateDoc(docRef, updatePayload);
+      return true;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
+  const handleSaveCroquis = async (eventoId: string, url: string) => {
+    try {
+      await updateDoc(doc(db, 'eventos', eventoId), { croquisUrl: url });
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar el croquis.");
+    }
+  };
 
   return {
-    eventos, loading, showNewEvent, setShowNewEvent, nuevoEventoForm, setNuevoEventoForm, handleCrearEvento, 
-    croquisModalState, setCroquisModalState, infoUsuarioState, setInfoUsuarioState, downloadModalState, setDownloadModalState, 
-    baseStructureModalState, setBaseStructureModalState, estructuraGuardada, setEstructuraGuardada, deleteModalState, setDeleteModalState, 
-    handleConfirmDelete, handleAddAdmin, editEventModalState, setEditEventModalState, handleSaveEditEvent,
-    handleOpenAjustesAdmin, handleGuardarAjustesAdmin
+    eventos, loading, showNewEvent, setShowNewEvent, nuevoEventoForm, setNuevoEventoForm,
+    croquisModalState, setCroquisModalState, infoUsuarioState, setInfoUsuarioState,
+    downloadModalState, setDownloadModalState, baseStructureModalState, setBaseStructureModalState,
+    estructuraGuardada, setEstructuraGuardada, deleteModalState, setDeleteModalState,
+    editEventModalState, setEditEventModalState,
+    handleCrearEvento, handleConfirmDelete, handleAddAdmin, handleSaveEditEvent,
+    handleGuardarAjustesAdmin, handleUpdateAdminAccess, handleSaveCroquis
   };
 };

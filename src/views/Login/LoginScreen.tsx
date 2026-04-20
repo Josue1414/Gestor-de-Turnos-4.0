@@ -40,75 +40,67 @@ const LoginScreen = () => {
     localStorage.removeItem('current_admin_id');
     sessionStorage.removeItem('visor_externo_tipo');
 
-    if (!cod) return alert('Por favor ingresa un código de acceso o ID.');
+    // AHORA AMBOS CAMPOS SON ESTRICTAMENTE OBLIGATORIOS
+    if (!cod || !pass) {
+      return alert('Por favor ingresa tu usuario y contraseña.');
+    }
 
-    // 1. VALIDACIÓN DEL SUPER ADMIN
+    // 1. VALIDACIÓN DEL SUPER ADMIN (Basado en el archivo .env)
     if (cod === SUPERADMIN_USER && pass === SUPERADMIN_PASSWORD) {
       localStorage.setItem('user_role', 'superadmin');
       navigate('/super-admin');
       return;
     } 
 
-    // 2. BUSCAR EN FIREBASE (Si pone contraseña o su ID indica que es admin)
-    if (pass !== '' || cod.toLowerCase().startsWith('admin-')) {
-      if (pass === '') {
-        return alert('Por favor ingresa tu contraseña.');
-      }
+    // 2. BUSCAR EN FIREBASE (Supervisor o Administrador)
+    setIsLoading(true);
+    try {
+      const eventosRef = collection(db, 'eventos');
+      const snapshot = await getDocs(eventosRef);
+      
+      let adminFound = false;
+      let supervisorFound = false;
+      let eventoIdFound = '';
+      let adminIdFound = '';
 
-      setIsLoading(true);
-      try {
-        const eventosRef = collection(db, 'eventos');
-        const snapshot = await getDocs(eventosRef);
+      snapshot.forEach(doc => {
+        const evento = doc.data() as EventoLoginData;
         
-        let adminFound = false;
-        let supervisorFound = false;
-        let eventoIdFound = '';
-        let adminIdFound = '';
-
-        snapshot.forEach(doc => {
-          const evento = doc.data() as EventoLoginData;
-          
-          // 2.1 REVISAR SI ES SUPERVISOR
-          if (evento.supervisor && evento.supervisor.usuario === cod && evento.supervisor.password === pass) {
-            supervisorFound = true;
-            eventoIdFound = doc.id;
-          }
-
-          // 2.2 REVISAR SI ES ADMINISTRADOR NORMAL
-          const admins = evento.admins || [];
-          const matchedAdmin = admins.find((a) => a.id === cod && a.password === pass);
-
-          if (matchedAdmin) {
-            adminFound = true;
-            eventoIdFound = doc.id; 
-            adminIdFound = matchedAdmin.id;
-          }
-        });
-
-        // 3. DECISIÓN DE RUTAS BASADA EN EL ROL ENCONTRADO
-        if (supervisorFound) {
-          localStorage.setItem('user_role', 'supervisor');
-          navigate(`/supervisor/${eventoIdFound}`);
-        } else if (adminFound) {
-          localStorage.setItem('user_role', 'admin');
-          localStorage.setItem('current_admin_id', adminIdFound);
-          navigate(`/admin/${eventoIdFound}`); 
-        } else {
-          alert('Credenciales incorrectas. Verifica tu usuario y contraseña.');
+        // 2.1 REVISAR SI ES SUPERVISOR
+        if (evento.supervisor && evento.supervisor.usuario === cod && evento.supervisor.password === pass) {
+          supervisorFound = true;
+          eventoIdFound = doc.id;
         }
 
-      } catch (error) {
-        console.error("Error al iniciar sesión:", error);
-        alert('Hubo un error al conectar con el servidor.');
-      } finally {
-        setIsLoading(false);
+        // 2.2 REVISAR SI ES ADMINISTRADOR NORMAL
+        const admins = evento.admins || [];
+        const matchedAdmin = admins.find((a) => a.id === cod && a.password === pass);
+
+        if (matchedAdmin) {
+          adminFound = true;
+          eventoIdFound = doc.id; 
+          adminIdFound = matchedAdmin.id;
+        }
+      });
+
+      // 3. DECISIÓN DE RUTAS BASADA EN EL ROL ENCONTRADO
+      if (supervisorFound) {
+        localStorage.setItem('user_role', 'supervisor');
+        navigate(`/supervisor/${eventoIdFound}`);
+      } else if (adminFound) {
+        localStorage.setItem('user_role', 'admin');
+        localStorage.setItem('current_admin_id', adminIdFound);
+        navigate(`/admin/${eventoIdFound}`); 
+      } else {
+        alert('Credenciales incorrectas. Verifica tu usuario y contraseña.');
       }
-      return; 
-    } 
-    
-    // 4. SI SOLO PONE ID (SIN CONTRASEÑA), ES UN PARTICIPANTE
-    // (Asegúrate de que esta lógica siga siendo válida para tu nueva estructura de participantes)
-    navigate(`/turno/${codigo}`);
+
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error);
+      alert('Hubo un error al conectar con el servidor.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -122,7 +114,7 @@ const LoginScreen = () => {
             <ShieldCheck size={36} />
           </div>
           <h1 className="text-2xl font-black text-white tracking-tighter uppercase">Gestor de Turnos</h1>
-          <p className="text-slate-400 text-xs font-bold tracking-widest uppercase mt-1">Acceso al Sistema 3.0</p>
+          <p className="text-slate-400 text-xs font-bold tracking-widest uppercase mt-1">Acceso Interno</p>
         </div>
 
         <div className="p-8">
@@ -139,7 +131,7 @@ const LoginScreen = () => {
 
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-                <Key size={14} /> Contraseña <span className="text-slate-300 font-medium normal-case">(Opcional para participantes)</span>
+                <Key size={14} /> Contraseña
               </label>
               <div className="relative">
                 <input 

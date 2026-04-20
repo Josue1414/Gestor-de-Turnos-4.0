@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, MapIcon } from 'lucide-react';
 import type { EventoData, AdminData } from '../hooks/useSuperAdminLogic';
 import AdminFiche from './AdminFiche';
 import SeccionSupervisor from './SeccionSupervisor';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { checkGlobalIdAvailable } from '../utils/validations';
 
 interface EventoSectionProps {
   evento: EventoData;
@@ -16,19 +17,14 @@ interface EventoSectionProps {
   onDeleteAdmin: (eventoId: string, adminId: string, adminName: string) => void;
   onAddAdmin: (eventoId: string) => void;
   onEditEvent: (evento: EventoData) => void;
+  onOpenCroquis: () => void;
 }
 
-// TIPADO ESTRICTO: Interfaz local para extraer de forma segura el supervisor sin usar "any"
-interface EventoConSupervisor {
-  supervisor?: {
-    usuario?: string;
-    password?: string;
-  };
-}
+interface EventoConSupervisor { supervisor?: { usuario?: string; password?: string; }; }
 
 const EventoSection: React.FC<EventoSectionProps> = ({ 
   evento, isDefaultExpanded, onDeleteEvent, onOpenSettings, 
-  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent
+  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent, onOpenCroquis
 }) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const [page, setPage] = useState(1);
@@ -39,20 +35,26 @@ const EventoSection: React.FC<EventoSectionProps> = ({
   const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
   const currentItems = evento.admins.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+  const supervisorData = (evento as unknown as EventoConSupervisor).supervisor;
+
   const handleUpdateSupervisor = async (nuevoUsuario: string, nuevoPass: string) => {
     try {
+      const isAvailable = await checkGlobalIdAvailable(nuevoUsuario, supervisorData?.usuario);
+      if (!isAvailable) {
+        alert("Este Usuario ya está en uso por alguien más en el sistema. Elige uno distinto.");
+        return;
+      }
+
       const eventoRef = doc(db, 'eventos', evento.id);
       await updateDoc(eventoRef, {
         supervisor: { usuario: nuevoUsuario, password: nuevoPass }
       });
       alert("Credenciales del supervisor actualizadas.");
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error("Error al actualizar supervisor:", err);
+      alert("Hubo un problema al actualizar el supervisor.");
     }
   };
-
-  // Extracción segura del supervisor usando type casting estricto
-  const supervisorData = (evento as unknown as EventoConSupervisor).supervisor;
 
   return (
     <section className="bg-white border-2 border-slate-300 shadow-sm rounded-2xl flex flex-col overflow-hidden transition-all duration-300">
@@ -86,6 +88,12 @@ const EventoSection: React.FC<EventoSectionProps> = ({
         </div>
 
         <div className="flex gap-2 shrink-0 w-full lg:w-auto justify-end mt-3 lg:mt-0 pt-3 lg:pt-0 border-t border-slate-700 lg:border-none">
+            
+            {/* ESTE BOTÓN ES EL QUE FALTABA CONECTAR */}
+            <button onClick={onOpenCroquis} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 p-2 sm:px-3 rounded-lg transition border border-indigo-500/30 flex items-center gap-1 text-xs font-bold" title="Ver Croquis Base">
+              <MapIcon size={14} /> <span className="hidden sm:block">Croquis</span>
+            </button>
+
             <button onClick={() => onEditEvent(evento)} className="bg-slate-700 hover:bg-slate-600 text-white p-2 sm:px-3 rounded-lg transition shadow-sm border border-slate-600 flex items-center gap-1 text-xs font-bold" title="Editar Detalles del Evento">
               <Edit2 size={14} /> <span className="hidden sm:block">Editar</span>
             </button>
@@ -95,11 +103,9 @@ const EventoSection: React.FC<EventoSectionProps> = ({
         </div>
       </div>
       
-
       {isExpanded && (
         <div className="p-4 bg-slate-50/50 flex flex-col min-h-[220px] animate-in slide-in-from-top-2 duration-200">
           
-          {/* AQUÍ INYECTAMOS LA SECCIÓN DEL SUPERVISOR ESTRICTAMENTE TIPADA */}
           <div className="mb-6">
             <SeccionSupervisor 
               eventoId={evento.id} 
@@ -111,7 +117,6 @@ const EventoSection: React.FC<EventoSectionProps> = ({
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
               {currentItems.map((item: AdminData) => {
-                  
                   const adminDias = evento.diasPorAdmin?.[item.id] || [];
                   const adminParticipantes = evento.participantesPorAdmin?.[item.id] || [];
 
@@ -128,19 +133,14 @@ const EventoSection: React.FC<EventoSectionProps> = ({
                     });
                   });
 
-                  const dynamicStats = {
-                    cajas: calcCajas,
-                    horarios: calcHorarios,
-                    totales: calcTotales,
-                    disponibles: calcDisponibles,
-                    participantes: calcParticipantesLength
-                  };
-
                   return (
                     <AdminFiche 
                         key={item.id} 
                         data={item} 
-                        stats={dynamicStats}
+                        stats={{
+                          cajas: calcCajas, horarios: calcHorarios, totales: calcTotales,
+                          disponibles: calcDisponibles, participantes: calcParticipantesLength
+                        }}
                         onOpenSettings={onOpenSettings}
                         onDownload={onDownload}
                         onView={onView} 
@@ -159,7 +159,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
 
           {totalPages > 1 && (
             <div className="mt-6 pt-4 border-t border-slate-200 flex items-center justify-center gap-4">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 transition shadow-sm flex items-center gap-1">
                 <ChevronLeft size={16} /> <span className="text-sm font-bold hidden sm:block">Anterior</span>
               </button>
               <div className="flex gap-1.5 items-center">
@@ -169,7 +169,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
                   </button>
                 ))}
               </div>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition shadow-sm flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-40 transition shadow-sm flex items-center gap-1">
                  <span className="text-sm font-bold hidden sm:block">Siguiente</span> <ChevronRight size={16} />
               </button>
             </div>
