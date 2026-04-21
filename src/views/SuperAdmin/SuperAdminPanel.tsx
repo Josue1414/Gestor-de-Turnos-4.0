@@ -28,6 +28,19 @@ const SuperAdminPanel = () => {
     }
   }, [navigate]);
 
+  // PROTECCIÓN BOTÓN ATRÁS (NUEVO)
+  const [showExitAlert, setShowExitAlert] = useState(false);
+
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.pathname);
+    const handlePopState = () => {
+      setShowExitAlert(true);
+      window.history.pushState(null, '', window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const {
     eventos, showNewEvent, setShowNewEvent,
     nuevoEventoForm, setNuevoEventoForm, handleCrearEvento,
@@ -56,7 +69,7 @@ const SuperAdminPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col gap-6">
+    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col gap-6 relative">
       
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 p-4 sm:p-6 rounded-2xl shadow-lg border-b-4 border-blue-500 shrink-0">
         <div className="flex items-center gap-3">
@@ -78,8 +91,9 @@ const SuperAdminPanel = () => {
               {showNewEvent ? "CERRAR PANEL" : "CREAR EVENTO"}
             </button>
             
+            {/* Se reemplazó handleLogout por abrir el modal de salida segura */}
             <button 
-              onClick={handleLogout}
+              onClick={() => setShowExitAlert(true)}
               className="px-3.5 py-2.5 bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-xl transition shadow-md border border-slate-600"
               title="Cerrar Sesión Master"
             >
@@ -156,7 +170,6 @@ const SuperAdminPanel = () => {
         ))}
       </div>
 
-      {/* EL COMPONENTE MÁGICO QUE REEMPLAZA A TODOS LOS DEMÁS */}
       <AdminSettingsFlow 
         isOpen={settingsFlow.isOpen}
         onClose={() => setSettingsFlow({isOpen: false, eventoId: '', admin: null})}
@@ -175,10 +188,17 @@ const SuperAdminPanel = () => {
       
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />
       
+      {/* SE LE PASA FALSE A ISSUPERVISOR */}
+      {/* SE LE PASA FALSE A ISSUPERVISOR Y SE SATISFACE A TYPESCRIPT */}
       <BaseStructureModal 
         isOpen={baseStructureModalState} 
         onClose={() => setBaseStructureModalState(false)} 
-        onSave={(estructura) => setEstructuraGuardada(estructura)} 
+        onSave={(estructura) => setEstructuraGuardada({
+          dias: estructura.dias,
+          horarios: estructura.horarios || [], // Si no hay, pasa arreglo vacío
+          cajas: estructura.cajas || []        // Si no hay, pasa arreglo vacío
+        })} 
+        isSupervisor={false}
       />
       
       <CountdownDeleteModal 
@@ -206,6 +226,20 @@ const SuperAdminPanel = () => {
             setCroquisModalState({isOpen: true, eventoId: evId});
         }}
       />
+
+      {/* ALERTA DE SALIDA SEGURA */}
+      {showExitAlert && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95">
+            <h3 className="text-xl font-black text-slate-800 mb-2">¿Cerrar Sesión Global?</h3>
+            <p className="text-sm text-slate-500 mb-6 font-medium">Estás a punto de salir del panel de SuperUsuario. ¿Confirmas esta acción?</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setShowExitAlert(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition">Cancelar</button>
+              <button onClick={handleLogout} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black shadow-md hover:bg-red-600 transition">Sí, salir</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
