@@ -1,208 +1,273 @@
-import React, { useRef, useState } from 'react';
-import { X, Download, Calendar as CalendarIcon, MapPin, Clock, Users, Star } from 'lucide-react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useRef, useState, useMemo } from 'react';
+import { X, Download, Image as ImageIcon, Loader2, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ClipboardList } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import type { DiaEvento, Participante } from '../types';
+
+// --- INTERFACES ---
+interface Turno { id: string; participanteId: string | null; horario: string; }
+interface Caja { id: string; nombre: string; turnos: Turno[]; }
+interface Dia { id: string; nombreDia: string; cajas: Caja[]; }
+interface Participante { id: string; nombre: string; }
 
 interface DownloadScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'personal' | 'general';
-  seccionName: string;
-  dias: DiaEvento[];
-  diaActivo: number;
+  type: 'general' | 'personal'; 
+  seccionName: string;          
+  dias: Dia[];
+  diaActivo: number;            
   participantes: Participante[];
-  targetUserId?: string;
+  targetUserId?: string | null; 
 }
 
-const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
-  isOpen, onClose, type, seccionName, dias, diaActivo, participantes, targetUserId
+const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({ 
+  isOpen, onClose, type, seccionName, dias, diaActivo, participantes, targetUserId 
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [customError, setCustomError] = useState<{title: string, message: string} | null>(null);
+
+  // Lógica de turnos personales unificados
+  const todosMisTurnos = useMemo(() => {
+    if (type !== 'personal' || !targetUserId || !dias) return [];
+    const turnosAcumulados: { dia: string, caja: string, horario: string }[] = [];
+    
+    dias.forEach(dia => {
+      const cajasArr = Array.isArray(dia.cajas) ? dia.cajas : (dia.cajas ? Object.values(dia.cajas) : []);
+      cajasArr.forEach((caja: any) => {
+        const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
+        turnosArr.forEach((turno: any) => {
+          if (String(turno.participanteId) === String(targetUserId)) {
+            turnosAcumulados.push({ dia: dia.nombreDia, caja: caja.nombre || 'Sin área', horario: turno.horario || 'Sin horario' });
+          }
+        });
+      });
+    });
+    return turnosAcumulados; 
+  }, [type, targetUserId, dias]);
 
   if (!isOpen) return null;
 
-  const targetUser = type === 'personal' ? participantes.find(p => p.id === targetUserId) : null;
+  const diaActual = dias && dias.length > 0 ? dias[diaActivo] : null;
+  const participantName = type === 'personal' && targetUserId 
+    ? participantes?.find(p => p.id === targetUserId)?.nombre || 'Participante' : '';
 
+  // Extraer horarios únicos para la vista general
+  const horariosUnicosSet = new Set<string>();
+  diaActual?.cajas?.forEach(caja => caja.turnos?.forEach(t => horariosUnicosSet.add(t.horario)));
+  const horariosUnicos = Array.from(horariosUnicosSet).sort();
+
+  const getNombreParticipante = (id: string | null) => {
+    if (!id) return '';
+    return participantes?.find(p => p.id === id)?.nombre || '---';
+  };
+
+  // --- FUNCIÓN DE DESCARGA ---
   const handleDownload = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
+    setCustomError(null);
+    
     try {
-      const canvas = await html2canvas(printRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-      const image = canvas.toDataURL('image/png');
+      const element = printRef.current;
+      
+      const canvas = await html2canvas(element, {
+        scale: 1.5, 
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 800,
+        windowWidth: 800
+      });
+      
+      const image = canvas.toDataURL('image/png', 1.0);
       const link = document.createElement('a');
+      const safeSeccion = (seccionName || 'Evento').replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
+      
+      link.download = type === 'general' 
+        ? `Agenda_${safeSeccion}_${(diaActual?.nombreDia || 'Dia').replace(/\s+/g, '_')}.png`
+        : `Mis_Turnos_${participantName.replace(/\s+/g, '_')}.png`;
+        
       link.href = image;
-      link.download = type === 'personal' 
-        ? `Horario_${targetUser?.nombre?.replace(/\s+/g, '_') || 'Participante'}.png` 
-        : `Horario_General_${seccionName.replace(/\s+/g, '_')}.png`;
+      document.body.appendChild(link);
       link.click();
-    } catch (error) {
-      console.error("Error al generar la imagen:", error);
-      alert("Hubo un error al generar la imagen.");
+      document.body.removeChild(link);
+
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); onClose(); }, 2000);
+
+    } catch (err: any) {
+      console.error("Fallo detectado en html2canvas:", err); 
+      setCustomError({
+        title: "Error Técnico",
+        message: err?.message || "Ocurrió un bloqueo interno en el navegador. Intenta nuevamente."
+      });
     } finally {
       setIsDownloading(false);
-      onClose();
     }
   };
 
-  const renderPersonalView = () => {
-    if (!targetUser) return <p>Usuario no encontrado.</p>;
-
-    return (
-      <div className="bg-white p-8 rounded-2xl w-full max-w-md mx-auto border-2 border-slate-100">
-        <div className="text-center mb-6 border-b-2 border-slate-100 pb-6">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Users size={32} />
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-6 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+        
+        {/* ENCABEZADO DEL MODAL */}
+        <div className="bg-slate-900 p-5 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-blue-500/20 rounded-xl text-blue-400"><ImageIcon size={20} /></div>
+             <h2 className="text-white font-black text-lg tracking-tight uppercase">Exportar Imagen</h2>
           </div>
-          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">{targetUser.nombre}</h2>
-          <p className="text-blue-600 font-bold uppercase tracking-widest text-xs mt-1">{seccionName}</p>
+          <button onClick={onClose} className="bg-slate-800 hover:bg-red-500 text-white p-2 rounded-xl transition-all"><X size={20} /></button>
         </div>
 
-        <div className="space-y-6">
-          {dias.map(dia => {
-            const misTurnosDia = dia.cajas.flatMap(caja => 
-              caja.turnos
-                .filter(t => t.participanteId === targetUser.id)
-                .map(t => ({ cajaNombre: caja.nombre, horario: t.horario, esEspecial: caja.esEspecial }))
-            );
-            if (misTurnosDia.length === 0) return null;
+        {/* ÁREA CON SCROLL (VISTA PREVIA) */}
+        <div className="flex-1 overflow-auto p-4 sm:p-8 bg-slate-100 border-y border-slate-200">
+          <div className="flex justify-center items-start min-w-max h-full">
+            
+            <div className="bg-white shadow-2xl mx-auto flex-shrink-0">
+              
+              {/* === ZONA DE LA FOTO (AISLAMIENTO TOTAL - CERO TAILWIND) === */}
+              <div 
+                id="print-container"
+                ref={printRef} 
+                style={{ 
+                  backgroundColor: '#ffffff', 
+                  width: '800px', 
+                  padding: '40px', 
+                  boxSizing: 'border-box',
+                  fontFamily: 'system-ui, -apple-system, sans-serif' 
+                }} 
+              >
+                {/* CABECERA DOCUMENTO */}
+                <div style={{ marginBottom: '32px', borderBottom: '4px solid #f1f5f9', paddingBottom: '24px', textAlign: 'center' }}>
+                  <h1 style={{ fontSize: '30px', fontWeight: 900, letterSpacing: '-0.05em', textTransform: 'uppercase', color: '#0f172a', margin: '0 0 12px 0' }}>
+                    {seccionName || 'Gestor de Turnos'}
+                  </h1>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                     <div style={{ padding: '6px 16px', borderRadius: '8px', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CalendarIcon size={14} color="#3b82f6" /> 
+                        <span style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b' }}>
+                           {type === 'general' ? (diaActual?.nombreDia || 'General') : 'Itinerario Personal'}
+                        </span>
+                     </div>
+                     {type === 'personal' && (
+                        <div style={{ padding: '6px 16px', borderRadius: '8px', backgroundColor: '#eff6ff' }}>
+                           <span style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#2563eb' }}>{participantName}</span>
+                        </div>
+                     )}
+                  </div>
+                </div>
 
-            return (
-              <div key={dia.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <h3 className="font-black text-slate-700 mb-3 flex items-center gap-2 border-b border-slate-200 pb-2">
-                  <CalendarIcon size={16} className="text-blue-500"/> {dia.nombreDia}
-                </h3>
-                <div className="space-y-3">
-                  {misTurnosDia.map((turno, idx) => (
-                    <div key={idx} className={`flex justify-between items-center bg-white p-3 rounded-lg shadow-sm border ${turno.esEspecial ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100'}`}>
-                      <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                        <Clock size={14} className={turno.esEspecial ? 'text-indigo-400' : 'text-slate-400'} /> {turno.horario}
-                      </div>
-                      <div className={`flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-md ${turno.esEspecial ? 'text-indigo-700 bg-indigo-100' : 'text-blue-700 bg-blue-50'}`}>
-                        {turno.esEspecial ? <Star size={12} className="fill-indigo-700" /> : <MapPin size={12} />} 
-                        {turno.cajaNombre}
-                      </div>
-                    </div>
-                  ))}
+                {/* VISTA GENERAL (DISEÑO DE BLOQUES VERTICALES) */}
+                {type === 'general' && diaActual && (
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                     {diaActual.cajas?.map((caja) => (
+                       <div key={caja.id} style={{ borderRadius: '16px', overflow: 'hidden', border: '2px solid #e2e8f0', backgroundColor: '#ffffff' }}>
+                         
+                         {/* CORRECCIÓN 1: Título de la Caja (Limpio, sin el emoji ni la palabra "Área") */}
+                         <div style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#0f172a', color: '#ffffff' }}>
+                           {caja.nombre}
+                         </div>
+                         
+                         {/* Cuadrícula de Horarios */}
+                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1px', backgroundColor: '#e2e8f0' }}>
+                           {horariosUnicos.map(h => {
+                             const turno = caja.turnos?.find(t => t.horario === h);
+                             const isAsignado = !!turno?.participanteId;
+                             return (
+                               <div key={h} style={{ padding: '16px', backgroundColor: '#ffffff' }}>
+                                 <p style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', marginBottom: '6px', color: '#94a3b8', margin: 0 }}>{h}</p>
+                                 
+                                 {/* CORRECCIÓN 2: El nombre fluye en múltiples líneas si es largo (se quitó el overflow y el nowrap) */}
+                                 <p style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: '1.3', color: isAsignado ? '#2563eb' : '#cbd5e1', margin: 0, wordBreak: 'break-word' }}>
+                                   {isAsignado ? getNombreParticipante(turno.participanteId) : 'Disponible'}
+                                 </p>
+                               </div>
+                             );
+                           })}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                )}
+
+                {/* VISTA PERSONAL (TABLA COMPACTA) */}
+                {type === 'personal' && (
+                  <table style={{ borderCollapse: 'collapse', width: '100%', textAlign: 'left' }}>
+                     <thead>
+                        <tr>
+                           <th style={{ padding: '16px', fontWeight: 900, textTransform: 'uppercase', fontSize: '12px', backgroundColor: '#0f172a', color: '#ffffff', border: '1px solid #334155' }}>Día</th>
+                           <th style={{ padding: '16px', fontWeight: 900, textTransform: 'uppercase', fontSize: '12px', backgroundColor: '#0f172a', color: '#ffffff', border: '1px solid #334155', textAlign: 'center' }}>Horario</th>
+                           <th style={{ padding: '16px', fontWeight: 900, textTransform: 'uppercase', fontSize: '12px', backgroundColor: '#0f172a', color: '#ffffff', border: '1px solid #334155', textAlign: 'right' }}>Área Asignada</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        {todosMisTurnos.length > 0 ? (
+                           todosMisTurnos.map((t, idx) => (
+                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#ffffff' }}>
+                                 <td style={{ padding: '16px', border: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569' }}>{t.dia}</td>
+                                 <td style={{ padding: '16px', border: '1px solid #e2e8f0', textAlign: 'center', fontSize: '14px', fontWeight: 900, color: '#2563eb' }}>{t.horario}</td>
+                                 <td style={{ padding: '16px', border: '1px solid #e2e8f0', textAlign: 'right', fontSize: '11px', fontWeight: 'bold', color: '#1e293b' }}>{t.caja}</td>
+                              </tr>
+                           ))
+                        ) : (
+                           <tr>
+                              <td colSpan={3} style={{ padding: '40px', textAlign: 'center', fontWeight: 'bold', fontStyle: 'italic', textTransform: 'uppercase', fontSize: '12px', color: '#cbd5e1', border: '1px solid #e2e8f0' }}>
+                                 Sin turnos asignados
+                              </td>
+                           </tr>
+                        )}
+                     </tbody>
+                  </table>
+                )}
+
+                {/* PIE DE PÁGINA DOCUMENTO */}
+                <div style={{ marginTop: '40px', paddingTop: '16px', borderTop: '2px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8' }}>
+                  <p style={{ margin: 0 }}>Gestor de Turnos 4.0</p>
+                  <p style={{ margin: 0 }}>{new Date().toLocaleDateString('es-MX')}</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-        <div className="mt-8 text-center text-xs text-slate-400 font-medium">Generado desde Gestor de Turnos 3.0</div>
-      </div>
-    );
-  };
+              {/* === FIN ZONA DE LA FOTO === */}
+            </div>
 
-  const renderGeneralView = () => {
-    const diaActual = dias[diaActivo] || dias[0]; 
-    
-    // SEPARAR CAJAS NORMALES DE ESPECIALES (Ya sin los comentarios @ts-ignore)
-    const cajasNormales = diaActual.cajas.filter(c => !c.esEspecial);
-    const cajasEspeciales = diaActual.cajas.filter(c => c.esEspecial);
-
-    return (
-      <div className="bg-white p-8 rounded-xl w-full max-w-4xl mx-auto border-2 border-slate-100 flex flex-col gap-6">
-        <div className="flex justify-between items-end border-b-2 border-slate-800 pb-4">
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight uppercase">HORARIO GENERAL</h2>
-            <p className="text-slate-500 font-bold tracking-widest uppercase text-sm mt-1">{seccionName} • <span className="text-blue-600">{diaActual.nombreDia}</span></p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-400 font-bold">Generado desde</p>
-            <p className="text-sm font-black text-blue-600">Gestor 3.0</p>
           </div>
         </div>
 
-        {/* TABLA 1: CAJAS NORMALES */}
-        {cajasNormales.length > 0 && (
-          <div>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-3 bg-slate-800 text-white font-bold text-sm uppercase border border-slate-700">Horario</th>
-                  {cajasNormales.map(caja => (
-                    <th key={caja.id} className="p-3 bg-slate-700 text-white font-bold text-sm uppercase border border-slate-600 text-center">{caja.nombre}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {diaActual.horariosMaestros.map((horario, idx) => (
-                  <tr key={idx}>
-                    <td className="p-3 border border-slate-300 bg-slate-100 font-bold text-sm text-slate-700 whitespace-nowrap">{horario}</td>
-                    {cajasNormales.map(caja => {
-                      const turno = caja.turnos.find(t => t.horario === horario);
-                      const participante = participantes.find(p => p.id === turno?.participanteId);
-                      return (
-                        <td key={caja.id} className={`p-3 border border-slate-300 text-center text-sm font-bold ${turno?.participanteId === 'CERRADO' ? 'bg-red-50 text-red-400' : turno?.participanteId ? 'bg-white text-blue-700' : 'bg-slate-50 text-slate-300'}`}>
-                          {turno?.participanteId === 'CERRADO' ? 'CERRADO' : participante?.nombre || 'VACÍO'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* PIE DEL MODAL CON BOTONES */}
+        <div className="p-5 bg-white border-t flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2 text-slate-400">
+             <ClipboardList size={16} />
+             <p className="text-[10px] font-black uppercase tracking-widest">Generador libre de errores</p>
+          </div>
+          <div className="flex gap-3 w-full sm:w-auto">
+            <button onClick={onClose} disabled={isDownloading} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition text-sm">Cerrar</button>
+            <button 
+              onClick={handleDownload} 
+              disabled={isDownloading || success || (type === 'personal' && todosMisTurnos.length === 0)} 
+              className={`flex-1 px-10 py-3 rounded-xl font-black text-white shadow-lg transition-all flex items-center justify-center gap-2 text-sm ${
+                success ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-700'
+              } disabled:opacity-50`}
+            >
+              {isDownloading ? <><Loader2 className="animate-spin" size={18} /> Procesando...</> 
+               : success ? <><CheckCircle2 size={18} /> ¡Guardado!</> 
+               : <><Download size={18} /> Guardar Imagen</>}
+            </button>
+          </div>
+        </div>
+
+        {customError && (
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl text-center border-b-8 border-red-500">
+              <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
+              <h3 className="text-2xl font-black text-slate-900 mb-2">{customError.title}</h3>
+              <p className="text-sm font-bold text-slate-500 mb-8 p-3 bg-slate-50 rounded-lg overflow-auto max-h-32 text-left whitespace-pre-wrap">
+                {customError.message}
+              </p>
+              <button onClick={() => setCustomError(null)} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl">Entendido</button>
+            </div>
           </div>
         )}
-
-        {/* TABLA 2: CAJAS ESPECIALES */}
-        {cajasEspeciales.length > 0 && (
-          <div className="mt-4 border-t-2 border-dashed border-slate-200 pt-6">
-            <h3 className="text-lg font-black text-indigo-900 tracking-tight uppercase mb-3 flex items-center gap-2">
-              <Star size={18} className="fill-indigo-500 text-indigo-500" /> Áreas / Turnos Especiales
-            </h3>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-3 bg-indigo-800 text-white font-bold text-sm uppercase border border-indigo-700">Área / Caja</th>
-                  <th className="p-3 bg-indigo-700 text-white font-bold text-sm uppercase border border-indigo-600 text-center">Horario Asignado</th>
-                  <th className="p-3 bg-indigo-700 text-white font-bold text-sm uppercase border border-indigo-600 text-center">Participante</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cajasEspeciales.flatMap(caja => 
-                  caja.turnos.map((turno, idx) => {
-                    const participante = participantes.find(p => p.id === turno.participanteId);
-                    return (
-                      <tr key={`${caja.id}-${idx}`}>
-                        <td className="p-3 border border-indigo-200 bg-indigo-50 font-black text-sm text-indigo-900 whitespace-nowrap">{caja.nombre}</td>
-                        <td className="p-3 border border-indigo-200 bg-white font-bold text-sm text-slate-700 text-center whitespace-nowrap">{turno.horario}</td>
-                        <td className={`p-3 border border-indigo-200 text-center text-sm font-bold ${turno?.participanteId === 'CERRADO' ? 'bg-red-50 text-red-400' : turno?.participanteId ? 'bg-white text-indigo-700' : 'bg-slate-50 text-slate-300'}`}>
-                          {turno?.participanteId === 'CERRADO' ? 'CERRADO' : participante?.nombre || 'VACÍO'}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-      </div>
-    );
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex flex-col w-full max-w-5xl max-h-[90vh] bg-slate-100 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200 shrink-0">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2"><Download size={20} className="text-blue-500"/> Vista Previa de Imagen</h3>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 bg-slate-50 rounded-lg"><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 overflow-auto p-4 sm:p-8 bg-slate-200/50 flex justify-center items-start">
-          <div ref={printRef} className="shadow-lg">{type === 'personal' ? renderPersonalView() : renderGeneralView()}</div>
-        </div>
-
-        <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancelar</button>
-          <button onClick={handleDownload} disabled={isDownloading} className={`px-6 py-2.5 text-sm font-bold text-white rounded-xl shadow-md flex items-center gap-2 transition ${isDownloading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
-            <Download size={18} /> {isDownloading ? 'Generando PNG...' : 'Descargar Imagen'}
-          </button>
-        </div>
       </div>
     </div>
   );
