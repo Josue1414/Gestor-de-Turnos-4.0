@@ -17,8 +17,9 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
 
   const [nuevoDia, setNuevoDia] = useState('');
   const [nuevaCaja, setNuevaCaja] = useState('');
-  const [inicio, setInicio] = useState({ h: '', m: '', p: 'AM' });
-  const [fin, setFin] = useState({ h: '', m: '', p: 'AM' });
+  
+  // NUEVO: Estado simplificado para el input de horarios
+  const [nuevoHorarioTexto, setNuevoHorarioTexto] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -37,15 +38,15 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     setNuevoDia('');
   };
 
+  // NUEVO: Lógica simplificada para agregar horarios
   const handleAddHorario = () => {
-    if (!inicio.h || !inicio.m || !fin.h || !fin.m) return setErrorMsg('Completa inicio y fin.');
-    const formatTime = (t: {h: string, m: string, p: string}) => `${t.h.padStart(2, '0')}:${t.m.padStart(2, '0')} ${t.p}`;
-    const nuevoHorario = `${formatTime(inicio)} - ${formatTime(fin)}`;
+    const val = nuevoHorarioTexto.trim();
+    if (!val) return setErrorMsg('Ingresa un horario válido (Ej. 08:00 - 09:00).');
+    if (horarios.includes(val)) return setErrorMsg('El horario ya existe.');
     
-    if (horarios.includes(nuevoHorario)) return setErrorMsg('El horario ya existe.');
-    setHorarios([...horarios, nuevoHorario]);
-    setInicio({ h: '', m: '', p: 'AM' });
-    setFin({ h: '', m: '', p: 'AM' });
+    // Lo guardamos tal cual lo escribe el SuperAdmin y lo ordenamos
+    setHorarios([...horarios, val].sort());
+    setNuevoHorarioTexto('');
   };
 
   const handleAddCaja = () => {
@@ -65,6 +66,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     }
     onSave({ dias, horarios, cajas });
     setDias([]); setHorarios([]); setCajas([]);
+    setNuevoHorarioTexto('');
     onClose();
   };
 
@@ -147,35 +149,70 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
                 </div>
               </div>
 
-              {/* COLUMNA HORARIOS */}
+              {/* COLUMNA HORARIOS ACTUALIZADA (MODO ETIQUETAS Y COLOR) */}
               <div className="bg-slate-50 border border-slate-100 p-4 sm:p-5 rounded-2xl flex flex-col shadow-sm">
                 <h4 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-4">
                   <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-600"><Clock size={18}/></div>
                   Horarios ({horarios.length})
                 </h4>
-                <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-200 shadow-sm focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all">
-                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">INICIO</span>
-                    <input type="number" placeholder="00" value={inicio.h} onChange={e => setInicio({...inicio, h: e.target.value})} className="w-10 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-sm font-bold outline-none focus:border-emerald-500" />:
-                    <input type="number" placeholder="00" value={inicio.m} onChange={e => setInicio({...inicio, m: e.target.value})} className="w-10 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-sm font-bold outline-none focus:border-emerald-500" />
-                    <select value={inicio.p} onChange={e => setInicio({...inicio, p: e.target.value})} className="p-1.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none"><option>AM</option><option>PM</option></select>
-                  </div>
-                  <div className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-200 shadow-sm focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all">
-                    <span className="text-[10px] font-black text-slate-400 w-10 text-center">FIN</span>
-                    <input type="number" placeholder="00" value={fin.h} onChange={e => setFin({...fin, h: e.target.value})} className="w-10 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-sm font-bold outline-none focus:border-emerald-500" />:
-                    <input type="number" placeholder="00" value={fin.m} onChange={e => setFin({...fin, m: e.target.value})} className="w-10 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-sm font-bold outline-none focus:border-emerald-500" />
-                    <select value={fin.p} onChange={e => setFin({...fin, p: e.target.value})} className="p-1.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none"><option>AM</option><option>PM</option></select>
-                    <button onClick={handleAddHorario} className="ml-auto bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700 transition shadow-sm hover:-translate-y-0.5"><Plus size={18} /></button>
-                  </div>
+                
+                {/* Nuevo Input Simple */}
+                <div className="flex gap-2 mb-4">
+                  <input 
+                    type="text" 
+                    placeholder="Ej. 08:00 - 09:00" 
+                    value={nuevoHorarioTexto} 
+                    onChange={(e) => setNuevoHorarioTexto(e.target.value)} 
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddHorario();
+                      }
+                    }}
+                    className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" 
+                  />
+                  <button onClick={handleAddHorario} className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition shadow-sm hover:-translate-y-0.5">
+                    <Plus size={20} />
+                  </button>
                 </div>
-                <div className="space-y-2 flex-1 overflow-y-auto pr-1">
-                  {horarios.map((h, i) => (
-                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-emerald-100 text-sm text-emerald-800 font-bold shadow-sm">
-                      <span>{h}</span>
-                      <button onClick={() => setHorarios(horarios.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition"><Trash2 size={16}/></button>
-                    </div>
-                  ))}
-                  {horarios.length === 0 && <p className="text-xs text-slate-400 font-medium text-center py-4 border-2 border-dashed border-slate-200 rounded-xl">No hay horarios agregados</p>}
+
+                {/* Renderizado de Etiquetas Estilo Admin */}
+                <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                  {horarios.length === 0 && (
+                    <p className="w-full text-xs text-slate-400 font-medium text-center py-4 border-2 border-dashed border-slate-200 rounded-xl">
+                      No hay horarios agregados
+                    </p>
+                  )}
+                  {horarios.map((h, i) => {
+                    // Minisimulador de color de tiempo
+                    const hourStr = h.split(/[-a]/i)[0]?.trim() || h;
+                    let isPM = false;
+                    const hourNum = parseInt(hourStr.split(':')[0], 10);
+                    
+                    if (hourStr.toUpperCase().includes('PM')) {
+                      isPM = true;
+                    } else if (hourStr.toUpperCase().includes('AM')) {
+                      isPM = false;
+                    } else {
+                      if (hourNum >= 12 && hourNum < 24) isPM = true;
+                    }
+
+                    return (
+                      <div 
+                        key={i} 
+                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all
+                          ${isPM ? 'bg-blue-900 text-white border border-blue-800' : 'bg-blue-500 text-white border border-blue-400'}`}
+                      >
+                        <span>{h}</span>
+                        <button 
+                          onClick={() => setHorarios(horarios.filter((_, idx) => idx !== i))} 
+                          className="opacity-60 hover:opacity-100 hover:text-red-300 transition-colors p-0.5"
+                        >
+                          <X size={14}/>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </>

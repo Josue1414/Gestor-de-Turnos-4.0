@@ -4,8 +4,9 @@
  * formato AM/PM coloreado y botones de acción visibles en móviles.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Plus, User, X, Clock, Lock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
@@ -54,8 +55,24 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
     return (h || 0) * 60 + (m || 0);
   };
 
-  const horariosUnicos = Array.from(new Set(cajasNormales.flatMap(c => c.turnos.map(t => t.horario))))
-    .sort((a, b) => getMinutos(a) - getMinutos(b));
+  // NUEVA LÓGICA: Extraer y ordenar estrictamente los horarios que pertenecen a ESTAS cajas NORMALES
+  const horariosUnicos = useMemo(() => {
+      const horariosSet = new Set<string>();
+      
+      // Solo iteramos sobre las cajasNormales
+      cajasNormales.forEach(caja => {
+          const turnos = Array.isArray(caja.turnos) 
+              ? caja.turnos 
+              : (caja.turnos ? Object.values(caja.turnos) : []);
+              
+          turnos.forEach((turno: any) => {
+              if (turno.horario) horariosSet.add(turno.horario);
+          });
+      });
+  
+      // Ordenamiento nativo basado en la función de minutos existente
+      return Array.from(horariosSet).sort((a, b) => getMinutos(a) - getMinutos(b));
+  }, [cajasNormales]);
 
   // 2. FORMATEADOR VISUAL DE HORA PERFECCIONADO (Alineación rígida y responsiva)
   const formatHorarioVisual = (rango: string) => {

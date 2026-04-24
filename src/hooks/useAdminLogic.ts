@@ -86,6 +86,7 @@ export const useAdminLogic = (eventoId: string) => {
   const [createShiftModal, setCreateShiftModal] = useState({ isOpen: false, defaultStart: '08:00', defaultEnd: '09:00' });
 
   const [horarioEditando, setHorarioEditando] = useState<string | null>(null);
+  const [clashModal, setClashModal] = useState({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
 
   useEffect(() => {
     if (!eventoId) return;
@@ -157,7 +158,14 @@ export const useAdminLogic = (eventoId: string) => {
 
   const handleCrearCaja = () => {
     if (!diaActual) return;
-    const horarios = diaActual.cajas.length > 0 ? Array.from(new Set(diaActual.cajas.flatMap(c => c.turnos.map(t => t.horario)))) : ['09:00 - 10:00'];
+    
+    // FILTRO ESTRICTO: Solo extraer horarios de las cajas que NO sean especiales
+    const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+    
+    const horarios = cajasNormales.length > 0 
+      ? Array.from(new Set(cajasNormales.flatMap(c => c.turnos.map(t => t.horario)))) 
+      : ['09:00 - 10:00'];
+      
     const nuevaCaja = {
       id: `caja_${Date.now()}`,
       nombre: `Caja ${diaActual.cajas.length + 1}`,
@@ -204,10 +212,7 @@ export const useAdminLogic = (eventoId: string) => {
   setCreateShiftModal({ isOpen: true, defaultStart: sugerenciaInicio, defaultEnd: sugerenciaFin });
 };
 
-// Pon esto arriba en useAdminLogic
-const [clashModal, setClashModal] = useState({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
 
-// Sustituye tu confirmarCrearHorario actual por este:
 const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
   if (!diaActual) return false;
   const nuevoHorario = `${inicio} - ${fin}`;
@@ -229,7 +234,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
   }
 
   // --- LÓGICA DE GUARDADO ---
-  const getMinutos = (rango: string) => { /* Tu código actual de getMinutos */
+  const getMinutos = (rango: string) => { 
     const hora = rango.split('-')[0].trim();
     const [h, m] = hora.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
