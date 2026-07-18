@@ -18,12 +18,12 @@ const AdminStatsBar: React.FC<AdminStatsBarProps> = ({
     <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold text-slate-600">
       
       {/* Botón de Cajas */}
-      <button onClick={onCrearCaja} className="bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1 hover:bg-slate-700 transition shadow-sm">
+      <button onClick={onCrearCaja} className="bg-slate-800 text-white px-2 py-2 rounded-xl text-[10px] font-bold flex items-center gap-1 hover:bg-slate-700 transition shadow-sm">
         <Plus size={14} /> Caja Normal
       </button>
 
       {/* Botón de Turnos (Horarios) - Movido aquí */}
-      <button onClick={onCrearHorario} className="bg-blue-100 text-blue-600 px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1 hover:bg-blue-200 transition shadow-sm">
+      <button onClick={onCrearHorario} className="bg-blue-100 text-blue-600 px-2 py-2 rounded-xl text-[10px] font-bold flex items-center gap-1 hover:bg-blue-200 transition shadow-sm">
         <Plus size={14} /> Turno
       </button>
       

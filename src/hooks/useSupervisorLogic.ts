@@ -16,9 +16,10 @@
  * ============================================================================
  */
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
-import { checkGlobalIdAvailable } from '../utils/validations';
+import type { Evento } from '../utils/schemas';
+import { useToast } from '../components/ToastProvider';
 
 // --- INTERFACES ESTRICTAS ---
 interface Turno { 
@@ -71,6 +72,7 @@ interface EventoDocument {
 }
 
 export const useSupervisorLogic = (eventoId: string | undefined) => {
+  const { showToast } = useToast();
   const [evento, setEvento] = useState<EventoDocument | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -116,11 +118,55 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   const handleAddAdmin = async () => {
     if (!eventoId || !evento) return;
     const adminNum = evento.admins.length + 1;
-    
+    const newAdminId = `admin-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const newPassword = Math.random().toString(36).slice(-6);
+
+    const existingAdminDays = Object.values(evento.diasPorAdmin || {}).find((dias) => Array.isArray(dias) && dias.length > 0) as Dia[] | undefined;
+    const defaultHorario = existingAdminDays?.[0]?.cajas?.[0]?.turnos?.[0]?.horario || '08:00 - 09:00';
+    const defaultDayItems = existingAdminDays && existingAdminDays.length > 0
+      ? existingAdminDays.map((dia, index) => ({
+          id: `dia_${Date.now()}_${index}`,
+          nombreDia: dia.nombreDia,
+          fecha: dia.fecha,
+          cajas: [
+            {
+              id: `caja_${Date.now()}_${index}_1`,
+              nombre: 'Caja 1',
+              turnos: [
+                {
+                  id: `turno_${Date.now()}_${index}_1`,
+                  horario: defaultHorario,
+                  participanteId: null
+                }
+              ]
+            }
+          ]
+        }))
+      : [
+          {
+            id: `dia_${Date.now()}_1`,
+            nombreDia: 'Día 1',
+            fecha: '',
+            cajas: [
+              {
+                id: `caja_${Date.now()}_1`,
+                nombre: 'Caja 1',
+                turnos: [
+                  {
+                    id: `turno_${Date.now()}_1`,
+                    horario: '08:00 - 09:00',
+                    participanteId: null
+                  }
+                ]
+              }
+            ]
+          }
+        ];
+
     const newAdmin: AdminData = {
-      id: `admin-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      id: newAdminId,
       name: `Admin ${adminNum}`,
-      password: Math.random().toString(36).slice(-6),
+      password: newPassword,
       area: 'Sin asignar',
       org: 'Sin asignar',
       orgLabel: 'Empresa'
@@ -128,10 +174,13 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
 
     try {
       await updateDoc(doc(db, 'eventos', eventoId), {
-        admins: [...evento.admins, newAdmin]
+        admins: [...evento.admins, newAdmin],
+        [`diasPorAdmin.${newAdminId}`]: defaultDayItems,
+        [`participantesPorAdmin.${newAdminId}`]: []
       });
     } catch (e) {
       console.error(e);
+      showToast('No se pudo agregar el administrador.', 'error');
     }
   };
 
@@ -144,6 +193,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       await updateDoc(docRef, { admins: nuevosAdmins });
     } catch (e) {
       console.error(e);
+        showToast('No se pudo eliminar el administrador.', 'error');
     }
   };
 
@@ -161,44 +211,48 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       await updateDoc(docRef, { admins: nuevosAdmins });
     } catch (error) {
       console.error(error);
-      alert("Error al guardar ajustes del perfil.");
+      showToast("Error al guardar ajustes del perfil.", 'error');
     }
   };
 
   const handleEditAccess = async (evId: string, oldId: string, newId: string, newPass: string): Promise<boolean> => {
     if (!evId) return false;
     try {
-      const isAvailable = await checkGlobalIdAvailable(newId, oldId);
-      if (!isAvailable) {
-        alert("Este ID ya está en uso en el sistema. Elige uno diferente.");
-        return false;
-      }
-
       const docRef = doc(db, 'eventos', evId);
-      const snap = await getDoc(docRef);
-      if (!snap.exists()) return false;
-      
-      const data = snap.data() as EventoDocument;
-
-      const nuevosAdmins = data.admins.map((a: AdminData) => a.id === oldId ? { ...a, id: newId, password: newPass } : a);
-      const updatePayload: Record<string, unknown> = { admins: nuevosAdmins };
-
-      if (oldId !== newId) {
-        if (data.diasPorAdmin?.[oldId]) {
-          updatePayload[`diasPorAdmin.${newId}`] = data.diasPorAdmin[oldId];
-          updatePayload[`diasPorAdmin.${oldId}`] = null;
+      const result = await runTransaction(db, async (transaction) => {
+        // Re-verificar disponibilidad global
+        const all = await getDocs(collection(db, 'eventos'));
+        for (const d of all.docs) {
+          const ev = d.data() as Evento | undefined;
+          if ((ev as any)?.supervisor && (ev as any).supervisor.usuario === newId) return false;
+          if (Array.isArray((ev as any)?.admins) && (ev as any).admins.some((a: any) => a.id === newId && a.id !== oldId)) return false;
         }
-        if (data.participantesPorAdmin?.[oldId]) {
-          updatePayload[`participantesPorAdmin.${newId}`] = data.participantesPorAdmin[oldId];
-          updatePayload[`participantesPorAdmin.${oldId}`] = null;
-        }
-      }
 
-      await updateDoc(docRef, updatePayload);
-      return true;
+        const snap = await transaction.get(docRef as any);
+        if (!snap.exists()) return false;
+        const data = snap.data() as EventoDocument;
+
+        const nuevosAdmins = data.admins.map((a: AdminData) => a.id === oldId ? { ...a, id: newId, password: newPass } : a);
+        const updatePayload: Record<string, any> = { admins: nuevosAdmins };
+
+        if (oldId !== newId) {
+          if (data.diasPorAdmin?.[oldId]) {
+            updatePayload[`diasPorAdmin.${newId}`] = data.diasPorAdmin[oldId];
+            updatePayload[`diasPorAdmin.${oldId}`] = null;
+          }
+          if (data.participantesPorAdmin?.[oldId]) {
+            updatePayload[`participantesPorAdmin.${newId}`] = data.participantesPorAdmin[oldId];
+            updatePayload[`participantesPorAdmin.${oldId}`] = null;
+          }
+        }
+
+        transaction.update(docRef as any, updatePayload);
+        return true;
+      });
+      return !!result;
     } catch (error) {
       console.error(error);
-      alert("Error al actualizar el acceso.");
+        showToast("Error al actualizar el acceso.", 'error');
       return false;
     }
   };
@@ -251,7 +305,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       });
 
       await updateDoc(docRef, { diasPorAdmin: nuevosDias });
-      alert("Estructura global aplicada con éxito a todos los Administradores.");
+        showToast("Estructura global aplicada con éxito a todos los Administradores.", 'success');
       return true;
     } catch (e) {
       console.error(e);

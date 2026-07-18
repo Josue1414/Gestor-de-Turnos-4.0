@@ -153,11 +153,11 @@ const SuperAdminPanel = () => {
       )}
 
       <div className="flex flex-col gap-6 flex-1 overflow-y-auto pb-10">
-        {eventos.map((evento: EventoData, index: number) => (
+        {eventos.map((evento: EventoData) => (
           <EventoSection 
             key={evento.id} 
             evento={evento}
-            isDefaultExpanded={index === 0} 
+            isDefaultExpanded={false} 
             onDeleteEvent={(id: string, name: string) => setDeleteModalState({ isOpen: true, type: 'evento', eventoId: id, targetId: id, targetName: name })}
             onOpenSettings={(admin) => setSettingsFlow({isOpen: true, eventoId: evento.id, admin})}
             onDownload={(id: string) => setDownloadModalState({ isOpen: true, adminId: id })}
@@ -184,6 +184,8 @@ const SuperAdminPanel = () => {
         isOpen={croquisModalState.isOpen} 
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
         isAdmin={true} 
+        croquisActual={null}
+        onSaveCroquis={() => {}}
       />
       
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />

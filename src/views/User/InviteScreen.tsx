@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ShieldCheck, User, Calendar } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ParticipanteSchema } from '../../utils/schemas';
 
 // Interfaz 100% estricta sin 'any'
 interface ParticipanteEnDB {
@@ -85,10 +86,20 @@ const InviteScreen = () => {
           id: miId,
           nombre: nombre.trim(),
           estado: 'Libre',
-          linkUnico: `inv-${miId}`, 
+          linkUnico: `inv-${miId}`,
           fechaNacimiento
         };
-        const actualizados = [...participantesDelAdmin, nuevoParticipante];
+
+        // Validar con Zod antes de escribir en Firestore
+        const validation = ParticipanteSchema.safeParse(nuevoParticipante);
+        if (!validation.success) {
+          console.error('Participante inválido, no se guardará:', validation.error);
+          setError('Datos inválidos en el participante. Contacta al organizador.');
+          setLoading(false);
+          return;
+        }
+
+        const actualizados = [...participantesDelAdmin, validation.data];
         await updateDoc(docRef, { [`participantesPorAdmin.${adminId}`]: actualizados });
       }
 

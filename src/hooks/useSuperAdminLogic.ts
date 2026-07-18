@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { checkGlobalIdAvailable } from '../utils/validations';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, runTransaction, setDoc } from 'firebase/firestore';
+import { useToast } from '../components/ToastProvider';
 
 export interface AdminData {
   id: string;
@@ -38,6 +38,7 @@ export interface EventoData {
 }
 
 export const useSuperAdminLogic = () => {
+  const { showToast } = useToast();
   const [eventos, setEventos] = useState<EventoData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,7 +63,7 @@ export const useSuperAdminLogic = () => {
   const [editEventModalState, setEditEventModalState] = useState<{isOpen: boolean, eventData: EventoData | null}>({ isOpen: false, eventData: null });
 
   const handleCrearEvento = async () => {
-    if (!nuevoEventoForm.nombre.trim()) return alert("Por favor, ingresa un nombre.");
+    if (!nuevoEventoForm.nombre.trim()) { showToast("Por favor, ingresa un nombre.", 'error'); return; }
 
     const cantidadAdmins = parseInt(nuevoEventoForm.numAdmins) || 0;
     const cantCajas = estructuraGuardada ? estructuraGuardada.cajas.length : 0;
@@ -119,30 +120,48 @@ export const useSuperAdminLogic = () => {
     };
 
     try {
-      await addDoc(collection(db, 'eventos'), nuevoEvento);
+      const createdRef = await addDoc(collection(db, 'eventos'), nuevoEvento);
+      // Registrar accesos en índice `accessIds` para optimizar búsquedas globales
+      try {
+        const eventoId = createdRef.id;
+        for (const a of nuevosAdmins) {
+          await setDoc(doc(db, 'accessIds', a.id), { eventoId, type: 'admin' });
+        }
+      } catch (e) {
+        console.warn('No se pudo escribir en accessIds, continuará funcionando sin índice.', e);
+      }
+
       setNuevoEventoForm({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
       setEstructuraGuardada(null); 
       setShowNewEvent(false);
     } catch (err) {
       console.error(err);
-      alert("Error al conectar con la nube.");
+      showToast("Error al conectar con la nube.", 'error');
     }
   };
 
   const handleConfirmDelete = async () => {
     try {
       if (deleteModalState.type === 'evento' && deleteModalState.targetId) {
+        // Borrar event y limpiar accessIds de sus admins
+        const ev = eventos.find(e => e.id === deleteModalState.targetId);
+        if (ev) {
+          for (const a of ev.admins) {
+            try { await deleteDoc(doc(db, 'accessIds', a.id)); } catch (e) { /* noop */ }
+          }
+        }
         await deleteDoc(doc(db, 'eventos', deleteModalState.targetId));
       } else if (deleteModalState.type === 'admin' && deleteModalState.eventoId && deleteModalState.targetId) {
         const ev = eventos.find(e => e.id === deleteModalState.eventoId);
         if (ev) {
           const nuevosAdmins = ev.admins.filter(a => a.id !== deleteModalState.targetId);
           await updateDoc(doc(db, 'eventos', deleteModalState.eventoId), { admins: nuevosAdmins });
+          try { await deleteDoc(doc(db, 'accessIds', deleteModalState.targetId || '')); } catch (e) { /* noop */ }
         }
       }
     } catch (err) {
       console.error(err);
-      alert("No se pudo eliminar.");
+      showToast("No se pudo eliminar.", 'error');
     }
     setDeleteModalState({ isOpen: false, type: null, eventoId: null, targetId: null, targetName: '' });
   };
@@ -169,6 +188,12 @@ export const useSuperAdminLogic = () => {
       [`diasPorAdmin.${nuevoAdmin.id}`]: baseDias,
       [`participantesPorAdmin.${nuevoAdmin.id}`]: []
     });
+    // Registrar en accessIds (no crítico — si falla, no bloquea la operación)
+    try {
+      await setDoc(doc(db, 'accessIds', nuevoAdmin.id), { eventoId, type: 'admin' });
+    } catch (e) {
+      console.warn('No se pudo escribir accessIds para nuevo admin', e);
+    }
   };
 
   const handleSaveEditEvent = async (editedEventData: EventoData) => {
@@ -185,36 +210,47 @@ export const useSuperAdminLogic = () => {
       await updateDoc(doc(db, 'eventos', eventoId), { admins: nuevosAdmins });
     } catch (err) {
       console.error(err);
-      alert("Error al guardar ajustes.");
+      showToast("Error al guardar ajustes.", 'error');
     }
   };
 
   const handleUpdateAdminAccess = async (eventoId: string, oldId: string, newId: string, newPass: string): Promise<boolean> => {
+    const docRef = doc(db, 'eventos', eventoId);
     try {
-      const isAvailable = await checkGlobalIdAvailable(newId, oldId);
-      if (!isAvailable) {
-        alert("Este ID de acceso ya está en uso. Elige uno diferente.");
-        return false;
-      }
-      const docRef = doc(db, 'eventos', eventoId);
-      const snap = await getDoc(docRef);
-      const data = snap.data() as EventoData;
-
-      const nuevosAdmins = data.admins.map(a => a.id === oldId ? { ...a, id: newId, password: newPass } : a);
-      const updatePayload: Record<string, unknown> = { admins: nuevosAdmins };
-
-      if (oldId !== newId) {
-        if (data.diasPorAdmin?.[oldId]) {
-          updatePayload[`diasPorAdmin.${newId}`] = data.diasPorAdmin[oldId];
-          updatePayload[`diasPorAdmin.${oldId}`] = null;
+      const result = await runTransaction(db, async (transaction) => {
+        if (oldId !== newId) {
+          const accessSnapshot = await transaction.get(doc(db, 'accessIds', newId));
+          if (accessSnapshot.exists()) {
+            return false;
+          }
         }
-        if (data.participantesPorAdmin?.[oldId]) {
-          updatePayload[`participantesPorAdmin.${newId}`] = data.participantesPorAdmin[oldId];
-          updatePayload[`participantesPorAdmin.${oldId}`] = null;
+
+        const snap = await transaction.get(docRef as any);
+        if (!snap.exists()) return false;
+        const data = snap.data() as EventoData;
+
+        const nuevosAdmins = data.admins.map(a => a.id === oldId ? { ...a, id: newId, password: newPass } : a);
+        const updatePayload: Record<string, any> = { admins: nuevosAdmins };
+
+        if (oldId !== newId) {
+          if (data.diasPorAdmin?.[oldId]) {
+            updatePayload[`diasPorAdmin.${newId}`] = data.diasPorAdmin[oldId];
+            updatePayload[`diasPorAdmin.${oldId}`] = null;
+          }
+          if (data.participantesPorAdmin?.[oldId]) {
+            updatePayload[`participantesPorAdmin.${newId}`] = data.participantesPorAdmin[oldId];
+            updatePayload[`participantesPorAdmin.${oldId}`] = null;
+          }
+
+          transaction.set(doc(db, 'accessIds', newId), { eventoId, type: 'admin' });
+          transaction.delete(doc(db, 'accessIds', oldId));
         }
-      }
-      await updateDoc(docRef, updatePayload);
-      return true;
+
+        transaction.update(docRef as any, updatePayload);
+        return true;
+      });
+
+      return !!result;
     } catch (err) {
       console.error(err);
       return false;
@@ -226,7 +262,7 @@ export const useSuperAdminLogic = () => {
       await updateDoc(doc(db, 'eventos', eventoId), { croquisUrl: url });
     } catch (err) {
       console.error(err);
-      alert("Error al guardar el croquis.");
+      showToast("Error al guardar el croquis.", 'error');
     }
   };
 

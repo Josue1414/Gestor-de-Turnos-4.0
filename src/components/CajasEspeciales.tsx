@@ -50,19 +50,19 @@ const CajasEspeciales: React.FC<CajasEspecialesProps> = ({
       
       <button 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-4 flex items-center justify-between bg-purple-100/70 hover:bg-purple-200 transition-colors"
+        className="w-full p-3 flex items-center justify-between bg-purple-100/70 hover:bg-purple-200 transition-colors"
       >
-        <h2 className="text-base font-black text-purple-800 flex items-center gap-2">
-          <Star className="text-purple-500" size={18} /> Kioscos Especiales ({cajas.length})
+        <h2 className="text-sm font-black text-purple-800 flex items-center gap-2">
+          <Star className="text-purple-500" size={16} /> Kioscos Especiales ({cajas.length})
         </h2>
-        {isExpanded ? <ChevronUp className="text-purple-600" /> : <ChevronDown className="text-purple-600" />}
+        {isExpanded ? <ChevronUp className="text-purple-600" size={16} /> : <ChevronDown className="text-purple-600" size={16} />}
       </button>
 
       {isExpanded && (
         <div className="p-4 pt-0 mt-4">
           <div className="flex overflow-x-auto gap-4 pb-4 snap-x custom-scrollbar">
             {cajas.map(caja => (
-              <div key={caja.id} className="bg-white rounded-2xl p-3 shadow-sm border border-purple-100 flex-shrink-0 w-[240px] snap-start flex flex-col">
+              <div key={caja.id} className="bg-white rounded-2xl p-3 shadow-sm border border-purple-100 flex-shrink-0 w-[200px] sm:w-[240px] snap-start flex flex-col">
                 
                 <div className="flex justify-between items-start mb-3 shrink-0">
                   <h3 className="font-black text-slate-800 uppercase tracking-tight text-[11px] truncate pr-2">{caja.nombre}</h3>

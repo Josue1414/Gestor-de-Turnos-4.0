@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Users, Settings, Share2, Copy, CheckCircle, MessageCircle, Trash2, UserPlus } from 'lucide-react';
 import type { Participante } from '../types';
+import { useToast } from './ToastProvider';
 
 export interface ParticipanteExtendido extends Participante {
   telefono?: string;
@@ -17,22 +18,22 @@ interface ParticipantDrawerProps {
   currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin'; 
   eventoId?: string; 
   adminId?: string;  
+  turnosLibresCount?: number;
+  turnosOcupadosCount?: number;
 }
 
 const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({ 
   isOpen, onClose, participantes, onEditParticipante, onDeleteParticipante, currentUserId, currentUserRole = 'Administrador',
-  eventoId = 'demo-evento', adminId = 'demo-admin'
+  eventoId = 'demo-evento', adminId = 'demo-admin', turnosLibresCount = 0, turnosOcupadosCount = 0
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const participantesFiltrados = participantes.filter(p => 
     p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim())
   );
 
-  const libresCount = participantes.filter(p => p.estado === 'Libre').length;
-  const asignadosCount = participantes.filter(p => p.estado === 'Asignado').length;
-  
   const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
 
   const handleCopyLink = (participanteId: string, e: React.MouseEvent) => {
@@ -45,7 +46,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
   const handleWhatsApp = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!participante.telefono) return alert("Este participante no tiene número de teléfono registrado.");
+    if (!participante.telefono) { showToast('Este participante no tiene número de teléfono registrado.', 'error'); return; }
     
     const numeroLimpio = participante.telefono.replace(/\D/g, '');
     const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participante.id}`;
@@ -57,7 +58,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   const handleCopyInviteLink = () => {
     const url = `${window.location.origin}/invite/${eventoId}/${adminId}`;
     navigator.clipboard.writeText(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
-    alert("¡Link de invitación general copiado!");
+    showToast('¡Link de invitación general copiado!', 'success');
   };
 
   const handleCopyAllLinks = () => {
@@ -66,7 +67,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
       textoMasivo += `• ${p.nombre}:\n  ${window.location.origin}/p/${eventoId}/${adminId}/${p.id}\n\n`;
     });
     navigator.clipboard.writeText(textoMasivo);
-    alert("¡Lista copiada! Pégala en tu grupo o lista de difusión de WhatsApp.");
+    showToast('¡Lista copiada! Pégala en tu grupo o lista de difusión de WhatsApp.', 'success');
   };
 
   return (
@@ -83,10 +84,10 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
           
           <div className="flex gap-2 text-xs font-bold mb-1">
             <div className="flex-1 bg-slate-700 p-2 rounded-lg text-center shadow-inner border border-slate-600">
-              <span className="text-emerald-400 block text-lg">{libresCount}</span> Libres
+              <span className="text-emerald-400 block text-lg">{turnosLibresCount}</span> Libres
             </div>
             <div className="flex-1 bg-slate-700 p-2 rounded-lg text-center shadow-inner border border-slate-600">
-              <span className="text-blue-400 block text-lg">{asignadosCount}</span> Ocupados
+              <span className="text-blue-400 block text-lg">{turnosOcupadosCount}</span> Ocupados
             </div>
           </div>
 

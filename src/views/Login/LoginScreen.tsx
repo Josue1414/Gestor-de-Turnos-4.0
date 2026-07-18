@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useToast } from '../../components/ToastProvider';
 
 // TIPADOS ESTRICTOS (Cero "any")
 interface AdminLoginData {
@@ -32,6 +33,7 @@ const LoginScreen = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     const cod = codigo.trim();
     const pass = password.trim();
     
@@ -42,7 +44,8 @@ const LoginScreen = () => {
 
     // AHORA AMBOS CAMPOS SON ESTRICTAMENTE OBLIGATORIOS
     if (!cod || !pass) {
-      return alert('Por favor ingresa tu usuario y contraseña.');
+      showToast('Por favor ingresa tu usuario y contraseña.', 'error');
+      return;
     }
 
     // 1. VALIDACIÓN DEL SUPER ADMIN (Basado en el archivo .env)
@@ -92,16 +95,18 @@ const LoginScreen = () => {
         localStorage.setItem('current_admin_id', adminIdFound);
         navigate(`/admin/${eventoIdFound}`); 
       } else {
-        alert('Credenciales incorrectas. Verifica tu usuario y contraseña.');
+        showToast('Credenciales incorrectas. Verifica tu usuario y contraseña.', 'error');
       }
 
     } catch (error) {
       console.error("Error al iniciar sesión:", error);
-      alert('Hubo un error al conectar con el servidor.');
+      showToast('Hubo un error al conectar con el servidor.', 'error');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const { showToast } = useToast();
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans relative overflow-hidden">

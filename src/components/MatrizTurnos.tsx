@@ -37,7 +37,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
     const box = c as CajaCheck;
-    if (box.isEspecial === true || box.especial === true || box.tipo === 'especial') return true;
+    if (box.isEspecial === true || box.isEspecial === true || box.especial === true || box.tipo === 'especial') return true;
     if (typeof box.nombre === 'string') {
       const lowerName = box.nombre.toLowerCase();
       return lowerName.includes('especial') || lowerName.includes('vip');
@@ -99,9 +99,9 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
 
     return (
       // En celular: Se apilan (flex-col) con el guion en medio. En PC: Quedan en fila (flex-row).
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 w-full">
-        {/* El w-10 y text-right forza a que el inicio siempre ocupe el mismo espacio visual */}
-        <span className={`font-black text-[12px] sm:text-sm w-full sm:w-10 text-center sm:text-right ${inicio.colorClass}`}>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 w-full">
+        {/* El w-10 y text-right fuerza a que el inicio siempre ocupe el mismo espacio visual */}
+        <span className={`font-black text-[12px] sm:text-sm w-full sm:w-8 text-center sm:text-right ${inicio.colorClass}`}>
           {inicio.texto}
         </span>
         
@@ -116,7 +116,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
   };
 
   return (
-    <div className="flex-1 bg-slate-50 font-sans h-full overflow-y-auto p-4 sm:p-6">
+    <div className="flex-1 max-w-none bg-slate-50 font-sans h-full overflow-y-auto px-0 py-2 sm:px-0 sm:py-2">
       
       {/* SECCIÓN 1: CAJAS ESPECIALES (INDEPENDIENTES Y MORADAS) */}
       <CajasEspeciales 
@@ -133,13 +133,13 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
 
       {/* SECCIÓN 2: TABLA NORMAL */}
       {cajasNormales.length > 0 ? (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto w-full pb-4">
-            <table className="w-full table-fixed border-separate border-spacing-0 min-w-max">
+        <div className="w-full max-w-full bg-white rounded-none sm:rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto w-full pb-2 sm:pb-4 px-0">
+            <table className="border-separate border-spacing-0 min-w-max w-full">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-2 sm:p-3 w-[65px] sm:w-[90px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-middle">
-                    <div className="flex flex-col items-center justify-center gap-1 text-slate-500 font-black text-[10px] uppercase tracking-wider h-full">
+                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-1.5 sm:p-3 w-[40px] sm:w-[58px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-middle">
+                    <div className="flex flex-col items-center justify-center gap-1 text-slate-500 font-black text-[9px] sm:text-[10px] uppercase tracking-wider h-full">
                       <div className="flex items-center gap-1"><Clock size={12} /> <span className="hidden sm:inline">HORARIO</span></div>
                       {/* LEYENDA DE COLORES AM / PM */}
                       <div className="flex gap-1 sm:gap-2 mt-1">
@@ -149,7 +149,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                     </div>
                   </th>
                   {cajasNormales.map(caja => (
-                    <th key={caja.id as string} className="group border-b border-slate-200 bg-white p-1.5 sm:p-3 w-[110px] sm:w-[200px] border-l align-top">
+                    <th key={caja.id as string} className="group border-b border-slate-200 bg-white p-1 sm:p-2 min-w-[56px] sm:min-w-[88px] border-l align-top">
                       <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[40px]">
                         <span 
                           className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" 
@@ -191,7 +191,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                     {cajasNormales.map(caja => {
                       const turnosEnEsteHorario = caja.turnos.filter(t => t.horario === horario);
                       return (
-                        <td key={`${caja.id}-${horario}`} className="border-b border-slate-100 border-l p-1 sm:p-2 align-top w-[110px] sm:w-[200px]">
+                        <td key={`${caja.id}-${horario}`} className="border-b border-slate-100 border-l p-1 sm:p-2 align-top min-w-[95px] sm:min-w-[140px]">
                           <div className="space-y-2">
                             {turnosEnEsteHorario.map((turno) => {
                               const participanteNorm = getParticipante(turno.participanteId);

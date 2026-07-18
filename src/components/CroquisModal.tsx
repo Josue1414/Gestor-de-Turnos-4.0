@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
@@ -6,22 +6,29 @@ interface CroquisModalProps {
   isOpen: boolean;
   onClose: () => void;
   isAdmin?: boolean;
+  croquisActual: string | null;
+  onSaveCroquis: (base64: string) => void;
 }
 
-const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = false }) => {
-  const [imagenUrl, setImagenUrl] = useState<string | null>(null);
+const CroquisModal: React.FC<CroquisModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  isAdmin = false, 
+  croquisActual, 
+  onSaveCroquis 
+}) => {
+  // ESTADO MODERNO: Solo guardamos un "override" temporal.
+  const [localOverride, setLocalOverride] = useState<string | null | undefined>(undefined);
 
-  useEffect(() => {
-    if (isOpen) {
-      // Diferimos la carga de la imagen un milisegundo para contentar a Vercel
-      const timer = setTimeout(() => {
-        const guardada = localStorage.getItem('gestor_croquis');
-        if (guardada) setImagenUrl(guardada);
-      }, 0);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
+  // La imagen real que se muestra en pantalla
+  const imagenUrl = localOverride !== undefined ? localOverride : croquisActual;
+
+  // NUEVO: En lugar de un useEffect, limpiamos el estado en la misma acción de cerrar.
+  // Esto elimina el error de React y mejora el rendimiento evitando re-renderizados en cascada.
+  const handleCloseModal = () => {
+    setLocalOverride(undefined);
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -31,22 +38,22 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        setImagenUrl(result);
-        localStorage.setItem('gestor_croquis', result);
+        setLocalOverride(result); // 1. Actualiza la pantalla instantáneamente
+        onSaveCroquis(result);    // 2. Manda a guardar a Firebase en segundo plano
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleRemove = () => {
-    setImagenUrl(null);
-    localStorage.removeItem('gestor_croquis');
+    setLocalOverride(null); // Null localmente significa "sin imagen"
+    onSaveCroquis('');      // Un string vacío le dice a Firebase que borre el campo
   };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4">
-      {/* Fondo oscuro con blur */}
-      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={onClose} />
+      {/* Fondo oscuro con blur. Usamos handleCloseModal */}
+      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={handleCloseModal} />
       
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col h-[85vh] sm:h-[90vh] overflow-hidden">
         
@@ -55,7 +62,8 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
           <h3 className="font-black text-slate-800 flex items-center gap-2 text-lg">
             <MapIcon className="text-indigo-500" /> Croquis del Evento
           </h3>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
+          {/* Botón de cerrar. Usamos handleCloseModal */}
+          <button onClick={handleCloseModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
             <X size={20} />
           </button>
         </div>
@@ -66,7 +74,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
             <TransformWrapper
               initialScale={1}
               minScale={0.5}
-              maxScale={8} // Permite un zoom bastante profundo
+              maxScale={8}
               centerOnInit={true}
             >
               {({ zoomIn, zoomOut, resetTransform }) => (
@@ -110,7 +118,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
           ) : (
             <div className="text-center w-full px-4">
               {isAdmin ? (
-                <label className="cursor-pointer mx-auto flex flex-col items-center justify-center w-full max-w-md h-72 border-4 border-dashed border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-400 rounded-3xl transition text-indigo-500 shadow-sm">
+                <label className="cursor-pointer mx-auto flex flex-col items-center justify-center w-full max-w-md h-72 border-4 border-dashed border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-400 rounded-3xl transition text-indigo-500 shadow-sm z-10 relative">
                   <Upload size={48} className="mb-4 text-indigo-400" />
                   <span className="font-black text-xl text-indigo-700">Subir Croquis</span>
                   <span className="text-sm mt-2 opacity-70 font-bold px-4 text-center">
@@ -119,7 +127,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
                   <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
                 </label>
               ) : (
-                <div className="flex flex-col items-center text-slate-400 bg-white p-10 rounded-3xl shadow-sm border border-slate-200 max-w-sm mx-auto">
+                <div className="flex flex-col items-center text-slate-400 bg-white p-10 rounded-3xl shadow-sm border border-slate-200 max-w-sm mx-auto z-10 relative">
                   <MapIcon size={64} className="mb-4 opacity-20" />
                   <p className="font-black text-xl text-slate-600">Croquis no disponible</p>
                   <p className="text-sm font-medium mt-2 text-center">
@@ -132,7 +140,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({ isOpen, onClose, isAdmin = 
         </div>
       </div>
 
-      {/* Estilo para el fondo punteado (opcional, le da un toque de software de diseño) */}
+      {/* Estilo para el fondo punteado */}
       <style dangerouslySetInnerHTML={{__html: `
         .dotted-background {
           background-image: radial-gradient(#cbd5e1 1px, transparent 1px);

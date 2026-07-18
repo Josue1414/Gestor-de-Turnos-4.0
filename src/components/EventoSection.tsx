@@ -6,6 +6,7 @@ import SeccionSupervisor from './SeccionSupervisor';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { checkGlobalIdAvailable } from '../utils/validations';
+import { useToast } from './ToastProvider';
 
 interface EventoSectionProps {
   evento: EventoData;
@@ -28,6 +29,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const [page, setPage] = useState(1);
+  const { showToast } = useToast();
   const ITEMS_PER_PAGE = 8; 
 
   const totalPages = Math.max(1, Math.ceil(evento.admins.length / ITEMS_PER_PAGE));
@@ -41,7 +43,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
     try {
       const isAvailable = await checkGlobalIdAvailable(nuevoUsuario, supervisorData?.usuario);
       if (!isAvailable) {
-        alert("Este Usuario ya está en uso por alguien más en el sistema. Elige uno distinto.");
+        showToast('Este Usuario ya está en uso por alguien más en el sistema. Elige uno distinto.', 'error');
         return;
       }
 
@@ -49,45 +51,50 @@ const EventoSection: React.FC<EventoSectionProps> = ({
       await updateDoc(eventoRef, {
         supervisor: { usuario: nuevoUsuario, password: nuevoPass }
       });
-      alert("Credenciales del supervisor actualizadas.");
+      showToast('Credenciales del supervisor actualizadas.', 'success');
     } catch (err) {
       console.error("Error al actualizar supervisor:", err);
-      alert("Hubo un problema al actualizar el supervisor.");
+      showToast('Hubo un problema al actualizar el supervisor.', 'error');
     }
   };
 
   return (
-    <section className="bg-white border-2 border-slate-300 shadow-sm rounded-2xl flex flex-col overflow-hidden transition-all duration-300">
+    <section className="bg-white border border-slate-300 shadow-sm rounded-2xl overflow-hidden transition-all duration-300">
       
-      <div className="bg-slate-800 p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-700">
+      <div className="bg-slate-800 px-4 py-3 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-slate-700">
         
-        <div className="flex items-center gap-3 flex-1 cursor-pointer group w-full lg:w-auto" onClick={() => setIsExpanded(!isExpanded)}>
-          <button className="text-slate-400 group-hover:text-white transition bg-slate-700/50 p-1.5 rounded-lg">
+        <div className="flex items-center gap-3 w-full cursor-pointer group" onClick={() => setIsExpanded(!isExpanded)}>
+          <button className="text-slate-400 group-hover:text-white transition bg-slate-700/50 p-1.5 rounded-lg flex items-center justify-center">
             {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </button>
-          
+
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-700 rounded-xl flex items-center justify-center text-blue-400 border border-slate-600 shrink-0">
             <ShieldCheck size={24} />
           </div>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3">
-                <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight truncate group-hover:text-blue-300 transition">
-                  {evento.nombre}
-                </h2>
-                <button onClick={(e) => { e.stopPropagation(); onAddAdmin(evento.id); }} className="bg-blue-600 hover:bg-blue-500 text-white p-2 px-3 rounded-lg transition shadow-md border border-blue-500 flex items-center gap-1.5 text-xs font-bold shrink-0">
-                    <Plus size={14} /> Añadir Admin
-                </button>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight truncate group-hover:text-blue-300 transition">
+                {evento.nombre}
+              </h2>
+              <span className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-slate-600 whitespace-nowrap">
+                Admins: {evento.admins.length}
+              </span>
             </div>
-            
-            <div className="flex flex-wrap gap-2 mt-1 sm:mt-2">
-              <span className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-slate-600">Admins: {evento.admins.length}</span>
-              <span className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-slate-600 hidden sm:inline-block">Guardado: {evento.metodoGuardado}</span>
-            </div>
+            <p className="mt-1 text-[10px] text-slate-300 truncate sm:max-w-xl">Guardado: {evento.metodoGuardado}</p>
           </div>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddAdmin(evento.id); }}
+            className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition shadow-md border border-blue-500 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-bold shrink-0"
+            title="Añadir administrador"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">Añadir</span>
+          </button>
         </div>
 
-        <div className="flex gap-2 shrink-0 w-full lg:w-auto justify-end mt-3 lg:mt-0 pt-3 lg:pt-0 border-t border-slate-700 lg:border-none">
+        <div className="flex flex-wrap gap-2 justify-end shrink-0 w-full lg:w-auto mt-2 lg:mt-0 pt-2 lg:pt-0 border-t border-slate-700 lg:border-none">
             
             {/* ESTE BOTÓN ES EL QUE FALTABA CONECTAR */}
             <button onClick={onOpenCroquis} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 p-2 sm:px-3 rounded-lg transition border border-indigo-500/30 flex items-center gap-1 text-xs font-bold" title="Ver Croquis Base">

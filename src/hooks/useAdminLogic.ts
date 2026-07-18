@@ -9,6 +9,9 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { DiaEvento, Participante } from '../types';
+import { DiaEventoSchema, ParticipanteSchema } from '../utils/schemas';
+import { rangesOverlap } from '../utils/validations';
+import { useToast } from '../components/ToastProvider';
 
 // Interfaz estricta para reemplazar el "any" del admin
 interface AdminDB {
@@ -38,27 +41,9 @@ interface TurnoEspecialConfig {
   fin: string;
 }
 
-const hayChoqueDeHorario = (rango1: string, rango2: string) => {
-  try {
-    const parse = (t: string) => {
-      if (!t) return 0;
-      const [h, m] = t.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-    const r1 = rango1.split('-');
-    const r2 = rango2.split('-');
-    const i1 = parse(r1[0].trim());
-    const f1 = r1.length > 1 ? parse(r1[1].trim()) : i1 + 59; 
-    const i2 = parse(r2[0].trim());
-    const f2 = r2.length > 1 ? parse(r2[1].trim()) : i2 + 59;
-    return i1 < f2 && i2 < f1;
-  } catch { 
-    return false; 
-  }
-};
-
 export const useAdminLogic = (eventoId: string) => {
   const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
+  const { showToast } = useToast();
 
   const [dias, setDias] = useState<DiaEvento[]>([]);
   const [diaActivo, setDiaActivo] = useState(0);
@@ -85,6 +70,19 @@ export const useAdminLogic = (eventoId: string) => {
 
   const [createShiftModal, setCreateShiftModal] = useState({ isOpen: false, defaultStart: '08:00', defaultEnd: '09:00' });
 
+  // Helper para detectar si una caja es especial independientemente
+  // del campo que venga de Firestore ('isEspecial' | 'esEspecial' | 'especial' | 'tipo').
+  const isCajaEspecial = (c: any): boolean => {
+    if (!c || typeof c !== 'object') return false;
+    if (c.isEspecial === true || c.esEspecial === true || c.especial === true) return true;
+    if (c.tipo === 'especial') return true;
+    if (typeof c.nombre === 'string') {
+      const ln = c.nombre.toLowerCase();
+      if (ln.includes('especial') || ln.includes('vip') || ln.includes('kiosco')) return true;
+    }
+    return false;
+  };
+
   const [horarioEditando, setHorarioEditando] = useState<string | null>(null);
   const [clashModal, setClashModal] = useState({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
 
@@ -95,8 +93,32 @@ export const useAdminLogic = (eventoId: string) => {
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setDias(data.diasPorAdmin?.[adminIdL] || []);
-        setParticipantes(data.participantesPorAdmin?.[adminIdL] || []);
+        // Validar y normalizar `dias` usando Zod; si falla, conservar el objeto original y loggear.
+        const rawDias = data.diasPorAdmin?.[adminIdL] || [];
+        const validatedDias = Array.isArray(rawDias)
+          ? rawDias.map((d: any) => {
+              const res = DiaEventoSchema.safeParse(d);
+              if (!res.success) {
+                console.warn('DiaEvento inválido desde Firestore:', res.error);
+                return d; // fallback al objeto bruto para no perder datos
+              }
+              return res.data as DiaEvento;
+            })
+          : [];
+        setDias(validatedDias as DiaEvento[]);
+
+        const rawParts = data.participantesPorAdmin?.[adminIdL] || [];
+        const validatedParts = Array.isArray(rawParts)
+          ? rawParts.map((p: any) => {
+              const res = ParticipanteSchema.safeParse(p);
+              if (!res.success) {
+                console.warn('Participante inválido desde Firestore:', res.error);
+                return p;
+              }
+              return res.data as Participante;
+            })
+          : [];
+        setParticipantes(validatedParts as Participante[]);
         if (data.nombre) setSeccionName(data.nombre);
 
         // Se reemplazó a:any por AdminDB
@@ -160,7 +182,7 @@ export const useAdminLogic = (eventoId: string) => {
     if (!diaActual) return;
     
     // FILTRO ESTRICTO: Solo extraer horarios de las cajas que NO sean especiales
-    const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+    const cajasNormales = diaActual.cajas.filter(c => !isCajaEspecial(c));
     
     const horarios = cajasNormales.length > 0 
       ? Array.from(new Set(cajasNormales.flatMap(c => c.turnos.map(t => t.horario)))) 
@@ -194,7 +216,7 @@ export const useAdminLogic = (eventoId: string) => {
   const handleCrearHorario = () => {
   if (!diaActual || diaActual.cajas.length === 0) return;
 
-  const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+  const cajasNormales = diaActual.cajas.filter(c => !isCajaEspecial(c));
   let sugerenciaInicio = '08:00';
   let sugerenciaFin = '09:00';
 
@@ -213,10 +235,10 @@ export const useAdminLogic = (eventoId: string) => {
 };
 
 
-const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
+  const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
   if (!diaActual) return false;
   const nuevoHorario = `${inicio} - ${fin}`;
-  const cajasNormales = diaActual.cajas.filter(c => !('isEspecial' in c && c.isEspecial));
+  const cajasNormales = diaActual.cajas.filter(c => !isCajaEspecial(c));
 
   if (!forzar && cajasNormales.length > 0) {
     const turnosExistentes = cajasNormales[0].turnos;
@@ -224,7 +246,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
       ? turnosExistentes.filter(t => t.horario !== horarioEditando)
       : turnosExistentes;
 
-    const turnoCruzado = turnosAValidar.find(t => hayChoqueDeHorario(t.horario, nuevoHorario));
+    const turnoCruzado = turnosAValidar.find(t => rangesOverlap(t.horario, nuevoHorario));
     
     // En lugar de window.confirm, abrimos el modal bonito
     if (turnoCruzado) {
@@ -244,7 +266,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
     if (idx !== diaActivo) return d;
     return {
       ...d, cajas: d.cajas.map(c => {
-        if ('isEspecial' in c && c.isEspecial) return c;
+        if (isCajaEspecial(c)) return c;
         const turnosActualizados = horarioEditando 
           ? c.turnos.map(t => t.horario === horarioEditando ? { ...t, horario: nuevoHorario } : t)
           : [...c.turnos, { id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorario, participanteId: null }];
@@ -265,7 +287,10 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
 
   const handleEliminarHorario = (horario: string) => {
     syncEvent(dias.map((d, i) => i === diaActivo ? {
-      ...d, cajas: d.cajas.map(c => ({ ...c, turnos: c.turnos.filter(t => t.horario !== horario) }))
+      ...d, cajas: d.cajas.map(c => {
+        if (isCajaEspecial(c)) return c;
+        return { ...c, turnos: c.turnos.filter(t => t.horario !== horario) };
+      })
     } : d));
   };
 
@@ -290,7 +315,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
       
       // 1. Validar límite de caracteres
       if (nombreLimpio.length > 20) {
-        alert("El nombre de la caja es muy largo. El límite son 20 caracteres.");
+        showToast("El nombre de la caja es muy largo. El límite son 20 caracteres.", 'error');
         return;
       }
       
@@ -302,7 +327,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
         );
         
         if (duplicado) {
-          alert("Ya existe una caja con ese nombre. Por favor, elige uno diferente.");
+          showToast("Ya existe una caja con ese nombre. Por favor, elige uno diferente.", 'error');
           return;
         }
       }
@@ -312,11 +337,12 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
         ...d, cajas: d.cajas.map(c => c.id === editModal.targetId ? { ...c, nombre: nombreLimpio } : c)
       } : d));
     } else {
-      // Lógica de edición de horario...
+      // Lógica de edición de horario: aplicar sólo a cajas normales (no especiales)
       syncEvent(dias.map((d, i) => i === diaActivo ? {
-        ...d, cajas: d.cajas.map(c => ({
-          ...c, turnos: c.turnos.map(t => t.horario === editModal.initialValue ? { ...t, horario: newValue } : t)
-        }))
+        ...d, cajas: d.cajas.map(c => {
+          if (isCajaEspecial(c)) return c;
+          return { ...c, turnos: c.turnos.map(t => t.horario === editModal.initialValue ? { ...t, horario: newValue } : t) };
+        })
       } : d));
     }
     setEditModal({ ...editModal, isOpen: false });
@@ -335,7 +361,7 @@ const confirmarCrearHorario = (inicio: string, fin: string, forzar = false) => {
     const busyIds = new Set<string>();
     diaActual.cajas.forEach(caja => {
       caja.turnos.forEach(turno => {
-        if (turno.participanteId && hayChoqueDeHorario(turno.horario, horario)) {
+        if (turno.participanteId && rangesOverlap(turno.horario, horario)) {
           busyIds.add(turno.participanteId);
         }
       });

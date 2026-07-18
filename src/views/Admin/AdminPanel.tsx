@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Plus, ShieldCheck, Clock, Users } from 'lucide-react';
+import { Calendar, ShieldCheck } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { DiaEvento, Participante } from '../../types';
 
@@ -67,11 +67,11 @@ const AdminPanel = () => {
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
   const [deleteEspecialModal, setDeleteEspecialModal] = useState({ isOpen: false, cajaId: '', turnoId: '' });
+  const [showActions, setShowActions] = useState(false);
   const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string} | null>(null);
 
   // ALIMENTAMOS EL HEADER CON LAS ESTADÍSTICAS REALES
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const statsActuales = calculateAdminStats(dias as any, participantesEnriquecidos as any);
+  const statsActuales = calculateAdminStats(dias, participantesEnriquecidos as any);
 
   useEffect(() => {
     if (!eventoId) return;
@@ -249,41 +249,27 @@ const AdminPanel = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col h-screen relative overflow-x-hidden">
+    <div className="min-h-screen bg-slate-100 px-0 py-2 sm:px-0 md:px-6 md:py-6 font-sans flex flex-col h-screen relative overflow-x-visible">
       
       <AdminHeader 
         seccionName={seccionName} setSeccionName={setSeccionName} isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle} 
         onOpenProfile={handleAbrirMiPerfil} onSave={handleSaveEventName} onShowCroquis={() => setShowCroquis(true)} 
         onBack={isExternalViewer ? handleBack : undefined} onLogout={!isExternalViewer ? handleLogout : undefined} 
+        onShowDirectorio={() => setShowDirectorio(true)} participantesCount={participantesEnriquecidos.length} onToggleActions={() => setShowActions(prev => !prev)} showActions={showActions}
+        onCrearCajaEspecial={() => setShowSpecialModal(true)} onCrearCaja={handleCrearCaja} onCrearHorario={handleCrearHorario} onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
         isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo}
         stats={statsActuales} // <-- Inyección directa de datos al header
       />
 
       <div className="flex gap-2 overflow-x-auto pb-2 shrink-0 mb-2 no-scrollbar">
         {dias.map((dia, idx) => (
-          <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-5 py-2.5 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-2 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>
-            <Calendar size={16} /> {dia.nombreDia}
+          <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}>
+            <Calendar size={14} /> {dia.nombreDia}
           </button>
         ))}
       </div>
 
-      {/* BOTONES REORDENADOS: Especial -> Normal -> Horario -> Participantes */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 shrink-0">
-        <button onClick={() => setShowSpecialModal(true)} className="flex-1 sm:flex-none px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl hover:bg-indigo-100 transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm">
-          <Plus size={16} /> Caja Especial
-        </button>
-        <button onClick={handleCrearCaja} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm">
-          <Plus size={16} /> Caja Normal
-        </button>
-        <button onClick={handleCrearHorario} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm">
-          <Clock size={16} /> Añadir Horario
-        </button>
-        <button onClick={() => setShowDirectorio(true)} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm">
-          <Users size={16} /> Participantes ({statsActuales.participantes})
-        </button>
-      </div>
-
-      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+      <div className="flex-1 bg-white rounded-none sm:rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
         <MatrizTurnos 
           diaActual={diaActual} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante}
           onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario}
@@ -304,7 +290,16 @@ const AdminPanel = () => {
       <DownloadScheduleModal isOpen={downloadModal.isOpen} onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })} type={downloadModal.type} seccionName={seccionName} dias={dias} diaActivo={diaActivo} participantes={participantesEnriquecidos} targetUserId={downloadModal.targetUserId} />
       <ModalInputHorario isOpen={createShiftModal?.isOpen || false} onClose={() => setCreateShiftModal && setCreateShiftModal({ ...createShiftModal, isOpen: false })} defaultStart={createShiftModal?.defaultStart || '08:00'} defaultEnd={createShiftModal?.defaultEnd || '09:00'} onConfirm={confirmarCrearHorario} />
       <ModalAlertaChoque isOpen={clashModal?.isOpen || false} onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`} horarioCruzado={clashModal?.turnoCruzado || ''} onConfirm={() => confirmarCrearHorario(clashModal!.inicio, clashModal!.fin, true)} />
-      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} isAdmin={true} />
+      
+      {/* SECCIÓN ACTUALIZADA DEL MODAL DE CROQUIS (Recibe imagen de Firebase y la actualiza) */}
+      <CroquisModal 
+        isOpen={showCroquis} 
+        onClose={() => setShowCroquis(false)} 
+        isAdmin={true} 
+        // Pasamos null por ahora porque la lógica se integrará en el hook global en el siguiente paso
+        croquisActual={null} 
+        onSaveCroquis={() => {}} 
+      />
 
     </div>
   );

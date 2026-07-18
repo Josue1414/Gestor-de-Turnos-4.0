@@ -20,7 +20,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
     const box = c as CajaCheck;
-    if (box.isEspecial === true || box.especial === true || box.tipo === 'especial') return true;
+    if (box.isEspecial === true || box.esEspecial === true || box.especial === true || box.tipo === 'especial') return true;
     if (typeof box.nombre === 'string') {
       const lowerName = box.nombre.toLowerCase();
       return lowerName.includes('especial') || lowerName.includes('vip');
@@ -80,16 +80,16 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
       {cajasNormales.length > 0 && (
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto w-full pb-4">
-            <table className="w-full table-fixed border-separate border-spacing-0 min-w-max">
+            <table className="w-full table-auto border-separate border-spacing-0 min-w-full">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-3 w-[80px] sm:w-[120px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                  <th className="sticky left-0 z-20 bg-slate-100 border-b border-slate-200 p-2 sm:p-3 w-[70px] sm:w-[110px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                     <div className="flex items-center justify-center gap-1.5 text-slate-500 font-black text-xs uppercase tracking-wider mt-4">
                       <Clock size={14} /> Horario
                     </div>
                   </th>
                   {cajasNormales.map(caja => (
-                    <th key={caja.id} className="border-b border-slate-200 bg-white p-1.5 sm:p-3 w-[110px] sm:w-[200px] border-l">
+                    <th key={caja.id} className="border-b border-slate-200 bg-white p-1 sm:p-3 min-w-[95px] sm:min-w-[140px] border-l break-words">
                        <span className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight break-words">{caja.nombre}</span>
                     </th>
                   ))}
@@ -104,7 +104,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                     {cajasNormales.map(caja => {
                       const turnosEnEsteHorario = caja.turnos.filter(t => t.horario === horario);
                       return (
-                        <td key={`${caja.id}-${horario}`} className="border-b border-slate-100 border-l p-1 sm:p-2 align-top w-[110px] sm:w-[200px]">
+                        <td key={`${caja.id}-${horario}`} className="border-b border-slate-100 border-l p-1 sm:p-2 align-top min-w-[95px] sm:min-w-[140px]">
                           <div className="space-y-2">
                             {turnosEnEsteHorario.map((turno) => {
                               const participanteTurno = getParticipante(turno.participanteId);

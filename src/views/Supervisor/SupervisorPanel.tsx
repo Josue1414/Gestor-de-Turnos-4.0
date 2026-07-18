@@ -9,6 +9,7 @@ import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import { useSupervisorLogic } from '../../hooks/useSupervisorLogic';
 import type { AdminData } from '../../hooks/useSuperAdminLogic';
+import { useToast } from '../../components/ToastProvider';
 
 const SupervisorPanel = () => {
   const { id: eventoId } = useParams();
@@ -35,6 +36,8 @@ const SupervisorPanel = () => {
     evento, loading, getAdminStats, handleAddAdmin, handleDeleteAdmin, 
     handleEditAccess, handleSaveProfile, handleSaveGlobalStructure 
   } = useSupervisorLogic(eventoId);
+
+  const { showToast } = useToast();
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, adminId: '', adminName: '' });
   const [structureModal, setStructureModal] = useState(false);
@@ -86,13 +89,13 @@ const SupervisorPanel = () => {
         </div>
 
         <div className="flex flex-wrap gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          <button onClick={() => setStructureModal(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm">
-            <Calendar size={16} /> Añadir Día Global
+          <button onClick={() => setStructureModal(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm">
+            <Calendar size={16} /> Añadir Día
           </button>
-          <button onClick={handleAddAdmin} className="flex-1 lg:flex-none bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm">
+          <button onClick={handleAddAdmin} className="flex-1 lg:flex-none bg-blue-600 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm">
             <Plus size={16} /> Añadir Admin
           </button>
-          <button onClick={() => setShowExitAlert(true)} className="px-4 py-2.5 text-red-500 bg-red-50 rounded-xl font-bold text-sm shrink-0 flex items-center gap-2">
+          <button onClick={() => setShowExitAlert(true)} className="px-3 py-2 text-red-500 bg-red-50 rounded-2xl font-bold text-xs sm:text-sm shrink-0 flex items-center gap-2">
             <LogOut size={16} /> Salir
           </button>
         </div>
@@ -101,7 +104,7 @@ const SupervisorPanel = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
         {evento?.admins && evento.admins.length > 0 ? (
           evento.admins.map((admin) => (
-            <AdminFiche key={admin.id} data={admin as never} stats={getAdminStats(admin.id)} onView={() => handleVerAdmin(admin.id)} onOpenSettings={() => setSettingsFlow({ isOpen: true, admin: admin as unknown as AdminData })} onDownload={() => alert("El Supervisor visualiza y descarga la info dentro del panel del Admin.")} onDelete={() => setDeleteModal({ isOpen: true, adminId: admin.id, adminName: admin.name })} />
+            <AdminFiche key={admin.id} data={admin as never} stats={getAdminStats(admin.id)} onView={() => handleVerAdmin(admin.id)} onOpenSettings={() => setSettingsFlow({ isOpen: true, admin: admin as unknown as AdminData })} onDownload={() => showToast('El Supervisor visualiza y descarga la info dentro del panel del Admin.', 'info')} onDelete={() => setDeleteModal({ isOpen: true, adminId: admin.id, adminName: admin.name })} />
           ))
         ) : (
           <div className="col-span-full text-center p-12 text-slate-400 font-bold">Aún no hay administradores.</div>

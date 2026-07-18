@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapIcon, ArrowLeft, LogOut, Settings } from 'lucide-react';
+import React, { useState } from 'react';
+import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download } from 'lucide-react';
 
 interface AdminInfo {
   name: string;
@@ -23,6 +23,14 @@ interface AdminHeaderProps {
   onOpenProfile: () => void;
   onSave: () => void;
   onShowCroquis: () => void;
+  onShowDirectorio?: () => void;
+  participantesCount?: number;
+  onToggleActions?: () => void;
+  showActions?: boolean;
+  onCrearCajaEspecial?: () => void;
+  onCrearCaja?: () => void;
+  onCrearHorario?: () => void;
+  onDownloadTabla?: () => void;
   onBack?: () => void;
   onLogout?: () => void;
   isSuperAdminViewing?: boolean;
@@ -39,14 +47,16 @@ const MiniStatCard = ({ label, value, color }: { label: string, value: number, c
 
 const AdminHeader: React.FC<AdminHeaderProps> = ({
   seccionName, setSeccionName, isEditingTitle, setIsEditingTitle,
-  onOpenProfile, onSave, onShowCroquis, onBack, onLogout, isSuperAdminViewing, adminInfo, stats
+  onOpenProfile, onSave, onShowCroquis, onShowDirectorio, participantesCount, onToggleActions, showActions,
+  onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
+  onBack, onLogout, isSuperAdminViewing, adminInfo, stats
 }) => {
+  const [showStats, setShowStats] = useState(false);
+
   return (
-    <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 gap-4 w-full">
-      
-      {/* IZQUIERDA: Info del Evento */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
-        <div className="flex-1 w-full sm:w-auto">
+    <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full">
+      <div className="flex items-start justify-between gap-4 w-full">
+        <div className="min-w-0 flex-1">
           {isEditingTitle && !isSuperAdminViewing ? (
             <input 
               type="text" value={seccionName} onChange={(e) => setSeccionName(e.target.value)} 
@@ -73,11 +83,50 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             </div>
           )}
         </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {onOpenProfile && (
+            <button onClick={onOpenProfile} className="inline-flex items-center gap-1 px-2 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px] hover:bg-slate-200 transition shadow-sm border border-slate-200">
+              <Settings size={14} /> Ajustes
+            </button>
+          )}
+          {onLogout && (
+            <button onClick={onLogout} className="inline-flex items-center gap-1 px-2 py-2 bg-red-50 text-red-600 font-bold rounded-xl text-[10px] hover:bg-red-100 transition shadow-sm border border-red-100">
+              <LogOut size={14} /> Salir
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 w-full">
+        <button onClick={() => setShowStats(prev => !prev)} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition">
+          {showStats ? 'Ocultar métricas' : 'Mostrar métricas'}
+        </button>
+        {onShowCroquis && (
+          <button onClick={onShowCroquis} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition">
+            <MapIcon size={14} /> Croquis
+          </button>
+        )}
+        {onBack && (
+          <button onClick={onBack} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition">
+            <ArrowLeft size={14} /> Regresar
+          </button>
+        )}
+        {onShowDirectorio && (
+          <button onClick={onShowDirectorio} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition">
+            <Users size={14} /> Participantes {participantesCount !== undefined ? `(${participantesCount})` : ''}
+          </button>
+        )}
+        {onToggleActions && (
+          <button onClick={onToggleActions} className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition">
+            {showActions ? 'Ocultar acciones' : 'Ver acciones'}
+          </button>
+        )}
       </div>
 
       {/* CENTRO: Mini Estadísticas (Con el inactivo que funciona) */}
       {stats && (
-        <div className="w-full xl:w-auto flex justify-center py-2 border-y xl:border-y-0 xl:border-x border-slate-100 xl:px-4">
+        <div className={`${showStats ? 'block' : 'hidden'} sm:block w-full xl:w-auto flex justify-center py-2 border-y xl:border-y-0 xl:border-x border-slate-100 xl:px-4`}>
            <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full">
              <MiniStatCard label="Cajas" value={stats.cajas} color="bg-blue-50 text-blue-700 border-blue-100" />
              <MiniStatCard label="Horarios" value={stats.horarios} color="bg-indigo-50 text-indigo-700 border-indigo-100" />
@@ -89,25 +138,36 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         </div>
       )}
 
-      {/* DERECHA: Botones de Acción (Reacomodados) */}
-      <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 shrink-0 w-full xl:w-auto">
-         <button onClick={onOpenProfile} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition shadow-sm border border-slate-200">
-            <Settings size={16} /> <span className="hidden sm:inline">Ajustes</span>
-         </button>
-         <button onClick={onShowCroquis} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs hover:bg-slate-700 transition shadow-sm">
-            <MapIcon size={16} /> Croquis
-         </button>
-         {onBack && (
-           <button onClick={onBack} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 bg-white text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition shadow-sm border border-slate-200">
-              <ArrowLeft size={16} /> Regresar
-           </button>
-         )}
-         {onLogout && (
-           <button onClick={onLogout} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2.5 bg-red-50 text-red-600 font-bold rounded-xl text-xs hover:bg-red-100 transition shadow-sm border border-red-100">
-              <LogOut size={16} /> Salir
-           </button>
-         )}
-      </div>
+      {onToggleActions && (
+        <div className={`${showActions ? 'block' : 'hidden'} bg-slate-50 p-2.5 rounded-2xl border border-slate-200 mt-3 w-full`}>
+          <div className="flex flex-wrap items-center gap-2">
+            {onCrearCajaEspecial && (
+              <button onClick={onCrearCajaEspecial} className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-sm border border-violet-200 min-w-[94px] justify-center">
+                <Plus size={14} />
+                <span>Caja Especial</span>
+              </button>
+            )}
+            {onCrearCaja && (
+              <button onClick={onCrearCaja} className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-sm border border-slate-300 min-w-[94px] justify-center">
+                <Inbox size={14} />
+                <span>Caja Normal</span>
+              </button>
+            )}
+            {onCrearHorario && (
+              <button onClick={onCrearHorario} className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-sm border border-emerald-200 min-w-[94px] justify-center">
+                <Clock size={14} />
+                <span>Horario</span>
+              </button>
+            )}
+            {onDownloadTabla && (
+              <button onClick={onDownloadTabla} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-md shadow-blue-500/20">
+                <Download size={14} />
+                <span>Descargar</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

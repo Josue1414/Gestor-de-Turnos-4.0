@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useToast } from '../components/ToastProvider';
 import { Key, User, X } from 'lucide-react';
 
 interface EditAdminAccessModalProps {
@@ -26,9 +27,10 @@ const EditAdminAccessModal: React.FC<EditAdminAccessModalProps> = ({ isOpen, onC
   }
 
   if (!isOpen) return null;
+  const { showToast } = useToast();
 
   const handleSave = async () => {
-    if (!newId.trim()) return alert("El ID no puede estar vacío.");
+    if (!newId.trim()) { showToast('El ID no puede estar vacío.', 'error'); return; }
     setIsSaving(true);
     const success = await onSave(adminId, newId.trim(), newPass.trim());
     setIsSaving(false);

@@ -11,6 +11,7 @@ import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalI
 import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
+import { useToast } from '../../components/ToastProvider';
 
 interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
@@ -37,10 +38,10 @@ const ParticipantPanel = () => {
   const [showCroquis, setShowCroquis] = useState(false);
   
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!eventoId || !adminId) return;
-
     const docRef = doc(db, 'eventos', eventoId);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -49,7 +50,7 @@ const ParticipantPanel = () => {
         setParticipantes(data.participantesPorAdmin?.[adminId] || []);
         if (data.nombre) setEventoNombre(data.nombre);
       } else {
-        alert("El evento no existe.");
+        showToast('El evento no existe.', 'error');
         navigate('/');
       }
       setLoading(false);
@@ -58,7 +59,27 @@ const ParticipantPanel = () => {
     return () => unsubscribe();
   }, [eventoId, adminId, navigate]);
 
-  const miUsuario = participantes.find(p => p.id === participanteId);
+  const participantesEnriquecidos = useMemo(() => {
+    return participantes.map((p) => {
+      const ubicaciones: string[] = [];
+      dias.forEach((dia) => {
+        dia.cajas.forEach((caja) => {
+          caja.turnos.forEach((turno) => {
+            if (turno.participanteId === p.id) {
+              ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${caja.nombre}`);
+            }
+          });
+        });
+      });
+      return {
+        ...p,
+        estado: ubicaciones.length > 0 ? 'Asignado' : 'Libre',
+        ubicaciones
+      };
+    });
+  }, [participantes, dias]);
+
+  const miUsuario = participantesEnriquecidos.find(p => p.id === participanteId);
 
   const datosParaModal: UsuarioModalData | null = useMemo(() => {
     if (!miUsuario) return null;
@@ -121,11 +142,14 @@ const ParticipantPanel = () => {
       setIsUsuarioModalOpen(false);
     } catch (error) {
       console.error("Error guardando perfil:", error);
-      alert("Hubo un error al guardar tu perfil.");
+      showToast('Hubo un error al guardar tu perfil.', 'error');
     }
   };
 
   const diaActual = dias[diaActivo];
+
+  const turnosLibresCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
+  const turnosOcupadosCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
 
   const syncEvent = async (nuevosDias: DiaEvento[]) => {
     if (!eventoId || !adminId) return;
@@ -204,22 +228,22 @@ const ParticipantPanel = () => {
           <p className="text-xs sm:text-sm font-bold text-slate-500">{eventoNombre}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <button onClick={() => setShowCroquis(true)} className="bg-white border border-slate-300 text-slate-700 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1 sm:gap-2 transition shadow-sm hover:bg-slate-50 flex-1 justify-center sm:flex-none">
+          <button onClick={() => setShowCroquis(true)} className="bg-white border border-slate-300 text-slate-700 p-2 rounded-lg text-[11px] font-bold flex items-center gap-1 transition shadow-sm hover:bg-slate-50">
             📍 <span className="hidden sm:inline">Croquis</span>
           </button>
           
-          <button onClick={() => setShowDirectorio(true)} className="bg-slate-800 text-white px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1 sm:gap-2 hover:bg-slate-700 transition shadow-sm flex-1 sm:flex-none">
-            <Users size={16} className="sm:w-4 sm:h-4" /> Directorio
+          <button onClick={() => setShowDirectorio(true)} className="bg-slate-800 text-white p-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-slate-700 transition shadow-sm">
+            <Users size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Directorio</span>
           </button>
 
           <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block"></div>
 
-          <button onClick={() => setIsUsuarioModalOpen(true)} className="bg-indigo-50 text-indigo-600 px-3 py-2 sm:py-2.5 border border-indigo-200 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1 sm:gap-2 hover:bg-indigo-100 transition shadow-sm flex-1 sm:flex-none">
+          <button onClick={() => setIsUsuarioModalOpen(true)} className="bg-indigo-50 text-indigo-600 p-2 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-indigo-100 transition shadow-sm">
              Mi Perfil
           </button>
 
-          <button onClick={handleLogout} className="bg-white text-red-600 border border-slate-200 hover:border-red-200 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition flex-1 sm:flex-none flex items-center justify-center">
-            <LogOut size={16} className="sm:w-4 sm:h-4 sm:mr-1" /> <span className="hidden sm:inline">Salir</span>
+          <button onClick={handleLogout} className="bg-white text-red-600 border border-slate-200 hover:border-red-200 p-2 rounded-lg text-[11px] font-bold shadow-sm transition flex items-center justify-center gap-1">
+            <LogOut size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Salir</span>
           </button>
         </div>
       </header>
@@ -254,13 +278,15 @@ const ParticipantPanel = () => {
       <ParticipantDrawer 
         isOpen={showDirectorio} 
         onClose={() => setShowDirectorio(false)} 
-        participantes={participantes} 
+        participantes={participantesEnriquecidos} 
         currentUserId={miUsuario.id} 
         currentUserRole="Participante" 
         onEditParticipante={(id) => { if (id === miUsuario.id) setIsUsuarioModalOpen(true); }}
         onDeleteParticipante={() => {}} 
         eventoId={eventoId}
         adminId={adminId}
+        turnosLibresCount={turnosLibresCount}
+        turnosOcupadosCount={turnosOcupadosCount}
       />
 
       <ModalInfoUsuario 
@@ -288,6 +314,8 @@ const ParticipantPanel = () => {
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 
         isAdmin={false} 
+        croquisActual={null}
+        onSaveCroquis={() => {}}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../components/ToastProvider';
 import { Edit2, Key, DatabaseZap, Calendar, Map as MapIcon, X } from 'lucide-react';
 import type { EventoData } from '../hooks/useSuperAdminLogic';
 
@@ -33,9 +34,11 @@ const EditEventModal: React.FC<EditEventModalProps> = ({ isOpen, onClose, onSave
 
   if (!isOpen) return null;
 
+  const { showToast } = useToast();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre.trim()) return alert("El nombre es obligatorio.");
+    if (!formData.nombre.trim()) { showToast('El nombre es obligatorio.', 'error'); return; }
     if (initialData) {
       onSave({ ...initialData, ...formData });
     }
