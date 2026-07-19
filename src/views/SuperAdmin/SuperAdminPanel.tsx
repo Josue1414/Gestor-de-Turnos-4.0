@@ -168,6 +168,9 @@ const SuperAdminPanel = () => {
             onAddAdmin={handleAddAdmin}
             onEditEvent={(eventData: EventoData) => setEditEventModalState({ isOpen: true, eventData })}
             onOpenCroquis={() => setCroquisModalState({isOpen: true, eventoId: evento.id})}
+            onOpenCroquisAdmin={(eventoId: string, adminId: string) => {
+              setCroquisModalState({isOpen: true, eventoId, adminId});
+            }}
           />
         ))}
       </div>
@@ -182,17 +185,28 @@ const SuperAdminPanel = () => {
         onSaveAccess={handleUpdateAdminAccess}
       />
 
-      {/* SE ACTUALIZÓ A canEdit={true} Y SE CONECTÓ LA SUBIDA */}
       <CroquisModal 
         isOpen={croquisModalState.isOpen} 
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
         canEdit={true} 
-        croquisActual={croquisModalState.eventoId ? eventos.find(e => e.id === croquisModalState.eventoId)?.croquisUrl || null : null}
+        // Actualizamos el título según si es individual o general
+        titulo={croquisModalState.adminId ? "Croquis Individual del Área" : "Croquis General del Evento"}
+        // Buscamos el croquis correcto
+        croquisActual={
+          croquisModalState.eventoId 
+            ? (
+                croquisModalState.adminId 
+                  // Si hay adminId, busca el croquis de ese admin (usando 'as any' o extendiendo la interfaz EventoData)
+                  ? ((eventos.find(e => e.id === croquisModalState.eventoId) as any)?.croquisPorAdmin?.[croquisModalState.adminId] || null)
+                  // Si no hay adminId, usa el croquis general
+                  : (eventos.find(e => e.id === croquisModalState.eventoId)?.croquisUrl || null)
+              )
+            : null
+        }
         onSaveCroquis={async (file) => {
           if (croquisModalState.eventoId) {
-            // Importar guardarCroquis en la parte superior si aún no lo has hecho
-            // import { guardarCroquis } from '../../utils/croquisService';
-            await guardarCroquis(croquisModalState.eventoId, null, file);
+            // Guardamos pasando el adminId (puede ser undefined, por lo que pasamos null si es necesario)
+            await guardarCroquis(croquisModalState.eventoId, croquisModalState.adminId || null, file);
           }
         }}
       />

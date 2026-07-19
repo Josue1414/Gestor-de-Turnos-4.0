@@ -313,10 +313,14 @@ const ParticipantPanel = () => {
       <CroquisModal 
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 
-        isAdmin={false} 
-        croquisActual={null}
-        onSaveCroquis={() => {}}
+        canEdit={false} // Cambiamos isAdmin={false} por canEdit={false}
+        croquisActual={null} // O puedes conectar el evento.croquisUrl aquí si ya lo obtienes
+        // Solución al error de TypeScript: Pasamos la firma exacta
+        onSaveCroquis={async (_file: File | null) => {
+          return Promise.resolve();
+        }}
       />
+      
     </div>
   );
 };

@@ -53,7 +53,7 @@ export const useSuperAdminLogic = () => {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [nuevoEventoForm, setNuevoEventoForm] = useState({ nombre: '', passwordGeneral: '', metodoGuardado: 'Firebase (Recomendado)', numAdmins: '' });
   
-  const [croquisModalState, setCroquisModalState] = useState<{isOpen: boolean, eventoId: string | null}>({ isOpen: false, eventoId: null });
+  const [croquisModalState, setCroquisModalState] = useState<{isOpen: boolean, eventoId: string | null, adminId?: string}>({isOpen: false, eventoId: null});
   const [infoUsuarioState, setInfoUsuarioState] = useState<{isOpen: boolean, eventoId: string | null, data: AdminData | null}>({ isOpen: false, eventoId: null, data: null });
   
   const [downloadModalState, setDownloadModalState] = useState<{isOpen: boolean, adminId?: string}>({ isOpen: false });
