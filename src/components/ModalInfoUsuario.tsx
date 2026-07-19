@@ -13,7 +13,7 @@ export interface UsuarioModalData {
   organization?: string;
   ubicaciones?: string[];
   birthDate?: string; 
-  turnosAsignados?: { dia: string; horario: string; caja: string }[]; // <-- Agregado para los turnos
+  turnosAsignados?: { dia: string; horario: string; caja: string }[];
 }
 
 interface ModalInfoUsuarioProps {
@@ -36,13 +36,18 @@ const FieldItem = ({ icon, label, children }: { icon: React.ReactNode, label: st
   </div>
 );
 
-// --- COMPONENTE HIJO (El contenido real del formulario) ---
 const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { data: UsuarioModalData }> = ({
   onClose, onSave, data, isViewingSelf, checkNameExists, currentUserRole = 'Administrador', onDownloadImage
 }) => {
+  // Inicialización estricta: Garantizamos que nada sea undefined
   const [formData, setFormData] = useState<UsuarioModalData>({
     ...data,
-    birthDate: data.birthDate || ''
+    birthDate: data.birthDate || '',
+    phone: data.phone || '',
+    countryCode: data.countryCode || '+52',
+    notes: data.notes || '',
+    organization: data.organization || '',
+    organizationLabel: data.organizationLabel || 'Congregación',
   });
   const [errorName, setErrorName] = useState('');
 
@@ -55,7 +60,14 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
       setErrorName('Ya existe alguien con este nombre. Agrega un apellido.');
       return;
     }
-    onSave(formData);
+    // Aseguramos de nuevo que se envíen textos vacíos en lugar de undefined
+    onSave({
+      ...formData,
+      phone: formData.phone || '',
+      countryCode: formData.countryCode || '+52',
+      notes: formData.notes || '',
+      organization: formData.organization || ''
+    });
   };
 
   return (
@@ -75,9 +87,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             {isEditable ? (
               <>
                 <input 
-                  type="text" 
-                  value={formData.name} 
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-semibold text-slate-700 transition"
                 />
                 {errorName && <p className="text-red-500 text-xs font-bold mt-2">{errorName}</p>}
@@ -91,14 +101,12 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             {isEditable ? (
               <div className="flex gap-2">
                 <input 
-                  type="text" value={formData.countryCode || '+52'} onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+                  type="text" value={formData.countryCode} onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
                   className="w-20 bg-white border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:border-blue-400 font-medium text-slate-700 text-center"
-                  placeholder="+52"
                 />
                 <input 
                   type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700"
-                  placeholder="Ej. 55 1234 5678"
+                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700" placeholder="Ej. 55 1234 5678"
                 />
               </div>
             ) : (
@@ -109,9 +117,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
           <FieldItem icon={<Calendar size={18} />} label="Fecha de Nacimiento (Clave)">
             {isEditable ? (
               <input 
-                type="date" 
-                value={formData.birthDate || ''} 
-                onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                type="date" value={formData.birthDate} onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
                 className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700"
               />
             ) : (
@@ -119,25 +125,18 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          {/* DINÁMICO: Etiqueta administrada por el Admin, valor escrito por el participante */}
           <FieldItem icon={<Briefcase size={18} />} label={formData.organizationLabel || "Congregación"}>
             {isEditable ? (
               <div className="space-y-2">
-                {/* SOLO EL ADMIN PUEDE CAMBIAR LA PALABRA "CONGREGACIÓN" */}
                 {isAdmin && (
                   <input 
-                    type="text"
-                    placeholder="Cambiar etiqueta (ej: Empresa)"
-                    value={formData.organizationLabel || ''}
+                    type="text" placeholder="Cambiar etiqueta (ej: Empresa)" value={formData.organizationLabel}
                     onChange={(e) => setFormData({...formData, organizationLabel: e.target.value})}
                     className="w-full text-[10px] text-indigo-500 bg-indigo-50 font-black uppercase rounded-lg p-2 border border-indigo-100"
                   />
                 )}
-                {/* EL PARTICIPANTE PUEDE ESCRIBIR EL NOMBRE DE SU EMPRESA */}
                 <input 
-                  type="text" 
-                  value={formData.organization || ''} 
-                  onChange={(e) => setFormData({...formData, organization: e.target.value})}
+                  type="text" value={formData.organization} onChange={(e) => setFormData({...formData, organization: e.target.value})}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700 transition"
                   placeholder={`Nombre de tu ${formData.organizationLabel || 'Congregación'}`}
                 />
@@ -147,7 +146,6 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          {/* TURNOS ASIGNADOS MUY COMPACTOS */}
           <FieldItem icon={<Clock size={18} />} label="Turnos Asignados">
             {formData.turnosAsignados && formData.turnosAsignados.length > 0 ? (
               <div className="flex flex-col gap-1.5">
@@ -166,9 +164,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
           <FieldItem icon={<StickyNote size={18} />} label="Notas Internas">
             {isEditable ? (
               <textarea 
-                value={formData.notes} 
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
+                value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-400 text-sm font-medium text-slate-700 resize-none"
                 placeholder="Alergias, necesidades especiales, comentarios..."
               />
@@ -177,15 +173,11 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          {/* BOTÓN DESCARGAR INTACTO */}
           {onDownloadImage && (
             <div className="pt-4 border-t border-slate-100">
-              <button 
-                onClick={onDownloadImage} 
-                className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm"
-              >
+              <button onClick={onDownloadImage} className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 py-3 rounded-2xl transition font-bold text-sm flex items-center justify-center gap-2 shadow-sm">
                 <Download size={20} />
-                {formData.role === 'Participante' ? 'DESCARGAR MIS TURNOS (IMAGEN)' : 'DESCARGAR HORARIO GLOBAL (IMAGEN)'}
+                {formData.role === 'Participante' ? 'DESCARGAR MIS TURNOS' : 'DESCARGAR HORARIO GLOBAL'}
               </button>
             </div>
           )}
@@ -202,7 +194,6 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
   );
 };
 
-// --- COMPONENTE CONTENEDOR (El que exportamos) ---
 const ModalInfoUsuario: React.FC<ModalInfoUsuarioProps> = ({ isOpen, data, ...props }) => {
   if (!isOpen || !data) return null;
   return <ModalContent key={data.id} data={data} {...props} />;

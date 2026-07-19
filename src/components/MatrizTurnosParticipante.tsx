@@ -130,9 +130,9 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                                   ) : estaOcupadoEnOtroLado ? (
                                     <div className="bg-red-50 border border-red-200 rounded-lg p-1.5 sm:p-2 opacity-80 cursor-not-allowed overflow-hidden">
                                       <div className="flex items-center gap-1 font-bold text-red-700 text-[10px] sm:text-sm">
-                                        <Lock size={10} className="shrink-0 sm:w-3 sm:h-3" /> <span className="truncate">Bloqueado</span>
+                                        <Lock size={10} className="shrink-0 sm:w-3 sm:h-3" /> <span className="truncate">Ya tienes turno</span>
                                       </div>
-                                      <span className="text-[8px] sm:text-[9px] text-red-500 font-bold block mt-0.5 truncate">Ya tienes turno</span>
+                                      <span className="text-[8px] sm:text-[9px] text-red-500 font-bold block mt-0.5 truncate">En este horario</span>
                                     </div>
                                   ) : (
                                     <button onClick={() => onAsignarme(caja.id, turno.id)} className="w-full h-8 sm:h-12 bg-white border border-dashed border-emerald-400 rounded-lg text-emerald-600 flex items-center justify-center gap-1 hover:bg-emerald-50 transition-colors shadow-sm overflow-hidden">

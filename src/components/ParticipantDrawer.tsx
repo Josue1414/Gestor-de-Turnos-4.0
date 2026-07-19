@@ -36,17 +36,42 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
   const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
 
+  // NUEVO: Función segura de copiado (Evita el error en IP Local)
+  const copiarSeguro = (texto: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto);
+    } else {
+      // Truco para conexiones HTTP locales (192.168.x.x)
+      const textArea = document.createElement("textarea");
+      textArea.value = texto;
+      textArea.style.position = "absolute";
+      textArea.style.left = "-999999px";
+      document.body.prepend(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+      } catch (error) {
+        console.error("Error copiando texto", error);
+      } finally {
+        textArea.remove();
+      }
+    }
+  };
+
   const handleCopyLink = (participanteId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participanteId}`;
-    navigator.clipboard.writeText(url);
+    copiarSeguro(url);
     setCopiedId(participanteId);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleWhatsApp = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!participante.telefono) { showToast('Este participante no tiene número de teléfono registrado.', 'error'); return; }
+    if (!participante.telefono) { 
+      showToast('Este participante no tiene número de teléfono registrado.', 'error'); 
+      return; 
+    }
     
     const numeroLimpio = participante.telefono.replace(/\D/g, '');
     const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participante.id}`;
@@ -57,7 +82,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
   const handleCopyInviteLink = () => {
     const url = `${window.location.origin}/invite/${eventoId}/${adminId}`;
-    navigator.clipboard.writeText(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
+    copiarSeguro(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
     showToast('¡Link de invitación general copiado!', 'success');
   };
 
@@ -66,7 +91,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
     participantes.forEach(p => {
       textoMasivo += `• ${p.nombre}:\n  ${window.location.origin}/p/${eventoId}/${adminId}/${p.id}\n\n`;
     });
-    navigator.clipboard.writeText(textoMasivo);
+    copiarSeguro(textoMasivo);
     showToast('¡Lista copiada! Pégala en tu grupo o lista de difusión de WhatsApp.', 'success');
   };
 
@@ -78,8 +103,12 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
         
         <div className="bg-slate-800 p-5 flex flex-col gap-4 text-white shrink-0">
           <div className="flex justify-between items-center">
-            <h2 className="font-black text-xl flex items-center gap-2"><Users size={22} className="text-blue-400" /> Directorio</h2>
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white"><X size={20} /></button>
+            <h2 className="font-black text-xl flex items-center gap-2">
+              <Users size={22} className="text-blue-400" /> Directorio
+            </h2>
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white">
+              <X size={20} />
+            </button>
           </div>
           
           <div className="flex gap-2 text-xs font-bold mb-1">
@@ -149,7 +178,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         </>
                       )}
 
-                      {/* AJUSTES: Visible para el Admin O para el propio dueño del usuario */}
                       {(canEdit || esMiUsuario) && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); onEditParticipante(p.id); }}
@@ -185,7 +213,9 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
               );
             })
           ) : (
-            <div className="text-center py-10"><p className="text-slate-400 text-sm font-bold">No se encontraron resultados</p></div>
+            <div className="text-center py-10">
+              <p className="text-slate-400 text-sm font-bold">No se encontraron resultados</p>
+            </div>
           )}
         </div>
       </div>

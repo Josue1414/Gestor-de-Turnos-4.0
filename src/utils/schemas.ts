@@ -19,7 +19,8 @@ export const DiaEventoSchema = z.object({
   id: z.string(),
   fecha: z.string().optional(),
   nombreDia: z.string(),
-  horariosMaestros: z.array(z.string()),
+  // SOLUCIÓN: Hacemos que sea opcional y por defecto asigne un arreglo vacío si Firebase devuelve undefined
+  horariosMaestros: z.array(z.string()).optional().default([]),
   cajas: z.array(CajaSchema),
   croquisUrl: z.string().url().optional(),
 });
@@ -32,7 +33,7 @@ export const ParticipanteSchema = z.object({
   ubicaciones: z.array(z.string()).optional(),
   whatsapp: z.string().optional(),
   notasDisponibilidad: z.string().optional(),
-});
+}).passthrough(); // SOLUCIÓN: passthrough permite que pasen campos adicionales (teléfono, notas, etc.) sin ser eliminados
 
 export const AdministradorSchema = z.object({
   id: z.string(),

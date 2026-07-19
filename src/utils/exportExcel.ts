@@ -1,7 +1,7 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { DiaEvento, Participante } from '../types';
 
-// 1. Extendemos los tipos localmente para evitar errores de TypeScript
+// Extendemos los tipos localmente para evitar errores de TypeScript
 type ParticipanteExcel = Participante & { 
   estado?: string; 
   ubicaciones?: string[]; 
@@ -12,56 +12,89 @@ type ParticipanteExcel = Participante & {
 };
 
 type DiaEventoExcel = DiaEvento & {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cajasEspeciales?: any;
 };
+
+interface StatsExport {
+  cajas: number;
+  horarios: number;
+  totales: number;
+  disponibles: number;
+  participantes: number;
+  inactivos: number;
+}
 
 export const exportToExcel = (
   seccionName: string,
   dias: DiaEventoExcel[],
   participantes: ParticipanteExcel[],
-  stats: any
+  stats: StatsExport,
+  adminInfo?: { name: string; org: string } | null
 ) => {
   const wb = XLSX.utils.book_new();
 
+  // --- ESTILOS REUTILIZABLES ---
+  const headerStyle = { font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "1E293B" } } };
+  const titleStyle = { font: { bold: true, sz: 14, color: { rgb: "0F172A" } } };
+  const labelStyle = { font: { bold: true, color: { rgb: "475569" } } };
+  const freeSlotStyle = { 
+    fill: { fgColor: { rgb: "DCFCE7" } }, // Verde muy claro (Tailwind emerald-100)
+    font: { color: { rgb: "166534" }, bold: true }, // Verde oscuro (Tailwind emerald-800)
+    alignment: { horizontal: "center", vertical: "center" }
+  };
+
   // --- HOJA 1: RESUMEN ---
-  const resumenData = [
-    ["Resumen del Evento", seccionName],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const resumenData: any[][] = [
+    [{ v: "Resumen del Evento", s: titleStyle }, seccionName],
     [""],
-    ["Métrica", "Cantidad"],
-    ["Cajas (Áreas)", stats.cajas || 0],
-    ["Horarios Únicos", stats.horarios || 0],
-    ["Total de Turnos", stats.totales || 0],
-    ["Turnos Libres", stats.disponibles || 0],
-    ["Total Usuarios", stats.participantes || 0],
-    ["Usuarios Inactivos", stats.inactivos || 0],
   ];
+
+  // Si hay datos del administrador, los agregamos a la cabecera
+  if (adminInfo) {
+    resumenData.push([{ v: "Administrador / Responsable", s: labelStyle }, adminInfo.name]);
+    resumenData.push([{ v: "Organización / Congregación", s: labelStyle }, adminInfo.org]);
+    resumenData.push([""]);
+  }
+
+  resumenData.push([
+    { v: "Métrica", s: headerStyle }, 
+    { v: "Cantidad", s: headerStyle }
+  ]);
+  resumenData.push(["Cajas (Áreas)", stats.cajas || 0]);
+  resumenData.push(["Horarios Únicos", stats.horarios || 0]);
+  resumenData.push(["Total de Turnos", stats.totales || 0]);
+  resumenData.push(["Turnos Libres", stats.disponibles || 0]);
+  resumenData.push(["Total Usuarios", stats.participantes || 0]);
+  resumenData.push(["Usuarios Inactivos", stats.inactivos || 0]);
+
   const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-  
-  // Asignamos ancho a las columnas de la hoja Resumen
-  wsResumen['!cols'] = [{ wch: 20 }, { wch: 30 }]; 
-  
+  wsResumen['!cols'] = [{ wch: 30 }, { wch: 40 }]; 
   XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
   // --- HOJA 2: DIRECTORIO DE PARTICIPANTES ---
-  const participantesData = participantes.map(p => ({
-    Nombre: p.nombre,
-    Estado: p.estado || 'Desconocido',
-    Teléfono: p.whatsapp || p.telefono || '',
-    Notas: p.notasDisponibilidad || p.notas || '',
-    // Usamos salto de línea (\n) para que las ubicaciones no se amontonen a lo ancho
-    Ubicaciones: (p.ubicaciones || []).join('\n')
-  }));
-  const wsParticipantes = XLSX.utils.json_to_sheet(participantesData);
-  
-  // Asignamos ancho a las columnas de la hoja Directorio para que no se vean pegadas
-  wsParticipantes['!cols'] = [
-    { wch: 25 }, // Columna A: Nombre
-    { wch: 15 }, // Columna B: Estado
-    { wch: 15 }, // Columna C: Teléfono
-    { wch: 30 }, // Columna D: Notas
-    { wch: 55 }, // Columna E: Ubicaciones (Más ancha para los textos largos)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dirHeader = [
+    { v: "Nombre", s: headerStyle },
+    { v: "Estado", s: headerStyle },
+    { v: "Teléfono", s: headerStyle },
+    { v: "Notas", s: headerStyle },
+    { v: "Ubicaciones", s: headerStyle }
   ];
+  
+  const participantesData = participantes.map(p => ([
+    p.nombre,
+    p.estado || 'Desconocido',
+    p.whatsapp || p.telefono || '',
+    p.notasDisponibilidad || p.notas || '',
+    (p.ubicaciones || []).join('\n')
+  ]));
 
+  const wsParticipantes = XLSX.utils.aoa_to_sheet([dirHeader, ...participantesData]);
+  wsParticipantes['!cols'] = [
+    { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 55 }
+  ];
   XLSX.utils.book_append_sheet(wb, wsParticipantes, "Directorio");
 
   // --- HOJA 3: MATRIZ DE TURNOS (POR DÍA) ---
@@ -70,8 +103,8 @@ export const exportToExcel = (
     const cajasEspeciales = Array.isArray(dia.cajasEspeciales) ? dia.cajasEspeciales : Object.values(dia.cajasEspeciales || {});
     const todasLasCajas = [...cajas, ...cajasEspeciales];
 
-    // Solución al error "implicitly has an 'any' type": tipamos t como (t: any)
     const horariosSet = new Set<string>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     todasLasCajas.forEach(c => c.turnos.forEach((t: any) => { 
       if (t.horario) horariosSet.add(t.horario); 
     }));
@@ -82,37 +115,43 @@ export const exportToExcel = (
       return ((hA || 0) * 60 + (mA || 0)) - ((hB || 0) * 60 + (mB || 0));
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const matriz: any[][] = [];
-    const header = ["Horario", ...todasLasCajas.map(c => c.nombre)];
-    matriz.push(header);
+    const headerRow = [
+      { v: "Horario", s: headerStyle }, 
+      ...todasLasCajas.map(c => ({ v: c.nombre, s: headerStyle }))
+    ];
+    matriz.push(headerRow);
 
     horarios.forEach(h => {
-      const row = [h];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row: any[] = [{ v: h, s: { font: { bold: true } } }];
+      
       todasLasCajas.forEach(c => {
-        // Tipamos explícitamente (t: any) aquí también
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const turno = c.turnos.find((t: any) => t.horario === h);
+        
         if (turno && turno.participanteId) {
           const part = participantes.find(p => p.id === turno.participanteId);
           row.push(part ? part.nombre : "ID: " + turno.participanteId);
         } else {
-          row.push(turno ? "Disponible" : "---");
+          // LÓGICA DE COLOR PARA CELDAS LIBRES
+          row.push(
+            turno 
+              ? { v: `[ LIBRE ]\n${h}`, s: freeSlotStyle } 
+              : { v: "---", s: { font: { color: { rgb: "94A3B8" } }, alignment: { horizontal: "center" } } }
+          );
         }
       });
       matriz.push(row);
     });
 
     const wsDia = XLSX.utils.aoa_to_sheet(matriz);
-    
-    // Asignamos ancho de columnas a la Matriz (Horario: 15, Resto de Cajas: 25)
-    wsDia['!cols'] = [
-      { wch: 15 }, 
-      ...todasLasCajas.map(() => ({ wch: 25 })) 
-    ];
+    wsDia['!cols'] = [{ wch: 15 }, ...todasLasCajas.map(() => ({ wch: 25 }))];
 
-    const nombreHoja = (dia.nombreDia || `Dia ${index + 1}`).substring(0, 31).replace(/[\[\]\*\\\/\?]/g, '');
+    const nombreHoja = (dia.nombreDia || `Dia ${index + 1}`).substring(0, 31).replace(/[\[\]*\\/?]/g, '');
     XLSX.utils.book_append_sheet(wb, wsDia, nombreHoja);
   });
 
-  // Exportar el archivo final
   XLSX.writeFile(wb, `Turnos_${seccionName.replace(/\s+/g, '_')}.xlsx`);
 };
