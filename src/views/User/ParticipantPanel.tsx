@@ -10,7 +10,7 @@ import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante'
 import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalInfoUsuario';
 import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
-import CroquisModal from '../../components/CroquisModal';
+import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 
 interface ParticipanteExtendidoDb extends Participante {
@@ -32,6 +32,10 @@ const ParticipantPanel = () => {
   const [participantes, setParticipantes] = useState<ParticipanteExtendidoDb[]>([]);
   const [eventoNombre, setEventoNombre] = useState('Evento');
   
+  // NUEVOS ESTADOS PARA LOS CROQUIS
+  const [croquisGral, setCroquisGral] = useState<string | null>(null);
+  const [croquisIndiv, setCroquisIndiv] = useState<string | null>(null);
+  
   const [diaActivo, setDiaActivo] = useState(0);
   const [downloadModal, setDownloadModal] = useState(false);
   const [showDirectorio, setShowDirectorio] = useState(false);
@@ -49,6 +53,10 @@ const ParticipantPanel = () => {
         setDias(data.diasPorAdmin?.[adminId] || []);
         setParticipantes(data.participantesPorAdmin?.[adminId] || []);
         if (data.nombre) setEventoNombre(data.nombre);
+        
+        // Guardamos las rutas de los croquis al cargar
+        setCroquisGral(data.croquisUrl || null);
+        setCroquisIndiv(data.croquisPorAdmin?.[adminId] || null);
       } else {
         showToast('El evento no existe.', 'error');
         navigate('/');
@@ -177,7 +185,6 @@ const ParticipantPanel = () => {
     syncEvent(nuevosDias);
   };
 
-  // Envolvemos en useCallback para que Vercel no marque errores en el useEffect de abajo
   const handleLogout = useCallback(() => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
@@ -188,23 +195,29 @@ const ParticipantPanel = () => {
     }
   }, [eventoId, adminId, navigate]);
 
-  // --- ALERTA DE SEGURIDAD BOTÓN ATRÁS (MÓVIL) ---
   useEffect(() => {
     window.history.pushState(null, '', window.location.pathname);
-    
     const handlePopState = () => {
       const confirmar = window.confirm("¿Seguro que deseas salir de tu sesión actual?");
       if (confirmar) {
         handleLogout(); 
       } else {
-        // Si cancela, volvemos a empujar el estado para bloquear la salida
         window.history.pushState(null, '', window.location.pathname);
       }
     };
-    
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [handleLogout]); // Dependencia segura
+  }, [handleLogout]);
+
+  // PREPARAMOS LA LISTA DE CROQUIS PARA EL PARTICIPANTE
+  const croquisDataParaMostrar: CroquisItem[] = useMemo(() => {
+    const arr: CroquisItem[] = [];
+    arr.push({ id: 'general', title: 'Croquis General', url: croquisGral });
+    if (croquisIndiv) {
+      arr.push({ id: adminId || 'admin', title: 'Croquis del Área', url: croquisIndiv });
+    }
+    return arr;
+  }, [croquisGral, croquisIndiv, adminId]);
 
   if (loading) {
     return (
@@ -310,13 +323,13 @@ const ParticipantPanel = () => {
         targetUserId={miUsuario.id} 
       />
 
+      {/* MODAL CORREGIDO: Firma exacta de TypeScript */}
       <CroquisModal 
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 
-        canEdit={false} // Cambiamos isAdmin={false} por canEdit={false}
-        croquisActual={null} // O puedes conectar el evento.croquisUrl aquí si ya lo obtienes
-        // Solución al error de TypeScript: Pasamos la firma exacta
-        onSaveCroquis={async (_file: File | null) => {
+        canEdit={false} 
+        croquis={croquisDataParaMostrar} 
+        onSaveCroquis={async (_file: File | null, _id: string) => {
           return Promise.resolve();
         }}
       />

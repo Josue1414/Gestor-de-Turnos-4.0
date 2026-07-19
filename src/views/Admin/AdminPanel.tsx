@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { Calendar, ShieldCheck } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,31 +21,20 @@ import SpecialBoxModal from '../../components/SpecialBoxModal';
 import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalInfoUsuario';
 import AdminHeader from '../../components/AdminHeader';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
-import CroquisModal from '../../components/CroquisModal';
+import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
 
-// NUESTRO CEREBRO MATEMÁTICO:
 import { calculateAdminStats } from '../../utils/statsCalculator';
 
 interface ParticipanteExtendidoDb extends Participante {
-  telefono?: string;
-  codigoPais?: string;
-  notas?: string;
-  organizacion?: string;
-  organizationLabel?: string;
-  ubicaciones?: string[];
-  fechaNacimiento?: string;
+  telefono?: string; codigoPais?: string; notas?: string;
+  organizacion?: string; organizationLabel?: string;
+  ubicaciones?: string[]; fechaNacimiento?: string;
 }
 
 interface AdminInDB {
-  id: string;
-  name?: string;
-  phone?: string;
-  countryCode?: string;
-  notes?: string;
-  organization?: string;
-  organizationLabel?: string;
-  supportArea?: string;
-  [key: string]: unknown;
+  id: string; name?: string; phone?: string; countryCode?: string;
+  notes?: string; organization?: string; organizationLabel?: string;
+  supportArea?: string; [key: string]: unknown;
 }
 
 const AdminPanel = () => {
@@ -71,7 +61,9 @@ const AdminPanel = () => {
   const [showActions, setShowActions] = useState(false);
   const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string} | null>(null);
 
-  // ALIMENTAMOS EL HEADER CON LAS ESTADÍSTICAS REALES
+  // NUEVO: ESTADO PARA AMBOS CROQUIS
+  const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
+
   const statsActuales = calculateAdminStats(dias, participantesEnriquecidos as any);
 
   useEffect(() => {
@@ -92,6 +84,19 @@ const AdminPanel = () => {
               : myAdmin.organization || 'Sin organización asignada'
           });
         }
+
+        // CARGAR CROQUIS PARA EL MODAL
+        const listaCroquis: CroquisItem[] = [{
+          id: 'general', title: 'Croquis General del Evento', url: data.croquisUrl || null
+        }];
+        
+        const croquisIndividual = data.croquisPorAdmin?.[adminIdL];
+        if (croquisIndividual) {
+          listaCroquis.push({
+            id: adminIdL, title: `Croquis Individual (${myAdmin?.name || 'Área'})`, url: croquisIndividual
+          });
+        }
+        setCroquisData(listaCroquis);
       }
     }).catch(err => console.error(err));
   }, [eventoId]);
@@ -102,30 +107,23 @@ const AdminPanel = () => {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return;
-      
       const data = docSnap.data();
       const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
-      
       const participantesDelAdmin: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
       const participantesFiltrados = participantesDelAdmin.filter((p) => p.id !== deletePartModal.id);
-
       const diasDelAdmin: DiaEvento[] = data.diasPorAdmin?.[adminIdL] || [];
       const diasLimpios = diasDelAdmin.map((dia) => ({
         ...dia,
         cajas: dia.cajas.map((caja) => ({
-          ...caja,
-          turnos: caja.turnos.map((turno) => ({
-            ...turno,
-            participanteId: turno.participanteId === deletePartModal.id ? null : turno.participanteId
+          ...caja, turnos: caja.turnos.map((turno) => ({
+            ...turno, participanteId: turno.participanteId === deletePartModal.id ? null : turno.participanteId
           }))
         }))
       }));
-
       await updateDoc(docRef, {
         [`participantesPorAdmin.${adminIdL}`]: participantesFiltrados,
         [`diasPorAdmin.${adminIdL}`]: diasLimpios
       });
-
     } catch (error) { console.error(error); }
   };
 
@@ -225,7 +223,6 @@ const AdminPanel = () => {
     try { await updateDoc(doc(db, 'eventos', eventoId), { nombre: seccionName.trim() }); } catch (error) { console.error(error); }
   };
 
-  // LÓGICA NUEVA
   const handleExportExcel = () => {
     exportToExcel(seccionName || 'Evento', dias as any, participantesEnriquecidos as any, statsActuales);
   };
@@ -264,7 +261,7 @@ const AdminPanel = () => {
         onShowDirectorio={() => setShowDirectorio(true)} participantesCount={participantesEnriquecidos.length} onToggleActions={() => setShowActions(prev => !prev)} showActions={showActions}
         onCrearCajaEspecial={() => setShowSpecialModal(true)} onCrearCaja={handleCrearCaja} onCrearHorario={handleCrearHorario} onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
         isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel}
-        stats={statsActuales} // <-- Inyección directa de datos al header
+        stats={statsActuales}
       />
 
       <div className="flex gap-2 overflow-x-auto pb-2 shrink-0 mb-2 no-scrollbar">
@@ -297,17 +294,12 @@ const AdminPanel = () => {
       <ModalInputHorario isOpen={createShiftModal?.isOpen || false} onClose={() => setCreateShiftModal && setCreateShiftModal({ ...createShiftModal, isOpen: false })} defaultStart={createShiftModal?.defaultStart || '08:00'} defaultEnd={createShiftModal?.defaultEnd || '09:00'} onConfirm={confirmarCrearHorario} />
       <ModalAlertaChoque isOpen={clashModal?.isOpen || false} onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`} horarioCruzado={clashModal?.turnoCruzado || ''} onConfirm={() => confirmarCrearHorario(clashModal!.inicio, clashModal!.fin, true)} />
       
-      {/* SECCIÓN ACTUALIZADA DEL MODAL DE CROQUIS (Recibe imagen de Firebase y la actualiza) */}
       <CroquisModal 
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 
-        canEdit={false} // El admin normal no puede editar
-        // Pasamos null por ahora porque la lógica se integrará en el hook global en el siguiente paso
-        croquisActual={null} 
-        onSaveCroquis={async (_file: File | null) => {
-          // Esta función no hace nada aquí porque canEdit es false
-          return Promise.resolve();
-        }} 
+        canEdit={false} 
+        croquis={croquisData} 
+        onSaveCroquis={async () => Promise.resolve()} 
       />
 
     </div>

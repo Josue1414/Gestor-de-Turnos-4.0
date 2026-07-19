@@ -1,24 +1,41 @@
-import React, { useState, useRef } from 'react';
-import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+
+export interface CroquisItem {
+  id: string;
+  title: string;
+  url: string | null;
+}
 
 interface CroquisModalProps {
   isOpen: boolean;
   onClose: () => void;
   canEdit?: boolean;
-  croquisActual: string | null;
-  onSaveCroquis: (file: File | null) => Promise<void>;
-  titulo?: string;
+  croquis: CroquisItem[];
+  onSaveCroquis: (file: File | null, croquisId: string) => Promise<void>;
 }
 
 const CroquisModal: React.FC<CroquisModalProps> = ({ 
-  isOpen, onClose, canEdit = false, croquisActual, onSaveCroquis, titulo = "Croquis del Evento"
+  isOpen, onClose, canEdit = false, croquis, onSaveCroquis
 }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
   const [localOverride, setLocalOverride] = useState<string | null | undefined>(undefined);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const imagenUrl = localOverride !== undefined ? localOverride : croquisActual;
+  // Reiniciar estado al abrir
+  useEffect(() => {
+    if (isOpen) {
+      setActiveIndex(0);
+      setLocalOverride(undefined);
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !croquis || croquis.length === 0) return null;
+
+  const currentItem = croquis[activeIndex];
+  const imagenUrl = localOverride !== undefined ? localOverride : currentItem.url;
 
   const handleCloseModal = () => {
     if (isUploading) return;
@@ -26,7 +43,15 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     onClose();
   };
 
-  if (!isOpen) return null;
+  const cambiarImagen = (direccion: 'izq' | 'der') => {
+    if (isUploading) return;
+    setLocalOverride(undefined);
+    if (direccion === 'izq') {
+      setActiveIndex(prev => prev > 0 ? prev - 1 : croquis.length - 1);
+    } else {
+      setActiveIndex(prev => prev < croquis.length - 1 ? prev + 1 : 0);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,17 +66,11 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
       try {
         const previewUrl = URL.createObjectURL(file);
         setLocalOverride(previewUrl);
-
-        // Agregamos un Timeout de 15 segundos para evitar que la pantalla se congele
-        const timeoutPromise = new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error("Tiempo agotado por problemas de red o CORS")), 15000)
-        );
-
-        await Promise.race([onSaveCroquis(file), timeoutPromise]);
+        await onSaveCroquis(file, currentItem.id);
       } catch (error) {
         console.error("Error al subir croquis:", error);
         setLocalOverride(undefined);
-        alert("Error al subir el croquis. Verifica los permisos CORS en Firebase o tu conexión a internet.");
+        alert("Error al subir el croquis.");
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -63,10 +82,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     if (!confirm("¿Eliminar este croquis?")) return;
     setIsUploading(true);
     try {
-      const timeoutPromise = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error("Tiempo agotado al intentar borrar")), 15000)
-      );
-      await Promise.race([onSaveCroquis(null), timeoutPromise]);
+      await onSaveCroquis(null, currentItem.id);
       setLocalOverride(null);
     } catch (error) {
       console.error(error);
@@ -83,14 +99,34 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
         
         <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white shrink-0 z-20 shadow-sm">
           <h3 className="font-black text-slate-800 flex items-center gap-2 text-lg">
-            <MapIcon className="text-indigo-500" /> {titulo}
+            <MapIcon className="text-indigo-500" /> {currentItem.title}
           </h3>
-          <button onClick={handleCloseModal} disabled={isUploading} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition disabled:opacity-50">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-4">
+            {croquis.length > 1 && (
+              <span className="bg-slate-100 text-slate-500 font-bold px-3 py-1 rounded-lg text-xs uppercase tracking-widest">
+                {activeIndex + 1} / {croquis.length}
+              </span>
+            )}
+            <button onClick={handleCloseModal} disabled={isUploading} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition disabled:opacity-50">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 relative bg-slate-100/50 flex items-center justify-center overflow-hidden dotted-background">
+        <div className="flex-1 relative bg-slate-100/50 flex items-center justify-center overflow-hidden dotted-background group">
+          
+          {/* FLECHAS DE NAVEGACIÓN */}
+          {croquis.length > 1 && (
+            <>
+              <button onClick={() => cambiarImagen('izq')} className="absolute left-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100">
+                <ChevronLeft size={28} />
+              </button>
+              <button onClick={() => cambiarImagen('der')} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100">
+                <ChevronRight size={28} />
+              </button>
+            </>
+          )}
+
           {isUploading && (
             <div className="absolute inset-0 z-50 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center">
               <Loader2 size={48} className="animate-spin text-indigo-500 mb-4" />

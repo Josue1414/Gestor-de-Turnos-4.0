@@ -1,19 +1,17 @@
-// src/views/Supervisor/SupervisorPanel.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ShieldCheck, LogOut, Plus, Calendar, MapIcon } from 'lucide-react'; // <-- AGREGADO MapIcon
+import { ShieldCheck, LogOut, Plus, Calendar, MapIcon } from 'lucide-react';
 import AdminFiche from '../../components/AdminFiche';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
-import CroquisModal from '../../components/CroquisModal'; // <-- AGREGADO
-import { guardarCroquis } from '../../utils/croquisService'; // <-- AGREGADO
+import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
+import { guardarCroquis } from '../../utils/croquisService';
 
 import { useSupervisorLogic } from '../../hooks/useSupervisorLogic';
 import type { AdminData } from '../../hooks/useSuperAdminLogic';
 import { useToast } from '../../components/ToastProvider';
 
-// Tipado seguro para extraer los datos de imagen
 interface EventoExtended {
   nombre?: string;
   admins?: unknown[];
@@ -53,7 +51,6 @@ const SupervisorPanel = () => {
   const [structureModal, setStructureModal] = useState(false);
   const [settingsFlow, setSettingsFlow] = useState<{isOpen: boolean, admin: AdminData | null}>({isOpen: false, admin: null});
   
-  // NUEVO: ESTADO PARA EL CROQUIS
   const [croquisModal, setCroquisModal] = useState<{isOpen: boolean, adminId: string | null}>({ isOpen: false, adminId: null });
 
   const diasActualesUnicos = new Set<string>();
@@ -92,6 +89,24 @@ const SupervisorPanel = () => {
 
   const eventoExt = evento as EventoExtended;
 
+  const croquisDataParaMostrar: CroquisItem[] = [];
+  
+  // Siempre agregamos primero el croquis general
+  croquisDataParaMostrar.push({
+    id: 'general',
+    title: "Croquis General del Evento",
+    url: eventoExt?.croquisUrl || null
+  });
+
+  // Si abrieron el croquis desde la tarjeta de un Admin, agregamos el suyo como segunda opción
+  if (croquisModal.adminId) {
+    croquisDataParaMostrar.push({
+      id: croquisModal.adminId,
+      title: "Croquis Individual del Área",
+      url: eventoExt?.croquisPorAdmin?.[croquisModal.adminId] || null
+    });
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 relative">
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 rounded-3xl shadow-sm border border-slate-200 mb-8 gap-4">
@@ -104,12 +119,9 @@ const SupervisorPanel = () => {
         </div>
 
         <div className="flex flex-wrap gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          
-          {/* NUEVO BOTÓN CROQUIS GENERAL EN LA CABECERA */}
           <button onClick={() => setCroquisModal({isOpen: true, adminId: null})} className="flex-1 lg:flex-none bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition">
             <MapIcon size={16} /> Croquis Gral.
           </button>
-          
           <button onClick={() => setStructureModal(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition hover:bg-slate-700">
             <Calendar size={16} /> Añadir Día
           </button>
@@ -135,7 +147,6 @@ const SupervisorPanel = () => {
                 onOpenSettings={() => setSettingsFlow({ isOpen: true, admin: admin })} 
                 onDownload={() => showToast('El Supervisor visualiza y descarga la info dentro del panel del Admin.', 'info')} 
                 onDelete={() => setDeleteModal({ isOpen: true, adminId: admin.id, adminName: admin.name })} 
-                // CONECTAMOS LA PROPIEDAD PARA CROQUIS INDIVIDUAL
                 onOpenCroquisAdmin={(id) => setCroquisModal({ isOpen: true, adminId: id })}
               />
             )
@@ -147,32 +158,28 @@ const SupervisorPanel = () => {
 
       <CountdownDeleteModal isOpen={deleteModal.isOpen} onClose={() => setDeleteModal({ isOpen: false, adminId: '', adminName: '' })} onConfirm={() => { handleDeleteAdmin(deleteModal.adminId); setDeleteModal({ isOpen: false, adminId: '', adminName: '' }); }} title={deleteModal.adminName} message="¿Seguro de eliminar este administrador?" />
       
-      {/* SE SATISFACE A TYPESCRIPT CASTING A UNKNOWN Y LUEGO AL TIPO */}
-      <AdminSettingsFlow isOpen={settingsFlow.isOpen} onClose={() => setSettingsFlow({ isOpen: false, admin: null })} admin={settingsFlow.admin} eventoId={eventoId || ''} currentUserRole="Supervisor" onSaveProfile={(evId, updated) => handleSaveProfile(evId, updated as unknown as {id: string, name: string, org: string})} onSaveAccess={handleEditAccess} />
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <AdminSettingsFlow isOpen={settingsFlow.isOpen} onClose={() => setSettingsFlow({ isOpen: false, admin: null })} admin={settingsFlow.admin} eventoId={eventoId || ''} currentUserRole="Supervisor" onSaveProfile={(evId, updated) => handleSaveProfile(evId, updated as any)} onSaveAccess={handleEditAccess} />
       
       <BaseStructureModal 
         isOpen={structureModal} onClose={() => setStructureModal(false)} 
         isSupervisor={true} existingDays={listaDiasExistentes}
         onSave={async (estructura) => {
           const exitoso = await handleSaveGlobalStructure({ 
-            dias: estructura.dias,
-            horarios: estructura.horarios || [], 
-            cajas: estructura.cajas || [] 
+            dias: estructura.dias, horarios: estructura.horarios || [], cajas: estructura.cajas || [] 
           });
           if (exitoso) setStructureModal(false);
         }}
       />
 
-      {/* COMPONENTE MAESTRO DE CROQUIS INTEGRADO AL SUPERVISOR */}
       <CroquisModal
         isOpen={croquisModal.isOpen}
         onClose={() => setCroquisModal({ isOpen: false, adminId: null })}
         canEdit={true}
-        titulo={croquisModal.adminId ? "Croquis Individual del Área" : "Croquis General del Evento"}
-        croquisActual={croquisModal.adminId ? (eventoExt?.croquisPorAdmin?.[croquisModal.adminId] || null) : (eventoExt?.croquisUrl || null)}
-        onSaveCroquis={async (file) => {
+        croquis={croquisDataParaMostrar}
+        onSaveCroquis={async (file, croquisId) => {
           if (eventoId) {
-            await guardarCroquis(eventoId, croquisModal.adminId, file);
+            await guardarCroquis(eventoId, croquisId === 'general' ? null : croquisId, file);
           }
         }}
       />

@@ -1,4 +1,3 @@
-// src/views/SuperAdmin/SuperAdminPanel.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -8,21 +7,22 @@ import {
 import { useSuperAdminLogic, type EventoData, type AdminData } from '../../hooks/useSuperAdminLogic';
 import { guardarCroquis } from '../../utils/croquisService';
 
-// NUEVOS COMPONENTES IMPORTADOS
 import EditEventModal from '../../components/EditEventModal';
 import EventoSection from '../../components/EventoSection';
-import AdminSettingsFlow from '../../components/AdminSettingsFlow'; // <-- EL NUEVO COMPONENTE
-
-// COMPONENTES EXISTENTES
-import CroquisModal from '../../components/CroquisModal';
+import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
+import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
+interface EventoExtended extends EventoData {
+  croquisUrl?: string;
+  croquisPorAdmin?: Record<string, string>;
+}
+
 const SuperAdminPanel = () => {
   const navigate = useNavigate();
 
-  // PROTECCIÓN DE RUTA: Expulsa a cualquiera que no sea SuperAdmin
   useEffect(() => {
     const role = localStorage.getItem('user_role');
     if (role !== 'superadmin') {
@@ -30,7 +30,6 @@ const SuperAdminPanel = () => {
     }
   }, [navigate]);
 
-  // PROTECCIÓN BOTÓN ATRÁS (NUEVO)
   const [showExitAlert, setShowExitAlert] = useState(false);
 
   useEffect(() => {
@@ -56,7 +55,6 @@ const SuperAdminPanel = () => {
     editEventModalState, setEditEventModalState, handleSaveEditEvent
   } = useSuperAdminLogic();
 
-  // ESTADO COMPACTO: Maneja todo el flujo de ajustes con el nuevo componente
   const [settingsFlow, setSettingsFlow] = useState<{isOpen: boolean, eventoId: string, admin: AdminData | null}>({isOpen: false, eventoId: '', admin: null});
 
   const handleVerAdmin = (eventoId: string, adminId: string) => {
@@ -69,6 +67,26 @@ const SuperAdminPanel = () => {
     localStorage.removeItem('user_role');
     navigate('/');
   };
+
+  // PREPARAR LOS DATOS DE CROQUIS PARA EL MODAL (General primero, luego el individual si aplica)
+  const activeEvent = eventos.find(e => e.id === croquisModalState.eventoId) as EventoExtended | undefined;
+  const croquisDataParaMostrar: CroquisItem[] = [];
+
+  if (croquisModalState.eventoId) {
+    croquisDataParaMostrar.push({
+      id: 'general',
+      title: "Croquis General del Evento",
+      url: activeEvent?.croquisUrl || null
+    });
+
+    if (croquisModalState.adminId) {
+      croquisDataParaMostrar.push({
+        id: croquisModalState.adminId,
+        title: "Croquis Individual del Área",
+        url: activeEvent?.croquisPorAdmin?.[croquisModalState.adminId] || null
+      });
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 p-2 md:p-6 font-sans flex flex-col gap-6 relative">
@@ -93,7 +111,6 @@ const SuperAdminPanel = () => {
               {showNewEvent ? "CERRAR PANEL" : "CREAR EVENTO"}
             </button>
             
-            {/* Se reemplazó handleLogout por abrir el modal de salida segura */}
             <button 
               onClick={() => setShowExitAlert(true)}
               className="px-3.5 py-2.5 bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-xl transition shadow-md border border-slate-600"
@@ -113,40 +130,76 @@ const SuperAdminPanel = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Nombre del Evento</label>
-              <input type="text" placeholder="Ej. Convención Anime" value={nuevoEventoForm.nombre} onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, nombre: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" />
+              <input 
+                type="text" 
+                placeholder="Ej. Convención Anime" 
+                value={nuevoEventoForm.nombre} 
+                onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, nombre: e.target.value})} 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
+              />
             </div>
+            
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Contraseña General (Opc.)</label>
-              <input type="text" placeholder="Clave para todos" value={nuevoEventoForm.passwordGeneral} onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, passwordGeneral: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" />
+              <input 
+                type="text" 
+                placeholder="Clave para todos" 
+                value={nuevoEventoForm.passwordGeneral} 
+                onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, passwordGeneral: e.target.value})} 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
+              />
             </div>
+            
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Método de Guardado</label>
-              <select value={nuevoEventoForm.metodoGuardado} onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, metodoGuardado: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700">
+              <select 
+                value={nuevoEventoForm.metodoGuardado} 
+                onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, metodoGuardado: e.target.value})} 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700"
+              >
                 <option>Firebase (Recomendado)</option>
                 <option>Google Sheets</option>
                 <option>Ambos</option>
               </select>
             </div>
+            
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Admins Iniciales (Opc.)</label>
-              <input type="number" min="0" placeholder="0" value={nuevoEventoForm.numAdmins} onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, numAdmins: e.target.value})} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" />
+              <input 
+                type="number" 
+                min="0" 
+                placeholder="0" 
+                value={nuevoEventoForm.numAdmins} 
+                onChange={(e) => setNuevoEventoForm({...nuevoEventoForm, numAdmins: e.target.value})} 
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
+              />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Estructura Base (Opc.)</label>
-              <button onClick={() => setBaseStructureModalState(true)} className={`w-full p-2.5 border rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition ${estructuraGuardada ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-50 hover:bg-blue-50 border-slate-200 hover:border-blue-300 text-slate-600 hover:text-blue-700'}`}>
+              <button 
+                onClick={() => setBaseStructureModalState(true)} 
+                className={`w-full p-2.5 border rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition ${estructuraGuardada ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-50 hover:bg-blue-50 border-slate-200 hover:border-blue-300 text-slate-600 hover:text-blue-700'}`}
+              >
                 <Calendar size={16} /> {estructuraGuardada ? 'Estructura Lista ✓' : 'Crear Días/Cajas'}
               </button>
             </div>
+            
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Croquis Base (Opc.)</label>
-              <button onClick={() => setCroquisModalState({isOpen: true, eventoId: null})} className="w-full p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition">
+              <button 
+                onClick={() => setCroquisModalState({isOpen: true, eventoId: null})} 
+                className="w-full p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-700 rounded-lg outline-none font-bold text-xs flex items-center justify-center gap-2 transition"
+              >
                 <UploadCloud size={16} /> Agregar Croquis
               </button>
             </div>
             
             <div className="space-y-1.5 md:col-span-2 flex items-end">
-              <button onClick={handleCrearEvento} className="w-full bg-blue-600 text-white p-2.5 rounded-lg font-black hover:bg-blue-700 transition shadow-sm text-sm h-[42px]">
+              <button 
+                onClick={handleCrearEvento} 
+                className="w-full bg-blue-600 text-white p-2.5 rounded-lg font-black hover:bg-blue-700 transition shadow-sm text-sm h-[42px]"
+              >
                 CREAR EVENTO
               </button>
             </div>
@@ -185,43 +238,36 @@ const SuperAdminPanel = () => {
         onSaveAccess={handleUpdateAdminAccess}
       />
 
+      {/* MODAL CORREGIDO: Propiedades actualizadas para recibir el Array de croquis */}
       <CroquisModal 
         isOpen={croquisModalState.isOpen} 
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
         canEdit={true} 
-        // Actualizamos el título según si es individual o general
-        titulo={croquisModalState.adminId ? "Croquis Individual del Área" : "Croquis General del Evento"}
-        // Buscamos el croquis correcto
-        croquisActual={
-          croquisModalState.eventoId 
-            ? (
-                croquisModalState.adminId 
-                  // Si hay adminId, busca el croquis de ese admin (usando 'as any' o extendiendo la interfaz EventoData)
-                  ? ((eventos.find(e => e.id === croquisModalState.eventoId) as any)?.croquisPorAdmin?.[croquisModalState.adminId] || null)
-                  // Si no hay adminId, usa el croquis general
-                  : (eventos.find(e => e.id === croquisModalState.eventoId)?.croquisUrl || null)
-              )
-            : null
-        }
-        onSaveCroquis={async (file) => {
+        croquis={croquisDataParaMostrar}
+        onSaveCroquis={async (file, id) => {
           if (croquisModalState.eventoId) {
-            // Guardamos pasando el adminId (puede ser undefined, por lo que pasamos null si es necesario)
-            await guardarCroquis(croquisModalState.eventoId, croquisModalState.adminId || null, file);
+            await guardarCroquis(croquisModalState.eventoId, id === 'general' ? null : id, file);
           }
         }}
       />
       
-      <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />
+      <DownloadScheduleModal 
+        isOpen={downloadModalState.isOpen} 
+        onClose={() => setDownloadModalState({ isOpen: false })} 
+        type="general" 
+        seccionName="Tabla de Turnos" 
+        dias={[]} 
+        diaActivo={0} 
+        participantes={[]} 
+      />
       
-      {/* SE LE PASA FALSE A ISSUPERVISOR */}
-      {/* SE LE PASA FALSE A ISSUPERVISOR Y SE SATISFACE A TYPESCRIPT */}
       <BaseStructureModal 
         isOpen={baseStructureModalState} 
         onClose={() => setBaseStructureModalState(false)} 
         onSave={(estructura) => setEstructuraGuardada({
           dias: estructura.dias,
-          horarios: estructura.horarios || [], // Si no hay, pasa arreglo vacío
-          cajas: estructura.cajas || []        // Si no hay, pasa arreglo vacío
+          horarios: estructura.horarios || [], 
+          cajas: estructura.cajas || []        
         })} 
         isSupervisor={false}
       />
