@@ -36,6 +36,7 @@ interface AdminHeaderProps {
   isSuperAdminViewing?: boolean;
   adminInfo?: AdminInfo | null;
   stats?: StatsData;
+  onExportExcel?: () => void;
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -49,7 +50,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   seccionName, setSeccionName, isEditingTitle, setIsEditingTitle,
   onOpenProfile, onSave, onShowCroquis, onShowDirectorio, participantesCount, onToggleActions, showActions,
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
-  onBack, onLogout, isSuperAdminViewing, adminInfo, stats
+  onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
 }) => {
   const [showStats, setShowStats] = useState(false);
 
@@ -163,6 +164,13 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               <button onClick={onDownloadTabla} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-md shadow-blue-500/20">
                 <Download size={14} />
                 <span>Descargar</span>
+              </button>
+            )}
+            {/* LÓGICA NUEVA: Botón Excel */}
+            {onExportExcel && (
+              <button onClick={onExportExcel} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-2 py-2 rounded-2xl font-bold text-[10px] transition shadow-md shadow-green-500/20">
+                <Download size={14} />
+                <span>Excel</span>
               </button>
             )}
           </div>

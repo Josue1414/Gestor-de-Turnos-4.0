@@ -1,3 +1,4 @@
+// src/views/SuperAdmin/SuperAdminPanel.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -5,6 +6,7 @@ import {
 } from 'lucide-react';
 
 import { useSuperAdminLogic, type EventoData, type AdminData } from '../../hooks/useSuperAdminLogic';
+import { guardarCroquis } from '../../utils/croquisService';
 
 // NUEVOS COMPONENTES IMPORTADOS
 import EditEventModal from '../../components/EditEventModal';
@@ -180,12 +182,19 @@ const SuperAdminPanel = () => {
         onSaveAccess={handleUpdateAdminAccess}
       />
 
+      {/* SE ACTUALIZÓ A canEdit={true} Y SE CONECTÓ LA SUBIDA */}
       <CroquisModal 
         isOpen={croquisModalState.isOpen} 
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
-        isAdmin={true} 
-        croquisActual={null}
-        onSaveCroquis={() => {}}
+        canEdit={true} 
+        croquisActual={croquisModalState.eventoId ? eventos.find(e => e.id === croquisModalState.eventoId)?.croquisUrl || null : null}
+        onSaveCroquis={async (file) => {
+          if (croquisModalState.eventoId) {
+            // Importar guardarCroquis en la parte superior si aún no lo has hecho
+            // import { guardarCroquis } from '../../utils/croquisService';
+            await guardarCroquis(croquisModalState.eventoId, null, file);
+          }
+        }}
       />
       
       <DownloadScheduleModal isOpen={downloadModalState.isOpen} onClose={() => setDownloadModalState({ isOpen: false })} type="general" seccionName="Tabla de Turnos" dias={[]} diaActivo={0} participantes={[]} />

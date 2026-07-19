@@ -19,13 +19,15 @@ interface EventoSectionProps {
   onAddAdmin: (eventoId: string) => void;
   onEditEvent: (evento: EventoData) => void;
   onOpenCroquis: () => void;
+  onOpenCroquisAdmin?: (eventoId: string, adminId: string) => void;
 }
 
 interface EventoConSupervisor { supervisor?: { usuario?: string; password?: string; }; }
 
+// Aquí se agregó onOpenCroquisAdmin en la desestructuración de las props
 const EventoSection: React.FC<EventoSectionProps> = ({ 
   evento, isDefaultExpanded, onDeleteEvent, onOpenSettings, 
-  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent, onOpenCroquis
+  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent, onOpenCroquis, onOpenCroquisAdmin
 }) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const [page, setPage] = useState(1);
@@ -96,7 +98,6 @@ const EventoSection: React.FC<EventoSectionProps> = ({
 
         <div className="flex flex-wrap gap-2 justify-end shrink-0 w-full lg:w-auto mt-2 lg:mt-0 pt-2 lg:pt-0 border-t border-slate-700 lg:border-none">
             
-            {/* ESTE BOTÓN ES EL QUE FALTABA CONECTAR */}
             <button onClick={onOpenCroquis} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 p-2 sm:px-3 rounded-lg transition border border-indigo-500/30 flex items-center gap-1 text-xs font-bold" title="Ver Croquis Base">
               <MapIcon size={14} /> <span className="hidden sm:block">Croquis</span>
             </button>
@@ -152,6 +153,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
                         onDownload={onDownload}
                         onView={onView} 
                         onDelete={(adminId: string, adminName: string) => onDeleteAdmin(evento.id, adminId, adminName)} 
+                        onOpenCroquisAdmin={onOpenCroquisAdmin ? (adminId: string) => onOpenCroquisAdmin(evento.id, adminId) : undefined}
                     />
                   );
               })}

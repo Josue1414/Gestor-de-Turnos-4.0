@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Trash2, Key, Eye, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, Trash2, Key, Eye, Download, ChevronDown, ChevronUp, MapIcon } from 'lucide-react';
 import type { AdminData } from '../hooks/useSuperAdminLogic';
 
 const StatBadge = ({ label, value, colorClass }: { label: string, value: string | number, colorClass: string }) => (
@@ -16,9 +16,10 @@ interface AdminFicheProps {
   onDownload: (id: string) => void;
   onView: (id: string) => void;
   onDelete: (id: string, name: string) => void;
+  onOpenCroquisAdmin?: (id: string) => void;
 }
 
-const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, onDownload, onView, onDelete }) => {
+const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, onDownload, onView, onDelete, onOpenCroquisAdmin }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -43,7 +44,17 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
             </div>
           </div>
 
+          {/* AQUÍ MOVIMOS EL BOTÓN PARA QUE ESTÉ SIEMPRE VISIBLE */}
           <div className="flex gap-1.5 shrink-0">
+            {onOpenCroquisAdmin && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenCroquisAdmin(data.id); }}
+                className="p-1.5 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-md hover:bg-indigo-100 transition shadow-sm"
+                title="Croquis de esta área"
+              >
+                <MapIcon size={14} />
+              </button>
+            )}
             <button
               onClick={() => onOpenSettings(data)}
               className="p-1.5 bg-white border border-slate-200 text-slate-500 rounded-md hover:bg-slate-100 transition shadow-sm"

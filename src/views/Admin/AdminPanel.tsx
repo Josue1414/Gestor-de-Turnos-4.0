@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, ShieldCheck } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { DiaEvento, Participante } from '../../types';
+import { exportToExcel } from '../../utils/exportExcel';
 
 import ModalInputHorario from '../../components/ModalInputHorario';
 import ModalAlertaChoque from '../../components/ModalAlertaChoque';
@@ -224,6 +225,11 @@ const AdminPanel = () => {
     try { await updateDoc(doc(db, 'eventos', eventoId), { nombre: seccionName.trim() }); } catch (error) { console.error(error); }
   };
 
+  // LÓGICA NUEVA
+  const handleExportExcel = () => {
+    exportToExcel(seccionName || 'Evento', dias as any, participantesEnriquecidos as any, statsActuales);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -257,7 +263,7 @@ const AdminPanel = () => {
         onBack={isExternalViewer ? handleBack : undefined} onLogout={!isExternalViewer ? handleLogout : undefined} 
         onShowDirectorio={() => setShowDirectorio(true)} participantesCount={participantesEnriquecidos.length} onToggleActions={() => setShowActions(prev => !prev)} showActions={showActions}
         onCrearCajaEspecial={() => setShowSpecialModal(true)} onCrearCaja={handleCrearCaja} onCrearHorario={handleCrearHorario} onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
-        isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo}
+        isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel}
         stats={statsActuales} // <-- Inyección directa de datos al header
       />
 
@@ -295,10 +301,13 @@ const AdminPanel = () => {
       <CroquisModal 
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 
-        isAdmin={true} 
+        canEdit={false} // El admin normal no puede editar
         // Pasamos null por ahora porque la lógica se integrará en el hook global en el siguiente paso
         croquisActual={null} 
-        onSaveCroquis={() => {}} 
+        onSaveCroquis={async (_file: File | null) => {
+          // Esta función no hace nada aquí porque canEdit es false
+          return Promise.resolve();
+        }} 
       />
 
     </div>
