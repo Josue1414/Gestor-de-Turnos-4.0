@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ShieldCheck, Info, Check } from 'lucide-react';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
 
