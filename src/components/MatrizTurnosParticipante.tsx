@@ -20,7 +20,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
     const box = c as CajaCheck;
-    if (box.isEspecial === true || box.esEspecial === true || box.especial === true || box.tipo === 'especial') return true;
+    if (box.isEspecial === true || box.isEspecial === true || box.especial === true || box.tipo === 'especial') return true;
     if (typeof box.nombre === 'string') {
       const lowerName = box.nombre.toLowerCase();
       return lowerName.includes('especial') || lowerName.includes('vip');
