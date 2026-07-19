@@ -161,7 +161,7 @@ const AssignUserModal: React.FC<AssignUserModalProps> = ({
                      {nombresSimilares.slice(0, 3).map(n => <li key={n.id}>{n.nombre}</li>)}
                      {nombresSimilares.length > 3 && <li>...y {nombresSimilares.length - 3} más</li>}
                    </ul>
-                   <p className="text-xs text-yellow-800 mb-3 text-center opacity-80">¿Te dio pereza escribir el nombre completo, o de verdad es una persona nueva?</p>
+                   <p className="text-xs text-yellow-800 mb-3 text-center opacity-80">¿Te falto escribir el nombre completo, o de verdad es una persona nueva?</p>
                    <button
                      onClick={handleCreate}
                      className="w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 rounded-lg text-sm font-black transition shadow-sm"
