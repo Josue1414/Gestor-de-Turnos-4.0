@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize, Loader2 } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
@@ -16,6 +16,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
 }) => {
   const [localOverride, setLocalOverride] = useState<string | null | undefined>(undefined);
   const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const imagenUrl = localOverride !== undefined ? localOverride : croquisActual;
 
@@ -30,20 +31,30 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("La imagen no debe superar los 2MB.");
+      if (file.size > 5 * 1024 * 1024) {
+        alert("La imagen no debe superar los 5MB.");
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
+      
       setIsUploading(true);
       try {
         const previewUrl = URL.createObjectURL(file);
         setLocalOverride(previewUrl);
-        await onSaveCroquis(file);
+
+        // Agregamos un Timeout de 15 segundos para evitar que la pantalla se congele
+        const timeoutPromise = new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("Tiempo agotado por problemas de red o CORS")), 15000)
+        );
+
+        await Promise.race([onSaveCroquis(file), timeoutPromise]);
       } catch (error) {
+        console.error("Error al subir croquis:", error);
         setLocalOverride(undefined);
-        alert("Error al guardar el croquis.");
+        alert("Error al subir el croquis. Verifica los permisos CORS en Firebase o tu conexión a internet.");
       } finally {
         setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
     }
   };
@@ -52,10 +63,14 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     if (!confirm("¿Eliminar este croquis?")) return;
     setIsUploading(true);
     try {
-      await onSaveCroquis(null);
+      const timeoutPromise = new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("Tiempo agotado al intentar borrar")), 15000)
+      );
+      await Promise.race([onSaveCroquis(null), timeoutPromise]);
       setLocalOverride(null);
     } catch (error) {
-      alert("Error al eliminar");
+      console.error(error);
+      alert("Error al eliminar el croquis.");
     } finally {
       setIsUploading(false);
     }
@@ -112,8 +127,8 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
               {canEdit ? (
                 <label className="cursor-pointer mx-auto flex flex-col items-center justify-center w-full max-w-md h-72 border-4 border-dashed border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-400 rounded-3xl transition text-indigo-500 shadow-sm z-10 relative">
                   <Upload size={48} className="mb-4 text-indigo-400" />
-                  <span className="font-black text-xl text-indigo-700">Subir Croquis (Máx 2MB)</span>
-                  <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+                  <span className="font-black text-xl text-indigo-700">Subir Croquis (Máx 5MB)</span>
+                  <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleFileUpload} ref={fileInputRef} disabled={isUploading} />
                 </label>
               ) : (
                 <div className="flex flex-col items-center text-slate-400 bg-white p-10 rounded-3xl shadow-sm border border-slate-200 max-w-sm mx-auto z-10 relative">
