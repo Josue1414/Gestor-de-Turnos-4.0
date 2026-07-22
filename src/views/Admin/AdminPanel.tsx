@@ -72,8 +72,6 @@ const AdminPanel = () => {
   const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
 
   const statsActuales = calculateAdminStats(dias, participantesEnriquecidos as any);
-
-  // NUEVO: Cálculos de turnos libres y ocupados para mandar al Drawer
   const turnosLibresCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
 
@@ -272,12 +270,9 @@ const AdminPanel = () => {
   };
 
   const handleExportExcel = () => {
-    // Le pasamos currentAdminInfo como quinto parámetro
     exportToExcel(
       seccionName || 'Evento', 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dias as any, 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       participantesEnriquecidos as any, 
       statsActuales, 
       currentAdminInfo
@@ -309,60 +304,73 @@ const AdminPanel = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 px-0 py-2 sm:px-0 md:px-6 md:py-6 font-sans flex flex-col h-screen relative overflow-x-visible">
+    // EL CONTENEDOR MAESTRO: Maneja el scroll vertical general de toda la página para una experiencia fluida.
+    <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
       
-      <AdminHeader 
-        seccionName={seccionName} 
-        setSeccionName={setSeccionName} 
-        isEditingTitle={isEditingTitle} 
-        setIsEditingTitle={setIsEditingTitle} 
-        onOpenProfile={handleAbrirMiPerfil} 
-        onSave={handleSaveEventName} 
-        onShowCroquis={() => setShowCroquis(true)} 
-        onBack={isExternalViewer ? handleBack : undefined} 
-        onLogout={!isExternalViewer ? handleLogout : undefined} 
-        onShowDirectorio={() => setShowDirectorio(true)} 
-        participantesCount={participantesEnriquecidos.length} 
-        onToggleActions={() => setShowActions(prev => !prev)} 
-        showActions={showActions}
-        onCrearCajaEspecial={() => setShowSpecialModal(true)} 
-        onCrearCaja={handleCrearCaja} 
-        onCrearHorario={handleCrearHorario} 
-        onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
-        isSuperAdminViewing={isExternalViewer} 
-        adminInfo={currentAdminInfo} 
-        onExportExcel={handleExportExcel} 
-        stats={statsActuales}
-      />
-
-      <div className="flex gap-2 overflow-x-auto pb-2 shrink-0 mb-2 no-scrollbar">
-        {dias.map((dia, idx) => (
-          <button 
-            key={dia.id} 
-            onClick={() => setDiaActivo(idx)} 
-            className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}
-          >
-            <Calendar size={14} /> {dia.nombreDia}
-          </button>
-        ))}
+      {/* 1. HEADER ADMIN: Está anclado a la izquierda (left-0) para que no se mueva si deslizas horizontalmente,
+          pero fluirá hacia arriba cuando bajes en la página. */}
+      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-10 box-border">
+        <div className="w-full max-w-[1400px] mx-auto">
+          <AdminHeader 
+            seccionName={seccionName} 
+            setSeccionName={setSeccionName} 
+            isEditingTitle={isEditingTitle} 
+            setIsEditingTitle={setIsEditingTitle} 
+            onOpenProfile={handleAbrirMiPerfil} 
+            onSave={handleSaveEventName} 
+            onShowCroquis={() => setShowCroquis(true)} 
+            onBack={isExternalViewer ? handleBack : undefined} 
+            onLogout={!isExternalViewer ? handleLogout : undefined} 
+            onShowDirectorio={() => setShowDirectorio(true)} 
+            participantesCount={participantesEnriquecidos.length} 
+            onToggleActions={() => setShowActions(prev => !prev)} 
+            showActions={showActions}
+            onCrearCajaEspecial={() => setShowSpecialModal(true)} 
+            onCrearCaja={handleCrearCaja} 
+            onCrearHorario={handleCrearHorario} 
+            onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
+            isSuperAdminViewing={isExternalViewer} 
+            adminInfo={currentAdminInfo} 
+            onExportExcel={handleExportExcel} 
+            stats={statsActuales}
+          />
+        </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-none sm:rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-        <MatrizTurnos 
-          diaActual={diaActual} 
-          getParticipante={getParticipante} 
-          onAsignar={abrirModalAsignacion} 
-          onQuitar={quitarParticipante}
-          onCrearCaja={handleCrearCaja} 
-          onDeleteCaja={handleEliminarCaja} 
-          onDeleteHorario={handleEliminarHorario}
-          onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }}
-          onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
-          onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
-          onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
-        />
+      {/* 2. BARRA DE DÍAS: Tiene top-0 y left-0. Se queda en el techo de la pantalla cuando el Header desaparece, 
+          y tampoco se mueve hacia los lados. El único scroll es su interior (overflow-x-auto). */}
+      <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
+        <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full">
+          {dias.map((dia, idx) => (
+            <button 
+              key={dia.id} 
+              onClick={() => setDiaActivo(idx)} 
+              className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}
+            >
+              <Calendar size={14} /> {dia.nombreDia}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* 3. MATRIZ TURNOS: La tabla empujará este contenedor horizontalmente si es muy ancha (min-w-max). */}
+      <div className="px-2 sm:px-6 min-w-max pb-10 flex flex-col z-0">
+         <MatrizTurnos 
+            diaActual={diaActual} 
+            getParticipante={getParticipante} 
+            onAsignar={abrirModalAsignacion} 
+            onQuitar={quitarParticipante}
+            onCrearCaja={handleCrearCaja} 
+            onDeleteCaja={handleEliminarCaja} 
+            onDeleteHorario={handleEliminarHorario}
+            onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }}
+            onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
+            onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
+            onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
+          />
+      </div>
+
+      {/* --- MODALS --- */}
       <AssignUserModal 
         isOpen={modalAsignacion.isOpen} 
         onClose={cerrarModalAsignacion} 

@@ -7,15 +7,17 @@ import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
 import { guardarCroquis } from '../../utils/croquisService';
+import { exportToExcel } from '../../utils/exportExcel';
+import { calculateAdminStats } from '../../utils/statsCalculator'; // <-- IMPORTAMOS EL CEREBRO
 
 import { useSupervisorLogic } from '../../hooks/useSupervisorLogic';
 import type { AdminData } from '../../hooks/useSuperAdminLogic';
-import { useToast } from '../../components/ToastProvider';
 
 interface EventoExtended {
   nombre?: string;
   admins?: unknown[];
   diasPorAdmin?: Record<string, unknown[]>;
+  participantesPorAdmin?: Record<string, unknown[]>;
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
 }
@@ -41,11 +43,9 @@ const SupervisorPanel = () => {
   }, [navigate]);
   
   const { 
-    evento, loading, getAdminStats, handleAddAdmin, handleDeleteAdmin, 
+    evento, loading, handleAddAdmin, handleDeleteAdmin, 
     handleEditAccess, handleSaveProfile, handleSaveGlobalStructure 
   } = useSupervisorLogic(eventoId);
-
-  const { showToast } = useToast();
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, adminId: '', adminName: '' });
   const [structureModal, setStructureModal] = useState(false);
@@ -91,14 +91,12 @@ const SupervisorPanel = () => {
 
   const croquisDataParaMostrar: CroquisItem[] = [];
   
-  // Siempre agregamos primero el croquis general
   croquisDataParaMostrar.push({
     id: 'general',
     title: "Croquis General del Evento",
     url: eventoExt?.croquisUrl || null
   });
 
-  // Si abrieron el croquis desde la tarjeta de un Admin, agregamos el suyo como segunda opción
   if (croquisModal.adminId) {
     croquisDataParaMostrar.push({
       id: croquisModal.adminId,
@@ -138,14 +136,25 @@ const SupervisorPanel = () => {
         {eventoExt?.admins && eventoExt.admins.length > 0 ? (
           eventoExt.admins.map((adminRaw) => {
             const admin = adminRaw as AdminData;
+            
+            // LÓGICA CONECTADA AL CEREBRO CENTRAL
+            const adminDias = (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
+            const adminParticipantes = (eventoExt?.participantesPorAdmin?.[admin.id] || []) as any[];
+            const statsObj = calculateAdminStats(adminDias, adminParticipantes);
+
+            const handleExport = () => {
+              const adminInfo = { name: admin.name, org: admin.org || 'Sin Organización' };
+              exportToExcel(eventoExt?.nombre || 'Evento', adminDias, adminParticipantes, statsObj, adminInfo);
+            };
+
             return (
               <AdminFiche 
                 key={admin.id} 
                 data={admin} 
-                stats={getAdminStats(admin.id)} 
+                stats={statsObj} 
                 onView={() => handleVerAdmin(admin.id)} 
                 onOpenSettings={() => setSettingsFlow({ isOpen: true, admin: admin })} 
-                onDownload={() => showToast('El Supervisor visualiza y descarga la info dentro del panel del Admin.', 'info')} 
+                onDownload={handleExport}
                 onDelete={() => setDeleteModal({ isOpen: true, adminId: admin.id, adminName: admin.name })} 
                 onOpenCroquisAdmin={(id) => setCroquisModal({ isOpen: true, adminId: id })}
               />

@@ -11,9 +11,9 @@ const StatBadge = ({ label, value, colorClass }: { label: string, value: string 
 
 interface AdminFicheProps {
   data: AdminData;
-  stats: { cajas: number, horarios: number, totales: number, disponibles: number, participantes: number };
+  stats: { cajas: number, horarios: number, totales: number, disponibles: number, participantes: number, inactivos?: number };
   onOpenSettings: (data: AdminData) => void;
-  onDownload: (id: string) => void;
+  onDownload: () => void; 
   onView: (id: string) => void;
   onDelete: (id: string, name: string) => void;
   onOpenCroquisAdmin?: (id: string) => void;
@@ -44,7 +44,6 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
             </div>
           </div>
 
-          {/* AQUÍ MOVIMOS EL BOTÓN PARA QUE ESTÉ SIEMPRE VISIBLE */}
           <div className="flex gap-1.5 shrink-0">
             {onOpenCroquisAdmin && (
               <button
@@ -97,7 +96,8 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
             <StatBadge label="Turnos" value={stats.totales} colorClass="text-indigo-600" />
             <StatBadge label="Disp." value={stats.disponibles} colorClass="text-emerald-500" />
             <StatBadge label="Participantes" value={stats.participantes} colorClass="text-slate-700" />
-            <StatBadge label="Inactivos" value={0} colorClass="text-slate-300" />
+            {/* LÓGICA DE INACTIVOS APLICADA AQUÍ */}
+            <StatBadge label="Inactivos" value={stats.inactivos || 0} colorClass="text-red-500" />
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -108,11 +108,11 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
               <Eye size={14} /> Ver
             </button>
             <button
-              onClick={() => onDownload(data.id)}
-              className="flex-1 py-1.5 px-3 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 transition flex items-center justify-center gap-1 shadow-sm"
-              title="Descargar tabla del admin"
+              onClick={onDownload}
+              className="flex-1 py-1.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition flex items-center justify-center gap-1 shadow-sm text-[11px] font-bold uppercase"
+              title="Descargar Excel del área"
             >
-              <Download size={14} /> Descargar
+              <Download size={14} /> Excel
             </button>
           </div>
         </div>
@@ -130,11 +130,11 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
               <Eye size={14} /> Ver
             </button>
             <button
-              onClick={() => onDownload(data.id)}
-              className="flex-1 py-1.5 px-3 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 transition shadow-sm flex items-center justify-center gap-1"
-              title="Descargar tabla del admin"
+              onClick={onDownload}
+              className="flex-1 py-1.5 px-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg hover:bg-emerald-100 transition shadow-sm flex items-center justify-center gap-1 text-[11px] font-bold uppercase"
+              title="Descargar Excel del área"
             >
-              <Download size={14} /> Descargar
+              <Download size={14} /> Excel
             </button>
           </div>
         </div>

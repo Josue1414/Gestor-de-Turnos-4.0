@@ -11,7 +11,6 @@ import EditEventModal from '../../components/EditEventModal';
 import EventoSection from '../../components/EventoSection';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
-import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
@@ -46,7 +45,6 @@ const SuperAdminPanel = () => {
     eventos, showNewEvent, setShowNewEvent,
     nuevoEventoForm, setNuevoEventoForm, handleCrearEvento,
     croquisModalState, setCroquisModalState,
-    downloadModalState, setDownloadModalState,
     handleGuardarAjustesAdmin, handleUpdateAdminAccess,
     baseStructureModalState, setBaseStructureModalState,
     estructuraGuardada, setEstructuraGuardada,
@@ -68,7 +66,6 @@ const SuperAdminPanel = () => {
     navigate('/');
   };
 
-  // PREPARAR LOS DATOS DE CROQUIS PARA EL MODAL (General primero, luego el individual si aplica)
   const activeEvent = eventos.find(e => e.id === croquisModalState.eventoId) as EventoExtended | undefined;
   const croquisDataParaMostrar: CroquisItem[] = [];
 
@@ -215,7 +212,6 @@ const SuperAdminPanel = () => {
             isDefaultExpanded={false} 
             onDeleteEvent={(id: string, name: string) => setDeleteModalState({ isOpen: true, type: 'evento', eventoId: id, targetId: id, targetName: name })}
             onOpenSettings={(admin) => setSettingsFlow({isOpen: true, eventoId: evento.id, admin})}
-            onDownload={(id: string) => setDownloadModalState({ isOpen: true, adminId: id })}
             onView={(adminId: string) => handleVerAdmin(evento.id, adminId)}
             onDeleteAdmin={(eventoId: string, adminId: string, adminName: string) => setDeleteModalState({ isOpen: true, type: 'admin', eventoId, targetId: adminId, targetName: adminName })}
             onAddAdmin={handleAddAdmin}
@@ -238,7 +234,6 @@ const SuperAdminPanel = () => {
         onSaveAccess={handleUpdateAdminAccess}
       />
 
-      {/* MODAL CORREGIDO: Propiedades actualizadas para recibir el Array de croquis */}
       <CroquisModal 
         isOpen={croquisModalState.isOpen} 
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
@@ -249,16 +244,6 @@ const SuperAdminPanel = () => {
             await guardarCroquis(croquisModalState.eventoId, id === 'general' ? null : id, file);
           }
         }}
-      />
-      
-      <DownloadScheduleModal 
-        isOpen={downloadModalState.isOpen} 
-        onClose={() => setDownloadModalState({ isOpen: false })} 
-        type="general" 
-        seccionName="Tabla de Turnos" 
-        dias={[]} 
-        diaActivo={0} 
-        participantes={[]} 
       />
       
       <BaseStructureModal 
@@ -298,7 +283,6 @@ const SuperAdminPanel = () => {
         }}
       />
 
-      {/* ALERTA DE SALIDA SEGURA */}
       {showExitAlert && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95">

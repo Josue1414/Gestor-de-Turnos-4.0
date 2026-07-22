@@ -7,13 +7,14 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { checkGlobalIdAvailable } from '../utils/validations';
 import { useToast } from './ToastProvider';
+import { exportToExcel } from '../utils/exportExcel';
+import { calculateAdminStats } from '../utils/statsCalculator'; // <-- Importamos el cerebro central
 
 interface EventoSectionProps {
   evento: EventoData;
   isDefaultExpanded: boolean;
   onDeleteEvent: (id: string, name: string) => void;
   onOpenSettings: (data: AdminData) => void;
-  onDownload: (id: string) => void;
   onView: (id: string) => void;
   onDeleteAdmin: (eventoId: string, adminId: string, adminName: string) => void;
   onAddAdmin: (eventoId: string) => void;
@@ -24,10 +25,9 @@ interface EventoSectionProps {
 
 interface EventoConSupervisor { supervisor?: { usuario?: string; password?: string; }; }
 
-// Aquí se agregó onOpenCroquisAdmin en la desestructuración de las props
 const EventoSection: React.FC<EventoSectionProps> = ({ 
   evento, isDefaultExpanded, onDeleteEvent, onOpenSettings, 
-  onDownload, onView, onDeleteAdmin, onAddAdmin, onEditEvent, onOpenCroquis, onOpenCroquisAdmin
+  onView, onDeleteAdmin, onAddAdmin, onEditEvent, onOpenCroquis, onOpenCroquisAdmin
 }) => {
   const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const [page, setPage] = useState(1);
@@ -125,32 +125,29 @@ const EventoSection: React.FC<EventoSectionProps> = ({
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
               {currentItems.map((item: AdminData) => {
+                  // Extraemos datos
                   const adminDias = evento.diasPorAdmin?.[item.id] || [];
                   const adminParticipantes = evento.participantesPorAdmin?.[item.id] || [];
 
-                  let calcTotales = 0;
-                  let calcDisponibles = 0;
-                  const calcCajas = adminDias[0]?.cajas?.length || 0;
-                  const calcHorarios = adminDias[0]?.horariosMaestros?.length || 0;
-                  const calcParticipantesLength = adminParticipantes.length;
+                  // USAMOS LA FUNCIÓN GLOBAL PARA ESTADÍSTICAS PERFECTAS
+                  const statsObj = calculateAdminStats(adminDias as any, adminParticipantes as any);
 
-                  adminDias.forEach((dia) => {
-                    dia.cajas?.forEach((caja) => {
-                      calcTotales += caja.turnos?.length || 0;
-                      calcDisponibles += caja.turnos?.filter(t => t.participanteId === null || t.participanteId === '').length || 0;
-                    });
-                  });
+                  // Lógica para exportar Excel
+                  const handleExport = () => {
+                    const diasExport = adminDias as Parameters<typeof exportToExcel>[1];
+                    const partExport = adminParticipantes as Parameters<typeof exportToExcel>[2];
+                    const adminInfo = { name: item.name, org: item.org || 'Sin Organización' };
+                    
+                    exportToExcel(evento.nombre, diasExport, partExport, statsObj, adminInfo);
+                  };
 
                   return (
                     <AdminFiche 
                         key={item.id} 
                         data={item} 
-                        stats={{
-                          cajas: calcCajas, horarios: calcHorarios, totales: calcTotales,
-                          disponibles: calcDisponibles, participantes: calcParticipantesLength
-                        }}
+                        stats={statsObj} // ¡AQUÍ PASAMOS EL OBJETO COMPLETO!
                         onOpenSettings={onOpenSettings}
-                        onDownload={onDownload}
+                        onDownload={handleExport}
                         onView={onView} 
                         onDelete={(adminId: string, adminName: string) => onDeleteAdmin(evento.id, adminId, adminName)} 
                         onOpenCroquisAdmin={onOpenCroquisAdmin ? (adminId: string) => onOpenCroquisAdmin(evento.id, adminId) : undefined}

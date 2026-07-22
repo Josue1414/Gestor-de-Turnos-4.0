@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Star, Plus, Clock, ArrowRight, Trash2 } from 'lucide-react';
+import { X, Star, Plus, Clock, ArrowRight, Trash2, AlertCircle } from 'lucide-react';
 import TextInput from './TextInput';
 import TimeInput from './TimeInput';
 
@@ -14,45 +14,92 @@ interface TurnoEspecialConfig {
 interface SpecialBoxModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // Cambiamos la firma para pasar el nombre y la lista de turnos configurados
+  // Pasamos el nombre y la lista de turnos configurados al componente padre
   onCreate: (nombre: string, turnos: TurnoEspecialConfig[]) => void;
 }
 
 const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCreate }) => {
-  const [nombre, setNombre] = useState('Registro Especial');
-  // Iniciamos con un turno por defecto (09:00 - 11:30, por ejemplo)
+  const [nombre, setNombre] = useState('Caja Especial');
+  // Iniciamos con el turno por defecto solicitado: 08:00 - 12:00
   const [turnos, setTurnos] = useState<TurnoEspecialConfig[]>([
-    { id: 'initial_shift', inicio: "09:00", fin: "11:30" }
+    { id: 'initial_shift', inicio: "08:00", fin: "12:00" }
   ]);
+  
+  // Nuevo estado para mostrar alertas de validación al usuario
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // Función para agregar un nuevo bloque de tiempo vacío
+  // Función para agregar un nuevo bloque de tiempo (siempre de 8am a 12pm por defecto)
   const agregarTurno = () => {
-    setTurnos([...turnos, { id: `shift_${Date.now()}`, inicio: "12:00", fin: "14:00" }]);
+    setTurnos([...turnos, { id: `shift_${Date.now()}`, inicio: "08:00", fin: "12:00" }]);
+    setError(null); // Limpiamos errores al agregar
   };
 
   // Función para actualizar un horario específico
   const actualizarHorario = (id: string, campo: 'inicio' | 'fin', valor: string) => {
     setTurnos(turnos.map(t => t.id === id ? { ...t, [campo]: valor } : t));
+    setError(null); // Limpiamos errores si el usuario intenta corregir
   };
 
   // Función para eliminar un turno de la lista
   const eliminarTurno = (id: string) => {
     if (turnos.length > 1) { // Mínimo un turno
       setTurnos(turnos.filter(t => t.id !== id));
+      setError(null);
     }
   };
 
-  const handleCreate = () => {
-    if (nombre.trim() && turnos.length > 0) {
-      // Pasamos los datos configurados
-      onCreate(nombre.trim(), turnos);
-      // Reiniciamos para la próxima vez
-      setNombre('Registro Especial');
-      setTurnos([{ id: 'initial_shift', inicio: "09:00", fin: "11:30" }]);
-      onClose();
+  // --- MOTOR DE VALIDACIÓN ---
+  // Convierte "HH:mm" a minutos totales para facilitar la comparación matemática
+  const timeToMinutes = (time: string): number => {
+    const [h, m] = time.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const validarTurnos = (): string | null => {
+    for (let i = 0; i < turnos.length; i++) {
+      const inicioActual = timeToMinutes(turnos[i].inicio);
+      const finActual = timeToMinutes(turnos[i].fin);
+
+      // Regla 1: El inicio debe ser antes que el fin (Evita que pase de 11:59pm al día siguiente)
+      if (inicioActual >= finActual) {
+        return `El turno #${i + 1} es inválido. La hora de inicio debe ser menor a la hora de fin (máximo 11:59 PM).`;
+      }
+
+      // Regla 2: Anti-Empalmes. Comparamos este turno con todos los demás
+      for (let j = i + 1; j < turnos.length; j++) {
+        const inicioSiguiente = timeToMinutes(turnos[j].inicio);
+        const finSiguiente = timeToMinutes(turnos[j].fin);
+
+        // Fórmula matemática para detectar si dos rangos de tiempo se cruzan
+        if (Math.max(inicioActual, inicioSiguiente) < Math.min(finActual, finSiguiente)) {
+          return `Los turnos #${i + 1} y #${j + 1} se empalman. No se pueden repetir horas. Para eso, crea otra caja especial.`;
+        }
+      }
     }
+    return null; // Si todo está bien, no hay error
+  };
+
+  const handleCreate = () => {
+    if (!nombre.trim() || turnos.length === 0) return;
+
+    // Ejecutamos la validación
+    const errorEncontrado = validarTurnos();
+    
+    if (errorEncontrado) {
+      setError(errorEncontrado); // Detenemos la creación y mostramos el error
+      return;
+    }
+
+    // Si pasa la validación, procedemos a crear
+    onCreate(nombre.trim(), turnos);
+    
+    // Reiniciamos para la próxima vez
+    setNombre('Caja Especial');
+    setTurnos([{ id: 'initial_shift', inicio: "08:00", fin: "12:00" }]);
+    setError(null);
+    onClose();
   };
 
   return createPortal(
@@ -60,7 +107,7 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
       {/* Overlay con desenfoque */}
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full relative z-10 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
         {/* Cabecera con estilo "Especial" (Indigo/Yellow) */}
         <div className="p-5 bg-indigo-600 text-white flex justify-between items-center shrink-0">
           <h3 className="font-bold flex items-center gap-2 text-lg">
@@ -72,7 +119,16 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
         </div>
 
         {/* Cuerpo del Modal - Con scroll si hay muchos turnos */}
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto bg-slate-50/50">
+        <div className="p-6 space-y-6 overflow-y-auto bg-slate-50/50 flex-1">
+          
+          {/* Mostramos el error si la validación falla */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-sm font-bold flex items-start gap-2 animate-in slide-in-from-top-2">
+              <AlertCircle size={18} className="shrink-0 mt-0.5 text-red-500" />
+              <p>{error}</p>
+            </div>
+          )}
+
           {/* Identificador de la Caja */}
           <div>
             <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">
@@ -80,7 +136,10 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
             </label>
             <TextInput 
               value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+              onChange={(e) => {
+                setNombre(e.target.value);
+                setError(null);
+              }}
               onClear={() => setNombre('')}
               placeholder="Ej: Registro VIP / Turno Largo"
               variant="light"
@@ -92,11 +151,13 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <label className="block text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                <Clock size={14} /> Definir Ramillete de Horarios (Total: {turnos.length})
+                <Clock size={14} /> Horarios (Total: {turnos.length})
               </label>
+              
+              {/* AQUÍ CAMBIAMOS EL COLOR AL BOTÓN (MORADO) */}
               <button 
                 onClick={agregarTurno}
-                className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
+                className="text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
               >
                 <Plus size={14} /> Agregar Turno
               </button>
@@ -104,7 +165,7 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
             
             <div className="space-y-3">
               {turnos.map((turno, index) => (
-                <div key={turno.id} className="flex flex-col sm:flex-row items-center gap-2 bg-white p-3 sm:p-4 rounded-2xl border border-slate-100 shadow-sm relative group">
+                <div key={turno.id} className="flex flex-col sm:flex-row items-center gap-2 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm relative group">
                   {/* Botón para eliminar turno (oculto por defecto) */}
                   {turnos.length > 1 && (
                     <button 
@@ -147,7 +208,10 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
         {/* Pie del Modal */}
         <div className="p-4 bg-slate-50 flex gap-3 justify-end border-t border-slate-100 shrink-0">
           <button 
-            onClick={onClose} 
+            onClick={() => {
+              setError(null);
+              onClose();
+            }} 
             className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
           >
             Cancelar
@@ -157,7 +221,7 @@ const SpecialBoxModal: React.FC<SpecialBoxModalProps> = ({ isOpen, onClose, onCr
             disabled={!nombre.trim() || turnos.length === 0}
             className="px-6 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 flex items-center gap-2 transition-all disabled:bg-slate-300 disabled:shadow-none"
           >
-            <Plus size={18} /> Crear con Horarios Rebeldes
+            <Plus size={18} /> Crear Caja Especial
           </button>
         </div>
       </div>
