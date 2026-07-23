@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, MapIcon } from 'lucide-react';
+import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, MapIcon, Download } from 'lucide-react'; // Importamos Download
 import type { EventoData, AdminData } from '../hooks/useSuperAdminLogic';
 import AdminFiche from './AdminFiche';
 import SeccionSupervisor from './SeccionSupervisor';
@@ -7,8 +7,8 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { checkGlobalIdAvailable } from '../utils/validations';
 import { useToast } from './ToastProvider';
-import { exportToExcel } from '../utils/exportExcel';
-import { calculateAdminStats } from '../utils/statsCalculator'; // <-- Importamos el cerebro central
+import { exportToExcel, exportGlobalToExcel } from '../utils/exportExcel'; // Importamos ambas funciones
+import { calculateAdminStats } from '../utils/statsCalculator'; 
 
 interface EventoSectionProps {
   evento: EventoData;
@@ -60,6 +60,15 @@ const EventoSection: React.FC<EventoSectionProps> = ({
     }
   };
 
+  const handleExportGlobal = () => {
+    exportGlobalToExcel(
+      evento.nombre, 
+      evento.admins as any, 
+      evento.diasPorAdmin as any, 
+      evento.participantesPorAdmin as any
+    );
+  };
+
   return (
     <section className="bg-white border border-slate-300 shadow-sm rounded-2xl overflow-hidden transition-all duration-300">
       
@@ -98,6 +107,11 @@ const EventoSection: React.FC<EventoSectionProps> = ({
 
         <div className="flex flex-wrap gap-2 justify-end shrink-0 w-full lg:w-auto mt-2 lg:mt-0 pt-2 lg:pt-0 border-t border-slate-700 lg:border-none">
             
+            {/* BOTÓN DE EXCEL GLOBAL AQUI */}
+            <button onClick={(e) => { e.stopPropagation(); handleExportGlobal(); }} className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 p-2 sm:px-3 rounded-lg transition border border-emerald-500/30 flex items-center gap-1 text-xs font-bold" title="Descargar Excel Global del Evento">
+              <Download size={14} /> <span className="hidden sm:block">Excel Global</span>
+            </button>
+
             <button onClick={onOpenCroquis} className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 p-2 sm:px-3 rounded-lg transition border border-indigo-500/30 flex items-center gap-1 text-xs font-bold" title="Ver Croquis Base">
               <MapIcon size={14} /> <span className="hidden sm:block">Croquis</span>
             </button>
@@ -125,19 +139,14 @@ const EventoSection: React.FC<EventoSectionProps> = ({
           {evento.admins.length > 0 ? (
               <div className="flex flex-wrap gap-4 flex-1 items-start">
               {currentItems.map((item: AdminData) => {
-                  // Extraemos datos
                   const adminDias = evento.diasPorAdmin?.[item.id] || [];
                   const adminParticipantes = evento.participantesPorAdmin?.[item.id] || [];
-
-                  // USAMOS LA FUNCIÓN GLOBAL PARA ESTADÍSTICAS PERFECTAS
                   const statsObj = calculateAdminStats(adminDias as any, adminParticipantes as any);
 
-                  // Lógica para exportar Excel
                   const handleExport = () => {
                     const diasExport = adminDias as Parameters<typeof exportToExcel>[1];
                     const partExport = adminParticipantes as Parameters<typeof exportToExcel>[2];
                     const adminInfo = { name: item.name, org: item.org || 'Sin Organización' };
-                    
                     exportToExcel(evento.nombre, diasExport, partExport, statsObj, adminInfo);
                   };
 
@@ -145,7 +154,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
                     <AdminFiche 
                         key={item.id} 
                         data={item} 
-                        stats={statsObj} // ¡AQUÍ PASAMOS EL OBJETO COMPLETO!
+                        stats={statsObj} 
                         onOpenSettings={onOpenSettings}
                         onDownload={handleExport}
                         onView={onView} 

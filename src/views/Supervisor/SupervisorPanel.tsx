@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ShieldCheck, LogOut, Plus, Calendar, MapIcon } from 'lucide-react';
+import { ShieldCheck, LogOut, Plus, Calendar, MapIcon, Download } from 'lucide-react'; // Importamos Download
 import AdminFiche from '../../components/AdminFiche';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
 import { guardarCroquis } from '../../utils/croquisService';
-import { exportToExcel } from '../../utils/exportExcel';
-import { calculateAdminStats } from '../../utils/statsCalculator'; // <-- IMPORTAMOS EL CEREBRO
+import { exportToExcel, exportGlobalToExcel } from '../../utils/exportExcel'; // Importamos el Excel Global
+import { calculateAdminStats } from '../../utils/statsCalculator'; 
 
 import { useSupervisorLogic } from '../../hooks/useSupervisorLogic';
 import type { AdminData } from '../../hooks/useSuperAdminLogic';
@@ -78,6 +78,19 @@ const SupervisorPanel = () => {
     navigate('/');
   };
 
+  // Función manejadora para el Excel General
+  const handleExportGlobal = () => {
+    const eventoExtData = evento as EventoExtended;
+    if (eventoExtData) {
+      exportGlobalToExcel(
+        eventoExtData.nombre || 'Evento_General', 
+        eventoExtData.admins || [], 
+        (eventoExtData.diasPorAdmin || {}) as any, 
+        (eventoExtData.participantesPorAdmin || {}) as any
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -120,6 +133,12 @@ const SupervisorPanel = () => {
           <button onClick={() => setCroquisModal({isOpen: true, adminId: null})} className="flex-1 lg:flex-none bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition">
             <MapIcon size={16} /> Croquis Gral.
           </button>
+          
+          {/* BOTÓN EXCEL GENERAL */}
+          <button onClick={handleExportGlobal} className="flex-1 lg:flex-none bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm">
+            <Download size={16} /> Excel Global
+          </button>
+          
           <button onClick={() => setStructureModal(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition hover:bg-slate-700">
             <Calendar size={16} /> Añadir Día
           </button>
@@ -137,7 +156,6 @@ const SupervisorPanel = () => {
           eventoExt.admins.map((adminRaw) => {
             const admin = adminRaw as AdminData;
             
-            // LÓGICA CONECTADA AL CEREBRO CENTRAL
             const adminDias = (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
             const adminParticipantes = (eventoExt?.participantesPorAdmin?.[admin.id] || []) as any[];
             const statsObj = calculateAdminStats(adminDias, adminParticipantes);
