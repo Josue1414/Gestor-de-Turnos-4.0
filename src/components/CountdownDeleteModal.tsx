@@ -37,7 +37,8 @@ const CountdownDeleteModal: React.FC<CountdownDeleteModalProps> = ({ isOpen, onC
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    // CAMBIO AQUI: z-[300] a z-[99999] para garantizar que flote por encima de todo
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 text-center animate-in zoom-in-95 duration-200">
         

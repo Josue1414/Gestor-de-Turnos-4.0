@@ -1,11 +1,5 @@
-/**
- * RESUMEN: ModalInputHorario
- * Este componente muestra una ventana emergente (modal) para que el administrador
- * ingrese una hora de inicio y una hora de fin al crear un nuevo bloque de turno.
- * Valida la entrada y pre-carga la hora sugerida automáticamente.
- */
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Clock, Plus, ArrowRight } from 'lucide-react';
 
 interface ModalInputHorarioProps {
@@ -19,91 +13,85 @@ interface ModalInputHorarioProps {
 const ModalInputHorario: React.FC<ModalInputHorarioProps> = ({ 
   isOpen, onClose, defaultStart, defaultEnd, onConfirm 
 }) => {
-  const [inicio, setInicio] = useState(defaultStart);
-  const [fin, setFin] = useState(defaultEnd);
-  
-  // Estado auxiliar para saber si el modal acaba de abrirse
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [start, setStart] = useState(defaultStart);
+  const [end, setEnd] = useState(defaultEnd);
 
-  // SOLUCIÓN VERCEL: En lugar de useEffect, React recomienda actualizar 
-  // el estado directamente durante el renderizado si detectamos un cambio.
-  if (isOpen !== prevIsOpen) {
-    setPrevIsOpen(isOpen); // Actualizamos la memoria
+  useEffect(() => {
     if (isOpen) {
-      // Si se acaba de abrir, reiniciamos los valores sugeridos
-      setInicio(defaultStart);
-      setFin(defaultEnd);
+      setStart(defaultStart || '08:00');
+      setEnd(defaultEnd || '09:00');
     }
-  }
+  }, [isOpen, defaultStart, defaultEnd]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    if (!inicio || !fin) return;
-    onConfirm(inicio, fin);
+  const handleSubmit = () => {
+    if (!start || !end) return;
+    onConfirm(start, end);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full relative z-10 overflow-hidden animate-in zoom-in-95 duration-200">
         
-        {/* Cabecera */}
-        <div className="bg-indigo-600 p-5 flex justify-between items-center text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-xl">
-              <Clock size={20} className="text-indigo-50" />
-            </div>
-            <h2 className="text-lg font-black tracking-tight">Agregar Horario</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors">
+        {/* Cabecera Verde */}
+        <div className="p-4 bg-emerald-600 text-white flex justify-between items-center">
+          <h3 className="font-bold flex items-center gap-2">
+            <Clock size={18} /> Nuevo Horario
+          </h3>
+          <button onClick={onClose} className="text-emerald-200 hover:text-white transition">
             <X size={20} />
           </button>
         </div>
 
-        {/* Cuerpo con Inputs Centrados y Alineados */}
+        {/* Cuerpos de Inputs Nativo (Evita letras) */}
         <div className="p-6">
-          <p className="text-slate-500 text-sm font-bold mb-6 text-center">
-            Selecciona la hora de inicio y fin. El sistema validará que no se cruce con otros turnos.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-            <div className="flex flex-col w-full text-center">
-              <label className="text-xs font-black text-slate-400 uppercase mb-2 tracking-wider">Inicio</label>
-              <input
-                type="time"
-                value={inicio}
-                onChange={(e) => setInicio(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-center text-xl font-black text-slate-700 outline-none focus:border-indigo-500 transition-colors"
+          <div className="flex flex-col sm:flex-row items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <div className="w-full">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">
+                Inicio
+              </label>
+              <input 
+                type="time" 
+                value={start} 
+                onChange={e => setStart(e.target.value)} 
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-center outline-none focus:border-emerald-500 transition-colors cursor-pointer" 
               />
             </div>
-
-            <div className="text-slate-300 rotate-90 sm:rotate-0 flex-shrink-0">
-              <ArrowRight size={24} />
+            
+            <div className="text-slate-400 rotate-90 sm:rotate-0">
+              <ArrowRight size={20}/>
             </div>
-
-            <div className="flex flex-col w-full text-center">
-              <label className="text-xs font-black text-slate-400 uppercase mb-2 tracking-wider">Fin</label>
-              <input
-                type="time"
-                value={fin}
-                onChange={(e) => setFin(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-center text-xl font-black text-slate-700 outline-none focus:border-indigo-500 transition-colors"
+            
+            <div className="w-full">
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">
+                Fin
+              </label>
+              <input 
+                type="time" 
+                value={end} 
+                onChange={e => setEnd(e.target.value)} 
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-center outline-none focus:border-emerald-500 transition-colors cursor-pointer" 
               />
             </div>
           </div>
+          <p className="text-[10px] font-bold text-slate-400 mt-4 text-center leading-tight">
+            El horario se ajustará automáticamente a formato 12 horas en la tabla con colores indicadores.
+          </p>
         </div>
 
-        {/* Pie */}
-        <div className="p-4 bg-slate-50 flex gap-3 justify-end border-t border-slate-100">
-          <button onClick={onClose} className="px-5 py-2.5 text-slate-600 bg-white border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50 transition shadow-sm">
+        <div className="p-4 bg-slate-50 flex gap-2 justify-end border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition">
             Cancelar
           </button>
-          <button onClick={handleSave} className="px-6 py-2.5 text-white bg-indigo-600 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-md shadow-indigo-200 transition">
-            <Plus size={16} /> Crear Horario
+          <button onClick={handleSubmit} className="px-6 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition flex items-center gap-2">
+            <Plus size={16}/> Agregar Horario
           </button>
         </div>
+
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

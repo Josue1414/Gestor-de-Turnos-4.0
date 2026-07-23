@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom'; // Importamos createPortal
 import { Edit2, Trash2 } from 'lucide-react';
 import CountdownDeleteModal from './CountdownDeleteModal';
 
@@ -44,14 +45,17 @@ const ActionMenu: React.FC<ActionMenuProps> = ({
         </button>
       </div>
 
-      {/* El modal se queda encapsulado aquí, manteniendo el AdminPanel limpio */}
-      <CountdownDeleteModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={handleConfirmDelete}
-        title={tituloEliminar}
-        message={mensajeEliminar}
-      />
+      {/* PORTAL: Sacamos el modal de la jerarquía de la tabla y lo renderizamos en el body */}
+      {showDeleteModal && createPortal(
+        <CountdownDeleteModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleConfirmDelete}
+          title={tituloEliminar}
+          message={mensajeEliminar}
+        />,
+        document.body
+      )}
     </>
   );
 };

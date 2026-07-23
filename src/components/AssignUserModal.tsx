@@ -9,7 +9,7 @@ interface AssignUserModalProps {
   horario: string;
   cajaNombre: string;
   participantes: Participante[];
-  busyUserIds: string[]; // NUEVO: IDs de los que ya están trabajando a esta hora
+  busyUserIds: string[]; // IDs de los que ya están trabajando a esta hora
   onAssign: (participanteId: string) => void;
   onCreateAndAssign: (nombre: string) => void;
 }
@@ -20,14 +20,26 @@ const AssignUserModal: React.FC<AssignUserModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [errorConflicto, setErrorConflicto] = useState<string | null>(null);
 
-  // 1. Buscamos en TODOS los participantes (ya no filtramos por "Libre")
-  const resultadosBusqueda = participantes.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim())
-  );
+  const termLimpio = searchTerm.trim().toLowerCase();
+
+  // 1. Buscamos y ORDENAMOS (Disponibles primero, Ocupados al final)
+  const resultadosBusqueda = useMemo(() => {
+    return participantes
+      .filter(p => p.nombre.toLowerCase().includes(termLimpio))
+      .sort((a, b) => {
+        const aIsBusy = busyUserIds.includes(a.id);
+        const bIsBusy = busyUserIds.includes(b.id);
+        
+        // Si 'a' está ocupado y 'b' está libre, 'b' va primero
+        if (aIsBusy && !bIsBusy) return 1;
+        // Si 'a' está libre y 'b' está ocupado, 'a' va primero
+        if (!aIsBusy && bIsBusy) return -1;
+        // Si ambos tienen el mismo estado, los ordenamos alfabéticamente
+        return a.nombre.localeCompare(b.nombre);
+      });
+  }, [participantes, termLimpio, busyUserIds]);
 
   // 2. Lógica Anti-Duplicados y Anti-Pereza
-  const termLimpio = searchTerm.trim().toLowerCase();
-  
   // ¿Existe alguien exactamente igual?
   const usuarioYaExisteExacto = useMemo(() => {
     if (!termLimpio) return false;
@@ -63,6 +75,18 @@ const AssignUserModal: React.FC<AssignUserModalProps> = ({
     setSearchTerm(''); 
   };
 
+  // NUEVO: Escuchar la tecla Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Evita que el formulario haga submit (comportamiento por defecto)
+      
+      // Si el buscador no está vacío y el usuario NO existe, lo creamos
+      if (searchTerm.trim() !== '' && !usuarioYaExisteExacto) {
+        handleCreate();
+      }
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose}></div>
@@ -85,7 +109,11 @@ const AssignUserModal: React.FC<AssignUserModalProps> = ({
           <div className="relative">
             <Search size={18} className="absolute left-3 top-3 text-slate-400" />
             <input 
-              type="text" autoFocus value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              type="text" 
+              autoFocus 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={handleKeyDown} // Agregamos el evento del teclado aquí
               placeholder="Buscar o escribir nuevo nombre..."
               className="w-full bg-white border-2 border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-slate-700 focus:outline-none focus:border-blue-500 transition shadow-sm"
             />

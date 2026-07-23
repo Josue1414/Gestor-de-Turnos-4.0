@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Calendar, Clock, Inbox, AlertCircle, LayoutGrid } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Trash2, Calendar, Clock, Inbox, AlertCircle, LayoutGrid, ArrowRight } from 'lucide-react';
 
 interface BaseStructureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // TypeScript satisfecho:
   onSave: (estructura: { dias: string[], horarios?: string[], cajas?: string[] }) => void;
   isSupervisor?: boolean;  
   existingDays?: string[]; 
@@ -16,11 +15,40 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
   const [cajas, setCajas] = useState<string[]>([]);
 
   const [nuevoDia, setNuevoDia] = useState('');
-  const [nuevaCaja, setNuevaCaja] = useState('');
+  const [nuevaCaja, setNuevaCaja] = useState('Caja 1'); // Empezamos sugiriendo la 1
   
-  // NUEVO: Estado simplificado para el input de horarios
-  const [nuevoHorarioTexto, setNuevoHorarioTexto] = useState('');
+  // Controles Nativos de Hora
+  const [nuevoInicio, setNuevoInicio] = useState('08:00');
+  const [nuevoFin, setNuevoFin] = useState('09:00');
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // === MAGIA: Auto-Sugerir la próxima Caja (Caja 1, Caja 2, Caja 3) ===
+  useEffect(() => {
+    if (cajas.length === 0) {
+      setNuevaCaja('Caja 1');
+      return;
+    }
+    // Buscar el número más alto usado
+    let max = 0;
+    cajas.forEach(c => {
+      const match = c.match(/caja\s+(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1]);
+        if (num > max) max = num;
+      }
+    });
+    // Buscar huecos (si borraron la caja 2, sugerirla de nuevo)
+    for (let i = 1; i <= max; i++) {
+      const testName = `Caja ${i}`;
+      if (!cajas.includes(testName)) {
+        setNuevaCaja(testName);
+        return;
+      }
+    }
+    // Si no hay huecos, dar la siguiente al final
+    setNuevaCaja(`Caja ${max + 1}`);
+  }, [cajas]);
 
   if (!isOpen) return null;
 
@@ -38,22 +66,25 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     setNuevoDia('');
   };
 
-  // NUEVO: Lógica simplificada para agregar horarios
   const handleAddHorario = () => {
-    const val = nuevoHorarioTexto.trim();
-    if (!val) return setErrorMsg('Ingresa un horario válido (Ej. 08:00 - 09:00).');
-    if (horarios.includes(val)) return setErrorMsg('El horario ya existe.');
+    if (!nuevoInicio || !nuevoFin) return setErrorMsg('Selecciona las horas de inicio y fin.');
+    const val = `${nuevoInicio} - ${nuevoFin}`;
+    if (horarios.includes(val)) return setErrorMsg('Este horario ya existe.');
     
-    // Lo guardamos tal cual lo escribe el SuperAdmin y lo ordenamos
     setHorarios([...horarios, val].sort());
-    setNuevoHorarioTexto('');
+    
+    // MAGIA: Auto-preparar el siguiente bloque de hora (ej: 09:00 -> 10:00)
+    setNuevoInicio(nuevoFin);
+    const [h, m] = nuevoFin.split(':').map(Number);
+    const nextH = (h + 1 < 24 ? h + 1 : 0).toString().padStart(2, '0');
+    setNuevoFin(`${nextH}:${m.toString().padStart(2, '0')}`);
   };
 
   const handleAddCaja = () => {
     if (!nuevaCaja.trim()) return setErrorMsg('Ingresa un nombre para la caja.');
-    if (cajas.includes(nuevaCaja.trim())) return setErrorMsg('La caja ya existe.');
+    if (cajas.includes(nuevaCaja.trim())) return setErrorMsg('Esta caja ya existe.');
     setCajas([...cajas, nuevaCaja.trim()]);
-    setNuevaCaja('');
+    // Nota: El useEffect se encargará de actualizar el input "nuevaCaja" automáticamente
   };
 
   const handleSave = () => {
@@ -61,12 +92,12 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
       if (dias.length === 0) return setErrorMsg('Debes agregar al menos 1 Día para guardar.');
     } else {
       if (dias.length === 0 || horarios.length === 0 || cajas.length === 0) {
-        return setErrorMsg('Debes agregar al menos 1 Día, 1 Horario y 1 Caja para guardar.');
+        return setErrorMsg('Debes agregar al menos 1 Día, 1 Horario y 1 Caja para crear la estructura.');
       }
     }
     onSave({ dias, horarios, cajas });
     setDias([]); setHorarios([]); setCajas([]);
-    setNuevoHorarioTexto('');
+    setNuevoInicio('08:00'); setNuevoFin('09:00');
     onClose();
   };
 
@@ -95,7 +126,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
               Días Nuevos ({dias.length})
             </h4>
             <div className="flex gap-2 mb-4">
-              <input type="date" value={nuevoDia} onChange={(e) => setNuevoDia(e.target.value)} className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" />
+              <input type="date" value={nuevoDia} onChange={(e) => setNuevoDia(e.target.value)} className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-blue-500 transition-all cursor-pointer" />
               <button onClick={handleAddDia} className="bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm hover:-translate-y-0.5"><Plus size={20} /></button>
             </div>
             <div className="space-y-2 flex-1 overflow-y-auto pr-1">
@@ -135,7 +166,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
                   Cajas ({cajas.length})
                 </h4>
                 <div className="flex gap-2 mb-4">
-                  <input type="text" placeholder="Nombre de la Caja" value={nuevaCaja} onChange={(e) => setNuevaCaja(e.target.value)} className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" />
+                  <input type="text" placeholder="Ej. Caja 1" value={nuevaCaja} onChange={(e) => setNuevaCaja(e.target.value)} className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-indigo-500 transition-all" />
                   <button onClick={handleAddCaja} className="bg-indigo-600 text-white p-2.5 rounded-xl hover:bg-indigo-700 transition shadow-sm hover:-translate-y-0.5"><Plus size={20} /></button>
                 </div>
                 <div className="space-y-2 flex-1 overflow-y-auto pr-1">
@@ -149,67 +180,38 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
                 </div>
               </div>
 
-              {/* COLUMNA HORARIOS ACTUALIZADA (MODO ETIQUETAS Y COLOR) */}
+              {/* COLUMNA HORARIOS NATIVOS */}
               <div className="bg-slate-50 border border-slate-100 p-4 sm:p-5 rounded-2xl flex flex-col shadow-sm">
                 <h4 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-4">
                   <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-600"><Clock size={18}/></div>
                   Horarios ({horarios.length})
                 </h4>
                 
-                {/* Nuevo Input Simple */}
-                <div className="flex gap-2 mb-4">
-                  <input 
-                    type="text" 
-                    placeholder="Ej. 08:00 - 09:00" 
-                    value={nuevoHorarioTexto} 
-                    onChange={(e) => setNuevoHorarioTexto(e.target.value)} 
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddHorario();
-                      }
-                    }}
-                    className="flex-1 p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all" 
-                  />
-                  <button onClick={handleAddHorario} className="bg-emerald-600 text-white p-2.5 rounded-xl hover:bg-emerald-700 transition shadow-sm hover:-translate-y-0.5">
-                    <Plus size={20} />
+                <div className="flex flex-col gap-2 mb-4 bg-white p-3 border border-slate-200 rounded-xl shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <input type="time" value={nuevoInicio} onChange={(e) => setNuevoInicio(e.target.value)} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs text-slate-700 outline-none focus:border-emerald-500 cursor-pointer" />
+                    <ArrowRight size={14} className="text-slate-400 shrink-0"/>
+                    <input type="time" value={nuevoFin} onChange={(e) => setNuevoFin(e.target.value)} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-xs text-slate-700 outline-none focus:border-emerald-500 cursor-pointer" />
+                  </div>
+                  <button onClick={handleAddHorario} className="w-full mt-1 bg-emerald-600 text-white p-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition flex items-center justify-center gap-1 shadow-sm">
+                    <Plus size={14} /> Agregar
                   </button>
                 </div>
 
-                {/* Renderizado de Etiquetas Estilo Admin */}
                 <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
-                  {horarios.length === 0 && (
-                    <p className="w-full text-xs text-slate-400 font-medium text-center py-4 border-2 border-dashed border-slate-200 rounded-xl">
-                      No hay horarios agregados
-                    </p>
-                  )}
+                  {horarios.length === 0 && <p className="w-full text-xs text-slate-400 font-medium text-center py-4 border-2 border-dashed border-slate-200 rounded-xl">No hay horarios agregados</p>}
                   {horarios.map((h, i) => {
-                    // Minisimulador de color de tiempo
                     const hourStr = h.split(/[-a]/i)[0]?.trim() || h;
                     let isPM = false;
                     const hourNum = parseInt(hourStr.split(':')[0], 10);
-                    
-                    if (hourStr.toUpperCase().includes('PM')) {
-                      isPM = true;
-                    } else if (hourStr.toUpperCase().includes('AM')) {
-                      isPM = false;
-                    } else {
-                      if (hourNum >= 12 && hourNum < 24) isPM = true;
-                    }
+                    if (hourStr.toUpperCase().includes('PM')) isPM = true;
+                    else if (hourStr.toUpperCase().includes('AM')) isPM = false;
+                    else if (hourNum >= 12 && hourNum < 24) isPM = true;
 
                     return (
-                      <div 
-                        key={i} 
-                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all
-                          ${isPM ? 'bg-blue-900 text-white border border-blue-800' : 'bg-blue-500 text-white border border-blue-400'}`}
-                      >
+                      <div key={i} className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all ${isPM ? 'bg-blue-900 text-white border border-blue-800' : 'bg-blue-500 text-white border border-blue-400'}`}>
                         <span>{h}</span>
-                        <button 
-                          onClick={() => setHorarios(horarios.filter((_, idx) => idx !== i))} 
-                          className="opacity-60 hover:opacity-100 hover:text-red-300 transition-colors p-0.5"
-                        >
-                          <X size={14}/>
-                        </button>
+                        <button onClick={() => setHorarios(horarios.filter((_, idx) => idx !== i))} className="opacity-60 hover:opacity-100 hover:text-red-300 transition-colors p-0.5"><X size={14}/></button>
                       </div>
                     );
                   })}

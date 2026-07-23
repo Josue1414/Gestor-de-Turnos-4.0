@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { X, Download, Image as ImageIcon, Loader2, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ClipboardList } from 'lucide-react';
+import { X, Download, Image as ImageIcon, Loader2, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ClipboardList, Star } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 // --- INTERFACES ESTRICTAS ---
@@ -14,6 +14,9 @@ interface Caja {
   id: string; 
   nombre: string; 
   turnos: Turno[] | Record<string, Turno>; 
+  isEspecial?: boolean;
+  especial?: boolean;
+  tipo?: string;
 }
 interface Dia { 
   id: string; 
@@ -37,12 +40,33 @@ interface DownloadScheduleModalProps {
   targetUserId?: string | null; 
 }
 
-// Helper tipado para unir cajas normales y especiales
-const getTodasLasCajas = (dia: Dia | null): Caja[] => {
+// Helpers para separar cajas
+const checkIsEspecial = (c: any): boolean => {
+    if (!c || typeof c !== 'object') return false;
+    if (c.isEspecial === true || c.especial === true || c.tipo === 'especial') return true;
+    if (typeof c.nombre === 'string') {
+        const lowerName = c.nombre.toLowerCase();
+        return lowerName.includes('especial') || lowerName.includes('vip');
+    }
+    return false;
+};
+
+const getCajasNormales = (dia: Dia | null): Caja[] => {
     if (!dia) return [];
     const cajas = Array.isArray(dia.cajas) ? dia.cajas : (dia.cajas ? (Object.values(dia.cajas) as Caja[]) : []);
-    const especiales = Array.isArray(dia.cajasEspeciales) ? dia.cajasEspeciales : (dia.cajasEspeciales ? (Object.values(dia.cajasEspeciales) as Caja[]) : []);
-    return [...cajas, ...especiales];
+    return cajas.filter(c => !checkIsEspecial(c));
+};
+
+const getCajasEspeciales = (dia: Dia | null): Caja[] => {
+    if (!dia) return [];
+    const cajasNormales = Array.isArray(dia.cajas) ? dia.cajas : (dia.cajas ? (Object.values(dia.cajas) as Caja[]) : []);
+    const especialesEnCajas = cajasNormales.filter(c => checkIsEspecial(c));
+    const especialesDedicadas = Array.isArray(dia.cajasEspeciales) ? dia.cajasEspeciales : (dia.cajasEspeciales ? (Object.values(dia.cajasEspeciales) as Caja[]) : []);
+    return [...especialesEnCajas, ...especialesDedicadas];
+};
+
+const getTodasLasCajas = (dia: Dia | null): Caja[] => {
+    return [...getCajasNormales(dia), ...getCajasEspeciales(dia)];
 };
 
 // --- EL NUEVO MOTOR UNIVERSAL DE TIEMPO (Colores Individuales) ---
@@ -164,19 +188,28 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
   const participantName = type === 'personal' && targetUserId 
     ? participantes?.find(p => p.id === targetUserId)?.nombre || 'Participante' : '';
 
-  // Extraer cajas y ordenar para Vista Admin
-  const todasLasCajasAdmin = getTodasLasCajas(diaActual);
-  const horariosMap = new Map<string, number>();
-  todasLasCajasAdmin.forEach((caja: Caja) => {
+  // --- LÓGICA VISTA ADMIN (SEPARADA Y PAGINADA) ---
+  const cajasNormales = getCajasNormales(diaActual);
+  const cajasEspeciales = getCajasEspeciales(diaActual);
+
+  // Dividir las cajas normales en grupos de máximo 7
+  const MAX_CAJAS_PER_TABLE = 7;
+  const cajasChunks: Caja[][] = [];
+  for (let i = 0; i < cajasNormales.length; i += MAX_CAJAS_PER_TABLE) {
+      cajasChunks.push(cajasNormales.slice(i, i + MAX_CAJAS_PER_TABLE));
+  }
+
+  // Extraer horarios ÚNICAMENTE de las cajas NORMALES
+  const horariosNormalesMap = new Map<string, number>();
+  cajasNormales.forEach((caja: Caja) => {
       const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
       turnosArr.forEach((t: Turno) => {
-          if (!horariosMap.has(t.horario)) {
-              horariosMap.set(t.horario, parseTimeUniversal(t.horario).minutes);
+          if (!horariosNormalesMap.has(t.horario)) {
+              horariosNormalesMap.set(t.horario, parseTimeUniversal(t.horario).minutes);
           }
       });
   });
-  
-  const horariosUnicosOrdenados = Array.from(horariosMap.keys()).sort((a, b) => horariosMap.get(a)! - horariosMap.get(b)!);
+  const horariosNormalesOrdenados = Array.from(horariosNormalesMap.keys()).sort((a, b) => horariosNormalesMap.get(a)! - horariosNormalesMap.get(b)!);
 
   const getNombreParticipante = (id: string | null) => {
     if (!id) return '';
@@ -298,52 +331,124 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                 {/* VISTA GENERAL ADMIN */}
                 {type === 'general' && diaActual && (
                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                     {todasLasCajasAdmin.map((caja: Caja) => (
-                       <div key={caja.id} style={{ borderRadius: '16px', overflow: 'hidden', border: '2px solid #e2e8f0', backgroundColor: '#ffffff' }}>
-                         
-                         <div style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: '#0f172a', color: '#ffffff' }}>
-                           {caja.nombre}
+                     
+                     {/* TABLA DE CAJAS NORMALES PAGINADA EN GRUPOS DE 7 */}
+                     {cajasChunks.length > 0 && cajasChunks.map((chunkCajas, chunkIndex) => (
+                       <div key={`chunk-${chunkIndex}`} style={{ borderRadius: '16px', overflow: 'hidden', border: '2px solid #e2e8f0', backgroundColor: '#ffffff', marginBottom: chunkIndex < cajasChunks.length - 1 ? '24px' : '0' }}>
+                         <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${chunkCajas.length}, minmax(0, 1fr))`, backgroundColor: '#0f172a', color: '#ffffff' }}>
+                           <div style={{ padding: '12px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', borderRight: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                             Horario
+                           </div>
+                           {chunkCajas.map(caja => (
+                             <div key={caja.id} style={{ padding: '12px', fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', textAlign: 'center', borderRight: '1px solid #334155' }}>
+                               {caja.nombre}
+                             </div>
+                           ))}
                          </div>
                          
-                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1px', backgroundColor: '#e2e8f0' }}>
-                           {horariosUnicosOrdenados.map(hRaw => {
-                             const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
-                             const turno = turnosArr.find(t => t.horario === hRaw);
-                             const parsedTime = parseTimeUniversal(hRaw);
-                             
-                             // --- LÓGICA DE CELDA VACÍA CORREGIDA ---
-                             const rawName = turno?.participanteId ? getNombreParticipante(turno.participanteId) : '';
-                             const isRealmenteAsignado = rawName.trim() !== '' && rawName !== '---';
-                             const displayText = isRealmenteAsignado ? rawName : 'Disponible';
-                             const textColor = isRealmenteAsignado ? '#0f172a' : '#94a3b8'; // Gris oscuro para que se lea bien
-                             
-                             return (
-                               <div key={hRaw} style={{ padding: '16px', backgroundColor: '#ffffff' }}>
-                                 
-                                 {/* Rango de Tiempo con Colores Individuales */}
-                                 <div style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <span style={{ color: parsedTime.start.isPM ? COLOR_PM : COLOR_AM }}>
-                                       {parsedTime.start.text12h}
-                                    </span>
-                                    {parsedTime.isRange && parsedTime.end && (
-                                       <>
-                                          <span style={{ color: '#94a3b8' }}>-</span>
-                                          <span style={{ color: parsedTime.end.isPM ? COLOR_PM : COLOR_AM }}>
-                                             {parsedTime.end.text12h}
-                                          </span>
-                                       </>
-                                    )}
-                                 </div>
-
-                                 <p style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: '1.3', color: textColor, margin: 0, wordBreak: 'break-word' }}>
-                                   {displayText}
-                                 </p>
+                         {horariosNormalesOrdenados.map((hRaw, idx) => {
+                            const parsedTime = parseTimeUniversal(hRaw);
+                            return (
+                             <div key={hRaw} style={{ display: 'grid', gridTemplateColumns: `100px repeat(${chunkCajas.length}, minmax(0, 1fr))`, backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
+                               
+                               <div style={{ padding: '12px', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                 <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTime.start.isPM ? COLOR_PM : COLOR_AM }}>
+                                    {parsedTime.start.text12h}
+                                 </span>
+                                 {parsedTime.isRange && parsedTime.end && (
+                                   <>
+                                      <span style={{ color: '#94a3b8', fontSize: '10px', lineHeight: 1 }}>-</span>
+                                      <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTime.end.isPM ? COLOR_PM : COLOR_AM }}>
+                                         {parsedTime.end.text12h}
+                                      </span>
+                                   </>
+                                 )}
                                </div>
-                             );
-                           })}
-                         </div>
+
+                               {chunkCajas.map(caja => {
+                                 const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
+                                 const turno = turnosArr.find(t => t.horario === hRaw);
+                                 
+                                 const rawName = turno?.participanteId ? getNombreParticipante(turno.participanteId) : '';
+                                 const isRealmenteAsignado = rawName.trim() !== '' && rawName !== '---';
+                                 const displayText = isRealmenteAsignado ? rawName : 'Disponible';
+                                 
+                                 // COLOR VERDE (#16a34a) SI ESTÁ DISPONIBLE, NEGRO SI ESTÁ OCUPADO
+                                 const textColor = isRealmenteAsignado ? '#0f172a' : '#16a34a';
+                                 
+                                 return (
+                                   <div key={`${caja.id}-${hRaw}`} style={{ padding: '12px', borderRight: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                                      {turno ? (
+                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: textColor, wordBreak: 'break-word' }}>
+                                          {displayText}
+                                        </span>
+                                      ) : (
+                                        <span style={{ color: '#cbd5e1' }}>-</span>
+                                      )}
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           );
+                         })}
                        </div>
                      ))}
+
+                     {/* SECCIÓN DE CAJAS ESPECIALES AISLADA */}
+                     {cajasEspeciales.length > 0 && (
+                        <div style={{ marginTop: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                            <Star size={18} fill="#a855f7" color="#a855f7" />
+                            <h2 style={{ fontSize: '18px', fontWeight: 900, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+                              Cajas Especiales
+                            </h2>
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+                            {cajasEspeciales.map(caja => {
+                              const turnosEspecialesArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
+                              
+                              // Ordenamos los turnos de esta caja especial cronológicamente
+                              const turnosOrdenados = turnosEspecialesArr.sort((a, b) => parseTimeUniversal(a.horario).minutes - parseTimeUniversal(b.horario).minutes);
+
+                              return (
+                                <div key={caja.id} style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #e9d5ff', backgroundColor: '#faf5ff' }}>
+                                  <div style={{ padding: '10px 16px', backgroundColor: '#a855f7', color: '#ffffff', fontSize: '13px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {caja.nombre}
+                                  </div>
+                                  <div style={{ padding: '8px' }}>
+                                    {turnosOrdenados.length > 0 ? (
+                                      turnosOrdenados.map((turno, idx) => {
+                                        const parsedTime = parseTimeUniversal(turno.horario);
+                                        const rawName = turno.participanteId ? getNombreParticipante(turno.participanteId) : '';
+                                        const isAsignado = rawName.trim() !== '' && rawName !== '---';
+                                        
+                                        // COLOR VERDE (#16a34a) SI ESTÁ DISPONIBLE EN CAJA ESPECIAL TAMBIÉN
+                                        const textColor = isAsignado ? '#0f172a' : '#16a34a';
+
+                                        return (
+                                          <div key={turno.id} style={{ padding: '10px', borderBottom: idx < turnosOrdenados.length - 1 ? '1px solid #f3e8ff' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: '8px', marginBottom: idx < turnosOrdenados.length - 1 ? '8px' : '0' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 900, color: '#7e22ce' }}>
+                                              {turno.horario}
+                                            </div>
+                                            <div style={{ fontSize: '12px', fontWeight: 'bold', color: textColor, maxWidth: '60%', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                              {isAsignado ? rawName : 'Disponible'}
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <div style={{ padding: '16px', textAlign: 'center', color: '#d8b4fe', fontSize: '11px', fontWeight: 'bold' }}>
+                                        Sin turnos
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                     )}
                    </div>
                 )}
 

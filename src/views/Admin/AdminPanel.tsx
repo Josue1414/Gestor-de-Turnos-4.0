@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Calendar, ShieldCheck } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { DiaEvento, Participante } from '../../types';
@@ -60,8 +60,8 @@ const AdminPanel = () => {
     downloadModal, setDownloadModal, loading, 
     diaActual, participantesEnriquecidos, getParticipante,
     abrirModalAsignacion, cerrarModalAsignacion, asignarUsuarioExistente, crearYAsignarUsuario, quitarParticipante,
-    handleCrearCaja, handleCrearCajaEspecial, handleCrearHorario, handleEliminarCaja, handleEliminarHorario,
-    abrirEditor, handleSaveEdit, getBusyUserIdsForModal, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
+    handleCrearCaja, handleCrearCajaEspecial, handleEliminarCaja, handleEliminarHorario,
+    abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal
   } = useAdminLogic(eventoId || 'demo'); 
 
@@ -101,6 +101,135 @@ const AdminPanel = () => {
       }
     }).catch(err => console.error(err));
   }, [eventoId]);
+
+  // --- MOTOR MATEMÁTICO UNIVERSAL PARA CHOQUES ---
+  const parseTimeToMinutes = (t: string) => {
+    if (!t) return 0;
+    const clean = t.toUpperCase().replace(/ A /g, '-').trim();
+    const [hStr, mStr] = clean.split(':');
+    let h = parseInt(hStr.replace(/\D/g, '')) || 0;
+    const m = parseInt((mStr || '0').replace(/\D/g, '')) || 0;
+    if (clean.includes('PM') && h !== 12) h += 12;
+    if (clean.includes('AM') && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const checkChoque = (h1: string, h2: string) => {
+    try {
+      const r1 = h1.split('-');
+      const r2 = h2.split('-');
+      const i1 = parseTimeToMinutes(r1[0]);
+      const f1 = r1.length > 1 ? parseTimeToMinutes(r1[1]) : i1 + 59;
+      const i2 = parseTimeToMinutes(r2[0]);
+      const f2 = r2.length > 1 ? parseTimeToMinutes(r2[1]) : i2 + 59;
+      return i1 < f2 && i2 < f1;
+    } catch { return false; }
+  };
+
+  const localBusyUserIds = useMemo(() => {
+    if (!diaActual || !modalAsignacion.horario) return [];
+    const busy = new Set<string>();
+    const cajasArr = Array.isArray(diaActual.cajas) ? diaActual.cajas : Object.values(diaActual.cajas || {});
+
+    cajasArr.forEach((c: any) => {
+       const turnosArr = Array.isArray(c.turnos) ? c.turnos : Object.values(c.turnos || {});
+       turnosArr.forEach((t: any) => {
+          if (t.participanteId && checkChoque(t.horario, modalAsignacion.horario)) {
+             busy.add(String(t.participanteId).trim());
+          }
+       });
+    });
+    return Array.from(busy);
+  }, [diaActual, modalAsignacion.horario]);
+
+  // --- FUNCIÓN PARA AUTO-SUGERIR HORARIOS ---
+  const checkIsEspecial = (c: any): boolean => {
+    if (!c || typeof c !== 'object') return false;
+    if (c.isEspecial === true || c.especial === true || c.tipo === 'especial') return true;
+    if (typeof c.nombre === 'string') {
+      const lowerName = c.nombre.toLowerCase();
+      return lowerName.includes('especial') || lowerName.includes('vip');
+    }
+    return false;
+  };
+
+  const getSiguienteHorario = () => {
+    const cajasArr = Array.isArray(diaActual?.cajas) ? diaActual.cajas : Object.values(diaActual?.cajas || {});
+    const cajasNormales = cajasArr.filter(c => !checkIsEspecial(c));
+    const horariosSet = new Set<string>();
+    
+    cajasNormales.forEach((c: any) => {
+       const turnosArr = Array.isArray(c.turnos) ? c.turnos : Object.values(c.turnos || {});
+       turnosArr.forEach((t: any) => horariosSet.add(t.horario));
+    });
+    
+    const horarios = Array.from(horariosSet);
+    if (horarios.length === 0) return { defaultStart: '08:00', defaultEnd: '09:00' };
+
+    horarios.sort((a, b) => parseTimeToMinutes(a.split('-')[0]) - parseTimeToMinutes(b.split('-')[0]));
+
+    const lastHorario = horarios[horarios.length - 1]; 
+    const parts = lastHorario.split('-');
+    if (parts.length === 2) {
+       const startRaw = parts[1].trim();
+       const cleanStr = (s: string) => {
+          let [h, m] = s.replace(/[^\d:]/g, '').split(':').map(Number);
+          if (s.toLowerCase().includes('pm') && h !== 12) h += 12;
+          if (s.toLowerCase().includes('am') && h === 12) h = 0;
+          return `${(h||0).toString().padStart(2, '0')}:${(m||0).toString().padStart(2, '0')}`;
+       }
+       const nextStart = cleanStr(startRaw);
+       const [h, m] = nextStart.split(':').map(Number);
+       const nextH = (h + 1 < 24 ? h + 1 : 0).toString().padStart(2, '0');
+       const nextEnd = `${nextH}:${m.toString().padStart(2, '0')}`;
+       
+       return { defaultStart: nextStart, defaultEnd: nextEnd };
+    }
+    return { defaultStart: '08:00', defaultEnd: '09:00' };
+  };
+
+  const handleValidarCrearHorario = (inicio: string, fin: string) => {
+    // 1. Validar que la hora de fin sea estrictamente mayor que la de inicio
+    // y que no cruce la medianoche (cambio de día)
+    const startMins = parseTimeToMinutes(inicio);
+    const endMins = parseTimeToMinutes(fin);
+
+    if (endMins <= startMins) {
+      alert("⚠️ Horario inválido: La hora de fin debe ser posterior a la hora de inicio. No se permiten horarios que crucen la medianoche hacia el día siguiente.");
+      return;
+    }
+
+    const nuevoHorarioStr = `${inicio} - ${fin}`;
+    const cajasArr = Array.isArray(diaActual?.cajas) ? diaActual.cajas : Object.values(diaActual?.cajas || {});
+    const cajasNormales = cajasArr.filter(c => !checkIsEspecial(c));
+    
+    let turnoCruzado = '';
+    // 2. Verificamos si existe choque matemático con los turnos normales existentes
+    const isDuplicateOrClash = cajasNormales.some((c: any) => {
+      const turnosArr = Array.isArray(c.turnos) ? c.turnos : Object.values(c.turnos || {});
+      return turnosArr.some((t: any) => {
+        if (checkChoque(t.horario, nuevoHorarioStr)) {
+          turnoCruzado = t.horario;
+          return true;
+        }
+        return false;
+      });
+    });
+
+    if (isDuplicateOrClash) {
+      // BLOQUEO ESTRICTO DE EMPALMES:
+      // Cerramos la ventana de creación de horario primero para no encimar los modales
+      if (setCreateShiftModal) setCreateShiftModal({ isOpen: false, defaultStart: '', defaultEnd: '' });
+      
+      // Activamos el modal reciclado de Choque de Horarios (Obliga a ver la alerta y crear una caja especial)
+      if (setClashModal) setClashModal({ isOpen: true, inicio, fin, turnoCruzado });
+      return; // El return interrumpe el proceso, impidiendo que el horario se guarde en la BD.
+    }
+
+    // 3. Si todo está correcto y no hay empalmes, se procede a guardar el horario
+    if (confirmarCrearHorario) confirmarCrearHorario(inicio, fin);
+    if (setCreateShiftModal) setCreateShiftModal({ isOpen: false, defaultStart: '', defaultEnd: '' });
+  };
 
   const handleConfirmDeleteParticipante = async () => {
     if (!eventoId || !deletePartModal.id) return;
@@ -304,11 +433,8 @@ const AdminPanel = () => {
   }
 
   return (
-    // EL CONTENEDOR MAESTRO: Maneja el scroll vertical general de toda la página para una experiencia fluida.
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
       
-      {/* 1. HEADER ADMIN: Está anclado a la izquierda (left-0) para que no se mueva si deslizas horizontalmente,
-          pero fluirá hacia arriba cuando bajes en la página. */}
       <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-10 box-border">
         <div className="w-full max-w-[1400px] mx-auto">
           <AdminHeader 
@@ -327,7 +453,14 @@ const AdminPanel = () => {
             showActions={showActions}
             onCrearCajaEspecial={() => setShowSpecialModal(true)} 
             onCrearCaja={handleCrearCaja} 
-            onCrearHorario={handleCrearHorario} 
+            
+            onCrearHorario={() => {
+              if (setCreateShiftModal) {
+                 const { defaultStart, defaultEnd } = getSiguienteHorario();
+                 setCreateShiftModal({ isOpen: true, defaultStart, defaultEnd });
+              }
+            }} 
+
             onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
             isSuperAdminViewing={isExternalViewer} 
             adminInfo={currentAdminInfo} 
@@ -337,8 +470,6 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* 2. BARRA DE DÍAS: Tiene top-0 y left-0. Se queda en el techo de la pantalla cuando el Header desaparece, 
-          y tampoco se mueve hacia los lados. El único scroll es su interior (overflow-x-auto). */}
       <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full">
           {dias.map((dia, idx) => (
@@ -353,8 +484,8 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* 3. MATRIZ TURNOS: La tabla empujará este contenedor horizontalmente si es muy ancha (min-w-max). */}
-      <div className="px-2 sm:px-6 min-w-max pb-10 flex flex-col z-0">
+      {/* REPARACIÓN VISUAL: overflow-visible para que no colapsen los encabezados sobre la primera fila */}
+      <div className="px-2 sm:px-6 min-w-max pb-10 flex flex-col z-0 overflow-visible bg-transparent rounded-none sm:rounded-2xl border-none sm:border border-transparent mb-0 sm:mb-4">
          <MatrizTurnos 
             diaActual={diaActual} 
             getParticipante={getParticipante} 
@@ -377,7 +508,7 @@ const AdminPanel = () => {
         horario={modalAsignacion.horario} 
         cajaNombre={modalAsignacion.cajaNombre} 
         participantes={participantesEnriquecidos} 
-        busyUserIds={getBusyUserIdsForModal()} 
+        busyUserIds={localBusyUserIds} 
         onAssign={asignarUsuarioExistente} 
         onCreateAndAssign={crearYAsignarUsuario} 
       />
@@ -453,15 +584,15 @@ const AdminPanel = () => {
         onClose={() => setCreateShiftModal && setCreateShiftModal({ ...createShiftModal, isOpen: false })} 
         defaultStart={createShiftModal?.defaultStart || '08:00'} 
         defaultEnd={createShiftModal?.defaultEnd || '09:00'} 
-        onConfirm={confirmarCrearHorario} 
+        onConfirm={handleValidarCrearHorario} 
       />
       
+      {/* UTILIZAMOS EL MODAL RECICLADO PARA BLOQUEAR EL CHOOQUE */}
       <ModalAlertaChoque 
         isOpen={clashModal?.isOpen || false} 
         onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} 
         horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`} 
         horarioCruzado={clashModal?.turnoCruzado || ''} 
-        onConfirm={() => confirmarCrearHorario(clashModal!.inicio, clashModal!.fin, true)} 
       />
       
       <CroquisModal 
