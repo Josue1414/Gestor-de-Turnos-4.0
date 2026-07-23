@@ -160,14 +160,14 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
             
         turnosArr.forEach((turno: Turno) => {
           if (String(turno.participanteId) === String(targetUserId)) {
-            const parsedTime = parseTimeUniversal(turno.horario);
+            const parsedTimeInfo = parseTimeUniversal(turno.horario);
             
             turnosAcumulados.push({ 
                 diaIndex,
                 dia: dia.nombreDia, 
                 caja: caja.nombre || 'Sin área', 
-                parsedTime,
-                sortValue: parsedTime.minutes
+                parsedTime: parsedTimeInfo,
+                sortValue: parsedTimeInfo.minutes
             });
           }
         });
@@ -347,19 +347,19 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                          </div>
                          
                          {horariosNormalesOrdenados.map((hRaw, idx) => {
-                            const parsedTime = parseTimeUniversal(hRaw);
+                            const parsedTimeInfo = parseTimeUniversal(hRaw); // Variable renombrada y utilizada
                             return (
                              <div key={hRaw} style={{ display: 'grid', gridTemplateColumns: `100px repeat(${chunkCajas.length}, minmax(0, 1fr))`, backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
                                
                                <div style={{ padding: '12px', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                 <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTime.start.isPM ? COLOR_PM : COLOR_AM }}>
-                                    {parsedTime.start.text12h}
+                                 <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTimeInfo.start.isPM ? COLOR_PM : COLOR_AM }}>
+                                    {parsedTimeInfo.start.text12h}
                                  </span>
-                                 {parsedTime.isRange && parsedTime.end && (
+                                 {parsedTimeInfo.isRange && parsedTimeInfo.end && (
                                    <>
                                       <span style={{ color: '#94a3b8', fontSize: '10px', lineHeight: 1 }}>-</span>
-                                      <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTime.end.isPM ? COLOR_PM : COLOR_AM }}>
-                                         {parsedTime.end.text12h}
+                                      <span style={{ fontSize: '11px', fontWeight: 900, color: parsedTimeInfo.end.isPM ? COLOR_PM : COLOR_AM }}>
+                                         {parsedTimeInfo.end.text12h}
                                       </span>
                                    </>
                                  )}
@@ -419,7 +419,7 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                                   <div style={{ padding: '8px' }}>
                                     {turnosOrdenados.length > 0 ? (
                                       turnosOrdenados.map((turno, idx) => {
-                                        const parsedTime = parseTimeUniversal(turno.horario);
+                                        
                                         const rawName = turno.participanteId ? getNombreParticipante(turno.participanteId) : '';
                                         const isAsignado = rawName.trim() !== '' && rawName !== '---';
                                         
