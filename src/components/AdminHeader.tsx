@@ -148,17 +148,17 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {onCrearCajaEspecial && (
               <button onClick={onCrearCajaEspecial} className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold text-[11px] transition shadow-sm border border-violet-200 min-w-[100px] justify-center">
-                <Plus size={14} /> Caja Especial
+                <Plus size={14} />Crear Caja Especial
               </button>
             )}
             {onCrearCaja && (
               <button onClick={onCrearCaja} className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-xl font-bold text-[11px] transition shadow-sm border border-slate-300 min-w-[100px] justify-center">
-                <Inbox size={14} /> Caja Normal
+                <Inbox size={14} />Crear Caja Normal
               </button>
             )}
             {onCrearHorario && (
               <button onClick={onCrearHorario} className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl font-bold text-[11px] transition shadow-sm border border-emerald-200 min-w-[100px] justify-center">
-                <Clock size={14} /> Horario
+                <Clock size={14} />Crear Horario
               </button>
             )}
             
