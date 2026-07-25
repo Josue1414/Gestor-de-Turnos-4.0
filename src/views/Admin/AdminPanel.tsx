@@ -44,7 +44,15 @@ interface AdminInDB {
   organization?: string; 
   organizationLabel?: string;
   supportArea?: string; 
+  permissions?: { cajas?: boolean; horarios?: boolean; especiales?: boolean }; // <-- TIPADO DE PERMISOS
   [key: string]: unknown;
+}
+
+// NUEVA INTERFAZ PARA EL ESTADO
+interface AdminPermissions {
+  cajas: boolean;
+  horarios: boolean;
+  especiales: boolean;
 }
 
 const AdminPanel = () => {
@@ -71,6 +79,13 @@ const AdminPanel = () => {
   const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string} | null>(null);
   const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
 
+  // NUEVO ESTADO: Guardará los permisos leídos desde Firebase
+  const [adminPerms, setAdminPerms] = useState<AdminPermissions>({
+    cajas: true,
+    horarios: true,
+    especiales: true
+  });
+
   const statsActuales = calculateAdminStats(dias, participantesEnriquecidos as any);
   const turnosLibresCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
@@ -90,6 +105,15 @@ const AdminPanel = () => {
             name: myAdmin.name || 'Administrador',
             org: myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada'
           });
+
+          // LECTURA DE PERMISOS DE FIREBASE
+          if (myAdmin.permissions) {
+             setAdminPerms({
+                cajas: myAdmin.permissions.cajas ?? true,
+                horarios: myAdmin.permissions.horarios ?? true,
+                especiales: myAdmin.permissions.especiales ?? true,
+             });
+          }
         }
 
         const listaCroquis: CroquisItem[] = [{ id: 'general', title: 'Croquis General del Evento', url: data.croquisUrl || null }];
@@ -101,6 +125,11 @@ const AdminPanel = () => {
       }
     }).catch(err => console.error(err));
   }, [eventoId]);
+
+  // REGLA DE ORO: Si es Supervisor o SuperAdmin (ExternalViewer), tiene TODO permitido
+  const permisosEfectivos = isExternalViewer 
+    ? { cajas: true, horarios: true, especiales: true } 
+    : adminPerms;
 
   // --- MOTOR MATEMÁTICO UNIVERSAL PARA CHOQUES ---
   const parseTimeToMinutes = (t: string) => {
@@ -189,8 +218,6 @@ const AdminPanel = () => {
   };
 
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
-    // 1. Validar que la hora de fin sea estrictamente mayor que la de inicio
-    // y que no cruce la medianoche (cambio de día)
     const startMins = parseTimeToMinutes(inicio);
     const endMins = parseTimeToMinutes(fin);
 
@@ -204,7 +231,6 @@ const AdminPanel = () => {
     const cajasNormales = cajasArr.filter(c => !checkIsEspecial(c));
     
     let turnoCruzado = '';
-    // 2. Verificamos si existe choque matemático con los turnos normales existentes
     const isDuplicateOrClash = cajasNormales.some((c: any) => {
       const turnosArr = Array.isArray(c.turnos) ? c.turnos : Object.values(c.turnos || {});
       return turnosArr.some((t: any) => {
@@ -217,16 +243,11 @@ const AdminPanel = () => {
     });
 
     if (isDuplicateOrClash) {
-      // BLOQUEO ESTRICTO DE EMPALMES:
-      // Cerramos la ventana de creación de horario primero para no encimar los modales
       if (setCreateShiftModal) setCreateShiftModal({ isOpen: false, defaultStart: '', defaultEnd: '' });
-      
-      // Activamos el modal reciclado de Choque de Horarios (Obliga a ver la alerta y crear una caja especial)
       if (setClashModal) setClashModal({ isOpen: true, inicio, fin, turnoCruzado });
-      return; // El return interrumpe el proceso, impidiendo que el horario se guarde en la BD.
+      return; 
     }
 
-    // 3. Si todo está correcto y no hay empalmes, se procede a guardar el horario
     if (confirmarCrearHorario) confirmarCrearHorario(inicio, fin);
     if (setCreateShiftModal) setCreateShiftModal({ isOpen: false, defaultStart: '', defaultEnd: '' });
   };
@@ -466,6 +487,7 @@ const AdminPanel = () => {
             adminInfo={currentAdminInfo} 
             onExportExcel={handleExportExcel} 
             stats={statsActuales}
+            adminPerms={permisosEfectivos} // <-- ENVIAMOS PERMISOS
           />
         </div>
       </div>
@@ -484,7 +506,6 @@ const AdminPanel = () => {
         </div>
       </div>
 
-      {/* REPARACIÓN VISUAL: overflow-visible para que no colapsen los encabezados sobre la primera fila */}
       <div className="px-2 sm:px-6 min-w-max pb-10 flex flex-col z-0 overflow-visible bg-transparent rounded-none sm:rounded-2xl border-none sm:border border-transparent mb-0 sm:mb-4">
          <MatrizTurnos 
             diaActual={diaActual} 
@@ -498,6 +519,7 @@ const AdminPanel = () => {
             onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
             onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
             onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
+            adminPerms={permisosEfectivos} // <-- ENVIAMOS PERMISOS
           />
       </div>
 
@@ -587,7 +609,6 @@ const AdminPanel = () => {
         onConfirm={handleValidarCrearHorario} 
       />
       
-      {/* UTILIZAMOS EL MODAL RECICLADO PARA BLOQUEAR EL CHOOQUE */}
       <ModalAlertaChoque 
         isOpen={clashModal?.isOpen || false} 
         onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} 

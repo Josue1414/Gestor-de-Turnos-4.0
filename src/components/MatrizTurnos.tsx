@@ -6,6 +6,13 @@ import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
 import CajasEspeciales from './CajasEspeciales';
 
+// NUEVA INTERFAZ: Permisos del administrador
+interface AdminPermissions {
+  cajas: boolean;
+  horarios: boolean;
+  especiales: boolean;
+}
+
 interface MatrizTurnosProps {
   diaActual: DiaEvento;
   getParticipante: (id: string | null) => Participante | undefined;
@@ -18,13 +25,16 @@ interface MatrizTurnosProps {
   onEditHorario: (horario: string) => void;
   onDeleteTurnoEspecial?: (cajaId: string, turnoId: string) => void;
   onEditTurnoEspecial?: (cajaId: string, turnoId: string) => void;
+  // NUEVA PROP: Recibe los permisos
+  adminPerms?: AdminPermissions;
 }
 
 interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; nombre?: unknown; }
 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
   diaActual, getParticipante, onAsignar, onQuitar,
-  onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial
+  onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial,
+  adminPerms // <-- Recibimos los permisos
 }) => {
 
   const checkIsEspecial = (c: unknown): boolean => {
@@ -109,6 +119,10 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         onQuitar={onQuitar} 
         onDeleteTurnoEspecial={onDeleteTurnoEspecial}
         onEditTurnoEspecial={onEditTurnoEspecial}
+        // Asumiendo que CajasEspeciales recibe adminPerms para ocultar sus propios menús de ActionMenu
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        adminPerms={adminPerms}
       />
 
       {cajasNormales.length > 0 ? (
@@ -139,9 +153,12 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                         {caja.nombre as string}
                       </span>
                       
-                      <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
-                        <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
-                      </div>
+                      {/* LÓGICA DE BLOQUEO: Solo renderiza si tiene permiso */}
+                      {adminPerms?.cajas !== false && (
+                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
+                          <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
+                        </div>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -155,9 +172,13 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                   <td className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 p-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-center justify-center gap-2 min-h-[50px]">
                       <div className="w-full">{formatHorarioVisual(horario)}</div>
-                      <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        <ActionMenu onEdit={() => onEditHorario(horario)} onDelete={() => onDeleteHorario(horario)} direccion="derecha" />
-                      </div>
+                      
+                      {/* LÓGICA DE BLOQUEO: Solo renderiza si tiene permiso */}
+                      {adminPerms?.horarios !== false && (
+                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <ActionMenu onEdit={() => onEditHorario(horario)} onDelete={() => onDeleteHorario(horario)} direccion="derecha" />
+                        </div>
+                      )}
                     </div>
                   </td>
                   
