@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useToast } from '../../components/ToastProvider';
@@ -109,17 +109,23 @@ const LoginScreen = () => {
   const { showToast } = useToast();
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
 
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
-        <div className="bg-slate-900 p-8 text-center flex flex-col items-center">
-          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-blue-400 border border-slate-700 shadow-inner mb-4">
-            <ShieldCheck size={36} />
-          </div>
-          <h1 className="text-2xl font-black text-white tracking-tighter uppercase">Gestor de Turnos</h1>
-          <p className="text-slate-400 text-xs font-bold tracking-widest uppercase mt-1">Acceso Interno</p>
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
+        
+        {/* CABECERA MODIFICADA: Fondo azul claro (bg-blue-50) y texto oscuro */}
+        <div className="bg-blue-100 p-8 text-center flex flex-col items-center border-b border-blue-100">
+          <img 
+            src="/logo-gestor-de-turnos.png" 
+            alt="Logo Gestor de Turnos" 
+            className="w-24 h-24 object-cover mb-4 rounded-3xl shadow-md border border-blue-200 bg-white" 
+          />
+          {/* Texto principal en un azul muy oscuro para buen contraste */}
+          <h1 className="text-2xl font-black text-blue-950 tracking-tighter uppercase">Gestor de Turnos</h1>
+          {/* Subtítulo en un azul intermedio */}
+          <p className="text-blue-700/80 text-xs font-bold tracking-widest uppercase mt-1">Acceso Interno</p>
         </div>
 
         <div className="p-8">
@@ -130,7 +136,7 @@ const LoginScreen = () => {
               </label>
               <input 
                 type="text" placeholder="Ej. admin-A3B9 o supervisor1" value={codigo} onChange={(e) => setCodigo(e.target.value)}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none font-bold text-sm text-slate-700 transition" 
               />
             </div>
 
@@ -141,7 +147,7 @@ const LoginScreen = () => {
               <div className="relative">
                 <input 
                   type={mostrarPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-400 outline-none font-bold text-sm text-slate-700" 
+                  className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none font-bold text-sm text-slate-700 transition" 
                 />
                 <button type="button" onClick={() => setMostrarPassword(!mostrarPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
                   {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
