@@ -8,7 +8,7 @@ import { exportToExcel } from '../../utils/exportExcel';
 import ModalInputHorario from '../../components/ModalInputHorario';
 import ModalAlertaChoque from '../../components/ModalAlertaChoque';
 import { useAdminLogic } from '../../hooks/useAdminLogic';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore'; // <-- AGREGADO getDoc AQUÍ
 import { db } from '../../firebase';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
@@ -44,11 +44,10 @@ interface AdminInDB {
   organization?: string; 
   organizationLabel?: string;
   supportArea?: string; 
-  permissions?: { cajas?: boolean; horarios?: boolean; especiales?: boolean }; // <-- TIPADO DE PERMISOS
+  permissions?: { cajas?: boolean; horarios?: boolean; especiales?: boolean }; 
   [key: string]: unknown;
 }
 
-// NUEVA INTERFAZ PARA EL ESTADO
 interface AdminPermissions {
   cajas: boolean;
   horarios: boolean;
@@ -79,11 +78,8 @@ const AdminPanel = () => {
   const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string} | null>(null);
   const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
 
-  // NUEVO ESTADO: Guardará los permisos leídos desde Firebase
   const [adminPerms, setAdminPerms] = useState<AdminPermissions>({
-    cajas: true,
-    horarios: true,
-    especiales: true
+    cajas: true, horarios: true, especiales: true
   });
 
   const statsActuales = calculateAdminStats(dias, participantesEnriquecidos as any);
@@ -95,23 +91,32 @@ const AdminPanel = () => {
     const adminIdL = localStorage.getItem('current_admin_id');
     if (!adminIdL) return;
     
-    getDoc(doc(db, 'eventos', eventoId)).then(snap => {
+    // Escucha en tiempo real con onSnapshot
+    const unsub = onSnapshot(doc(db, 'eventos', eventoId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         const admins = (data.admins as AdminInDB[]) || [];
         const myAdmin = admins.find((a) => a.id === adminIdL);
+        
+        const globalPerms = data.globalPermissions || { cajas: true, horarios: true, especiales: true };
+
         if (myAdmin) {
           setCurrentAdminInfo({
             name: myAdmin.name || 'Administrador',
             org: myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada'
           });
 
-          // LECTURA DE PERMISOS DE FIREBASE
           if (myAdmin.permissions) {
              setAdminPerms({
-                cajas: myAdmin.permissions.cajas ?? true,
-                horarios: myAdmin.permissions.horarios ?? true,
-                especiales: myAdmin.permissions.especiales ?? true,
+                cajas: (myAdmin.permissions.cajas ?? true) && globalPerms.cajas,
+                horarios: (myAdmin.permissions.horarios ?? true) && globalPerms.horarios,
+                especiales: (myAdmin.permissions.especiales ?? true) && globalPerms.especiales,
+             });
+          } else {
+             setAdminPerms({
+                cajas: globalPerms.cajas,
+                horarios: globalPerms.horarios,
+                especiales: globalPerms.especiales,
              });
           }
         }
@@ -123,15 +128,17 @@ const AdminPanel = () => {
         }
         setCroquisData(listaCroquis);
       }
-    }).catch(err => console.error(err));
+    }, (error) => {
+        console.error("Error al escuchar cambios en permisos:", error);
+    });
+
+    return () => unsub();
   }, [eventoId]);
 
-  // REGLA DE ORO: Si es Supervisor o SuperAdmin (ExternalViewer), tiene TODO permitido
   const permisosEfectivos = isExternalViewer 
     ? { cajas: true, horarios: true, especiales: true } 
     : adminPerms;
 
-  // --- MOTOR MATEMÁTICO UNIVERSAL PARA CHOQUES ---
   const parseTimeToMinutes = (t: string) => {
     if (!t) return 0;
     const clean = t.toUpperCase().replace(/ A /g, '-').trim();
@@ -171,7 +178,6 @@ const AdminPanel = () => {
     return Array.from(busy);
   }, [diaActual, modalAsignacion.horario]);
 
-  // --- FUNCIÓN PARA AUTO-SUGERIR HORARIOS ---
   const checkIsEspecial = (c: any): boolean => {
     if (!c || typeof c !== 'object') return false;
     if (c.isEspecial === true || c.especial === true || c.tipo === 'especial') return true;
@@ -487,7 +493,7 @@ const AdminPanel = () => {
             adminInfo={currentAdminInfo} 
             onExportExcel={handleExportExcel} 
             stats={statsActuales}
-            adminPerms={permisosEfectivos} // <-- ENVIAMOS PERMISOS
+            adminPerms={permisosEfectivos}
           />
         </div>
       </div>
@@ -519,7 +525,7 @@ const AdminPanel = () => {
             onEditHorario={(horario) => abrirEditor('horario', horario, horario)}
             onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })}
             onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
-            adminPerms={permisosEfectivos} // <-- ENVIAMOS PERMISOS
+            adminPerms={permisosEfectivos} 
           />
       </div>
 

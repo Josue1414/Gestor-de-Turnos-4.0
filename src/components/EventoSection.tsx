@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, MapIcon, Download } from 'lucide-react'; // Importamos Download
+import { ChevronUp, ChevronDown, ShieldCheck, Plus, Edit2, Trash2, ChevronLeft, ChevronRight, MapIcon, Download, Lock, Unlock } from 'lucide-react';
 import type { EventoData, AdminData } from '../hooks/useSuperAdminLogic';
 import AdminFiche from './AdminFiche';
 import SeccionSupervisor from './SeccionSupervisor';
@@ -7,8 +7,13 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { checkGlobalIdAvailable } from '../utils/validations';
 import { useToast } from './ToastProvider';
-import { exportToExcel, exportGlobalToExcel } from '../utils/exportExcel'; // Importamos ambas funciones
+import { exportToExcel, exportGlobalToExcel } from '../utils/exportExcel';
 import { calculateAdminStats } from '../utils/statsCalculator'; 
+import ModalBloqueoGlobal from './ModalBloqueoGlobal'; 
+
+interface EventoExtended extends EventoData {
+  globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
+}
 
 interface EventoSectionProps {
   evento: EventoData;
@@ -34,12 +39,17 @@ const EventoSection: React.FC<EventoSectionProps> = ({
   const { showToast } = useToast();
   const ITEMS_PER_PAGE = 8; 
 
+  const [globalBlockModal, setGlobalBlockModal] = useState(false); 
+  const [syncTrigger, setSyncTrigger] = useState(0);
+
   const totalPages = Math.max(1, Math.ceil(evento.admins.length / ITEMS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
   const currentItems = evento.admins.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const supervisorData = (evento as unknown as EventoConSupervisor).supervisor;
+  const eventoExt = evento as EventoExtended;
+  const isGlobalLocked = eventoExt?.globalPermissions && (!eventoExt.globalPermissions.cajas || !eventoExt.globalPermissions.horarios || !eventoExt.globalPermissions.especiales);
 
   const handleUpdateSupervisor = async (nuevoUsuario: string, nuevoPass: string) => {
     try {
@@ -48,11 +58,8 @@ const EventoSection: React.FC<EventoSectionProps> = ({
         showToast('Este Usuario ya está en uso por alguien más en el sistema. Elige uno distinto.', 'error');
         return;
       }
-
       const eventoRef = doc(db, 'eventos', evento.id);
-      await updateDoc(eventoRef, {
-        supervisor: { usuario: nuevoUsuario, password: nuevoPass }
-      });
+      await updateDoc(eventoRef, { supervisor: { usuario: nuevoUsuario, password: nuevoPass } });
       showToast('Credenciales del supervisor actualizadas.', 'success');
     } catch (err) {
       console.error("Error al actualizar supervisor:", err);
@@ -61,16 +68,35 @@ const EventoSection: React.FC<EventoSectionProps> = ({
   };
 
   const handleExportGlobal = () => {
-    exportGlobalToExcel(
-      evento.nombre, 
-      evento.admins as any, 
-      evento.diasPorAdmin as any, 
-      evento.participantesPorAdmin as any
-    );
+    exportGlobalToExcel(evento.nombre, evento.admins as any, evento.diasPorAdmin as any, evento.participantesPorAdmin as any);
+  };
+
+  const handleSaveGlobalBlock = async (newPerms: any) => {
+    const eventoRef = doc(db, 'eventos', evento.id);
+    
+    // Sobrescribimos a los admins para que apliquen la jerarquía estricta
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatedAdmins = (evento as any).admins.map((admin: any) => ({
+      ...admin,
+      permissions: { ...newPerms } 
+    }));
+
+    await updateDoc(eventoRef, { 
+      globalPermissions: newPerms,
+      admins: updatedAdmins
+    });
+
+    // Mutación local
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (evento as any).globalPermissions = newPerms;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (evento as any).admins = updatedAdmins;
+    setSyncTrigger(prev => prev + 1);
+    showToast('Bloqueo global aplicado exitosamente.', 'success');
   };
 
   return (
-    <section className="bg-white border border-slate-300 shadow-sm rounded-2xl overflow-hidden transition-all duration-300">
+    <section key={syncTrigger} className="bg-white border border-slate-300 shadow-sm rounded-2xl overflow-hidden transition-all duration-300">
       
       <div className="bg-slate-800 px-4 py-3 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-slate-700">
         
@@ -95,11 +121,7 @@ const EventoSection: React.FC<EventoSectionProps> = ({
             <p className="mt-1 text-[10px] text-slate-300 truncate sm:max-w-xl">Guardado: {evento.metodoGuardado}</p>
           </div>
 
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddAdmin(evento.id); }}
-            className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition shadow-md border border-blue-500 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-bold shrink-0"
-            title="Añadir administrador"
-          >
+          <button onClick={(e) => { e.stopPropagation(); onAddAdmin(evento.id); }} className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition shadow-md border border-blue-500 flex items-center justify-center gap-1 text-[10px] sm:text-xs font-bold shrink-0" title="Añadir administrador">
             <Plus size={14} />
             <span className="hidden sm:inline">Añadir</span>
           </button>
@@ -107,7 +129,19 @@ const EventoSection: React.FC<EventoSectionProps> = ({
 
         <div className="flex flex-wrap gap-2 justify-end shrink-0 w-full lg:w-auto mt-2 lg:mt-0 pt-2 lg:pt-0 border-t border-slate-700 lg:border-none">
             
-            {/* BOTÓN DE EXCEL GLOBAL AQUI */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); setGlobalBlockModal(true); }} 
+              className={`px-3 py-2 rounded-lg transition border flex items-center gap-1 text-xs font-bold ${
+                isGlobalLocked 
+                  ? 'bg-purple-600/40 text-purple-200 border-purple-500/50 hover:bg-purple-600/60' 
+                  : 'bg-purple-600/10 text-purple-400 border-purple-500/30 hover:bg-purple-600/30'
+              }`} 
+              title="Control de Permisos de Edición"
+            >
+              {isGlobalLocked ? <Lock size={14} /> : <Unlock size={14} />} 
+              <span className="hidden sm:block">{isGlobalLocked ? "Bloqueos Activos" : "Desbloqueado"}</span>
+            </button>
+
             <button onClick={(e) => { e.stopPropagation(); handleExportGlobal(); }} className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 p-2 sm:px-3 rounded-lg transition border border-emerald-500/30 flex items-center gap-1 text-xs font-bold" title="Descargar Excel Global del Evento">
               <Download size={14} /> <span className="hidden sm:block">Excel Global</span>
             </button>
@@ -191,6 +225,14 @@ const EventoSection: React.FC<EventoSectionProps> = ({
           )}
         </div>
       )}
+
+      <ModalBloqueoGlobal 
+        isOpen={globalBlockModal} 
+        onClose={() => setGlobalBlockModal(false)} 
+        admins={evento.admins as AdminData[]} 
+        currentGlobalPerms={(evento as EventoExtended).globalPermissions} 
+        onSave={handleSaveGlobalBlock} 
+      />
     </section>
   );
 };
