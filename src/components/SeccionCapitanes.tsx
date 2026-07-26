@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Copy, Key, User, Box, Trash2, Play, Users, Calendar } from 'lucide-react';
+import { Shield, Copy, Key, User, Box, Trash2, Play, Users } from 'lucide-react';
 import { useToast } from './ToastProvider';
 
 export interface CapitanData {
