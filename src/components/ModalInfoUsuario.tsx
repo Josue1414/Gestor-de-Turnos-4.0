@@ -4,7 +4,7 @@ import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock } from
 export interface UsuarioModalData {
   id: string; 
   name: string; 
-  role: 'Administrador' | 'Participante' | 'SuperAdmin';
+  role: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; // <-- AÑADIDO CAPITÁN AQUÍ
   phone: string; 
   countryCode?: string;
   supportArea: string; 
@@ -23,7 +23,7 @@ interface ModalInfoUsuarioProps {
   data: UsuarioModalData | null; 
   isViewingSelf?: boolean;
   checkNameExists?: (name: string, currentId: string) => boolean;
-  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin'; 
+  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; // <-- AÑADIDO CAPITÁN AQUÍ
   onDownloadImage?: () => void; 
 }
 

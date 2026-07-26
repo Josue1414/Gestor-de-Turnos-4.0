@@ -1,5 +1,7 @@
+// src/components/AdminHeader.tsx
 import React, { useState } from 'react';
-import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2 } from 'lucide-react';
+import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield } from 'lucide-react';
+import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 
 interface AdminInfo {
   name: string;
@@ -15,7 +17,6 @@ interface StatsData {
   inactivos: number;
 }
 
-// NUEVA INTERFAZ: Permisos del administrador
 interface AdminPermissions {
   cajas: boolean;
   horarios: boolean;
@@ -27,8 +28,8 @@ interface AdminHeaderProps {
   setSeccionName: (name: string) => void;
   isEditingTitle: boolean;
   setIsEditingTitle: (val: boolean) => void;
-  onOpenProfile: () => void;
-  onSave: () => void;
+  onOpenProfile?: () => void;
+  onSave?: () => void;
   onShowCroquis: () => void;
   onShowDirectorio?: () => void;
   participantesCount?: number;
@@ -44,8 +45,16 @@ interface AdminHeaderProps {
   adminInfo?: AdminInfo | null;
   stats?: StatsData;
   onExportExcel?: () => void;
-  // NUEVA PROP: Recibe los permisos del admin
   adminPerms?: AdminPermissions;
+  
+  // Props para manejar a los capitanes DENTRO del Header
+  isCapitan?: boolean;
+  showCapitanes?: boolean;
+  onToggleCapitanes?: () => void;
+  capitanes?: CapitanData[];
+  onOpenCapitanModal?: () => void;
+  onDeleteCapitan?: (id: string) => void;
+  onSimularCapitan?: (id: string) => void;
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -60,15 +69,26 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   onOpenProfile, onSave, onShowCroquis, onShowDirectorio, participantesCount, onToggleActions, showActions,
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
   onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
-  adminPerms // <-- Recibimos los permisos
+  adminPerms, isCapitan, 
+  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan
 }) => {
   const [showStats, setShowStats] = useState(false);
+
+  // LOGICA PARA NO PERMITIR EDICIÓN DE TÍTULO
+  const isSupervisorOrSuperAdmin = !!sessionStorage.getItem('visor_externo_tipo') || isSuperAdminViewing;
+  const canEditTitle = isSupervisorOrSuperAdmin; 
+
+  const handleTitleClick = () => {
+    if (canEditTitle) {
+      setIsEditingTitle(true);
+    }
+  };
 
   return (
     <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full">
       <div className="flex items-start justify-between gap-4 w-full">
         <div className="min-w-0 flex-1">
-          {isEditingTitle && !isSuperAdminViewing ? (
+          {isEditingTitle && canEditTitle ? (
             <input 
               type="text" value={seccionName} onChange={(e) => setSeccionName(e.target.value)} 
               onBlur={onSave} autoFocus
@@ -76,17 +96,17 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             />
           ) : (
             <h1 
-              className={`text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2 ${!isSuperAdminViewing ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
-              onClick={() => !isSuperAdminViewing && setIsEditingTitle(true)}
-              title={!isSuperAdminViewing ? "Clic para editar el nombre del evento" : ""}
+              className={`text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2 ${canEditTitle ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
+              onClick={handleTitleClick}
+              title={canEditTitle ? "Clic para editar el nombre del evento" : ""}
             >
               {seccionName || 'Sin Título'}
             </h1>
           )}
           {adminInfo && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                Admin: <span className="text-slate-700">{adminInfo.name}</span>
+              <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isCapitan ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                {isCapitan ? 'Capitán:' : 'Admin:'} <span className={isCapitan ? 'text-amber-900' : 'text-slate-700'}>{adminInfo.name}</span>
               </span>
               <span className="text-[10px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 truncate max-w-[200px]">
                 {adminInfo.org}
@@ -128,6 +148,14 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               <Users size={14} /> Participantes {participantesCount !== undefined ? `(${participantesCount})` : ''}
             </button>
           )}
+          
+          {/* BOTÓN: Ver Capitanes (Ahora controla el acordeón interno) */}
+          {!isCapitan && onToggleCapitanes && (
+             <button onClick={onToggleCapitanes} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold transition shadow-sm ${showCapitanes ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300'}`}>
+               <Shield size={14} /> {showCapitanes ? 'Cerrar Capitanes' : 'Capitanes'}
+             </button>
+          )}
+
           <button onClick={() => setShowStats(prev => !prev)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 transition shadow-sm">
             <BarChart2 size={14} /> {showStats ? 'Ocultar' : 'Métricas'}
           </button>
@@ -138,7 +166,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           )}
         </div>
 
-        {/* CENTRO: Mini Estadísticas (Con el inactivo que funciona) */}
+        {/* CENTRO: Mini Estadísticas */}
         {stats && (
           <div className={`${showStats ? 'flex' : 'hidden'} sm:flex w-full xl:w-auto justify-center xl:border-l border-slate-100 xl:pl-4`}>
              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full">
@@ -153,11 +181,23 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         )}
       </div>
 
+      {/* ACORDEÓN DE CAPITANES DENTRO DEL HEADER */}
+      {showCapitanes && capitanes && onOpenCapitanModal && onDeleteCapitan && onSimularCapitan && (
+        <div className="mt-2 w-full">
+          <SeccionCapitanes 
+             capitanes={capitanes}
+             onOpenModal={onOpenCapitanModal}
+             onDeleteCapitan={onDeleteCapitan}
+             onSimularCapitan={onSimularCapitan}
+             isOpen={true} 
+          />
+        </div>
+      )}
+
+      {/* ACORDEÓN DE ACCIONES */}
       {onToggleActions && (
         <div className={`${showActions ? 'block' : 'hidden'} bg-slate-50 p-3 rounded-2xl border border-slate-200 mt-2 w-full animate-in slide-in-from-top-2 duration-200`}>
           <div className="flex flex-wrap items-center gap-2">
-            
-            {/* LÓGICA DE BLOQUEO: Solo mostramos los botones si el permiso no está explícitamente en falso */}
             {adminPerms?.especiales !== false && onCrearCajaEspecial && (
               <button onClick={onCrearCajaEspecial} className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 px-3 py-2 rounded-xl font-bold text-[11px] transition shadow-sm border border-violet-200 min-w-[100px] justify-center">
                 <Plus size={14} />Crear Caja Especial
@@ -173,9 +213,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
                 <Clock size={14} />Crear Horario
               </button>
             )}
-            
             <div className="h-6 w-px bg-slate-300 mx-1 hidden sm:block"></div>
-            
             {onDownloadTabla && (
               <button onClick={onDownloadTabla} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl font-bold text-[11px] transition shadow-md shadow-blue-500/20">
                 <Download size={14} /> PNG

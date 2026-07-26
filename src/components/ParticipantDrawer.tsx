@@ -24,7 +24,7 @@ interface ParticipantDrawerProps {
 
 const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({ 
   isOpen, onClose, participantes, onEditParticipante, onDeleteParticipante, currentUserId, currentUserRole = 'Administrador',
-  eventoId = 'demo-evento', adminId = 'demo-admin', turnosLibresCount = 0, turnosOcupadosCount = 0
+  eventoId = 'demo-evento', adminId = 'demo-admin',
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -109,15 +109,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
             <button onClick={onClose} className="p-1.5 hover:bg-slate-700 rounded-xl transition text-slate-300 hover:text-white">
               <X size={20} />
             </button>
-          </div>
-          
-          <div className="flex gap-2 text-xs font-bold mb-1">
-            <div className="flex-1 bg-slate-700 p-2 rounded-lg text-center shadow-inner border border-slate-600">
-              <span className="text-emerald-400 block text-lg">{turnosLibresCount}</span> Libres
-            </div>
-            <div className="flex-1 bg-slate-700 p-2 rounded-lg text-center shadow-inner border border-slate-600">
-              <span className="text-blue-400 block text-lg">{turnosOcupadosCount}</span> Ocupados
-            </div>
           </div>
 
           <div className="relative">

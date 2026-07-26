@@ -5,7 +5,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useToast } from '../../components/ToastProvider';
 
-// TIPADOS ESTRICTOS (Cero "any")
+// TIPADOS ESTRICTOS
 interface AdminLoginData {
   id: string;
   password?: string;
@@ -16,9 +16,17 @@ interface SupervisorLoginData {
   password?: string;
 }
 
+// 1. Añadimos la interfaz para el Capitán (CORRECCIÓN APLICADA AQUÍ)
+interface CapitanLoginData {
+  id: string;
+  usuario?: string; // Ahora TypeScript sabe que los capitanes tienen un nombre de usuario corto
+  password?: string;
+}
+
 interface EventoLoginData {
   admins?: AdminLoginData[];
   supervisor?: SupervisorLoginData;
+  capitanesPorAdmin?: Record<string, CapitanLoginData[]>;
 }
 
 const LoginScreen = () => {
@@ -40,22 +48,22 @@ const LoginScreen = () => {
     // Limpiamos memorias antiguas por seguridad
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
+    localStorage.removeItem('current_capitan_id'); // Limpiamos rastro de capitán
     sessionStorage.removeItem('visor_externo_tipo');
 
-    // AHORA AMBOS CAMPOS SON ESTRICTAMENTE OBLIGATORIOS
     if (!cod || !pass) {
       showToast('Por favor ingresa tu usuario y contraseña.', 'error');
       return;
     }
 
-    // 1. VALIDACIÓN DEL SUPER ADMIN (Basado en el archivo .env)
+    // 1. VALIDACIÓN DEL SUPER ADMIN
     if (cod === SUPERADMIN_USER && pass === SUPERADMIN_PASSWORD) {
       localStorage.setItem('user_role', 'superadmin');
       navigate('/super-admin');
       return;
     } 
 
-    // 2. BUSCAR EN FIREBASE (Supervisor o Administrador)
+    // 2. BUSCAR EN FIREBASE (Supervisor, Administrador o Capitán)
     setIsLoading(true);
     try {
       const eventosRef = collection(db, 'eventos');
@@ -63,8 +71,11 @@ const LoginScreen = () => {
       
       let adminFound = false;
       let supervisorFound = false;
+      let capitanFound = false;
+      
       let eventoIdFound = '';
       let adminIdFound = '';
+      let capitanIdFound = '';
 
       snapshot.forEach(doc => {
         const evento = doc.data() as EventoLoginData;
@@ -84,6 +95,23 @@ const LoginScreen = () => {
           eventoIdFound = doc.id; 
           adminIdFound = matchedAdmin.id;
         }
+
+        // 2.3 REVISAR SI ES CAPITÁN (CORRECCIÓN APLICADA AQUÍ)
+        const capitanesDict = evento.capitanesPorAdmin || {};
+        // Recorremos las listas de capitanes de todos los admins del evento
+        for (const adminIdPadre in capitanesDict) {
+          const listaCapitanes = capitanesDict[adminIdPadre] || [];
+          
+          // Cambiamos c.id por c.usuario, ya que el Capitán ingresa su usuario corto (ej. cap-ABCD)
+          const matchedCapitan = listaCapitanes.find((c) => c.usuario === cod && c.password === pass);
+          
+          if (matchedCapitan) {
+            capitanFound = true;
+            eventoIdFound = doc.id;
+            capitanIdFound = matchedCapitan.id; // Guardamos su ID interno para las consultas
+            adminIdFound = adminIdPadre; // Necesitamos saber de qué admin es este capitán
+          }
+        }
       });
 
       // 3. DECISIÓN DE RUTAS BASADA EN EL ROL ENCONTRADO
@@ -93,6 +121,12 @@ const LoginScreen = () => {
       } else if (adminFound) {
         localStorage.setItem('user_role', 'admin');
         localStorage.setItem('current_admin_id', adminIdFound);
+        navigate(`/admin/${eventoIdFound}`); 
+      } else if (capitanFound) {
+        // Redirección para el Capitán
+        localStorage.setItem('user_role', 'capitan');
+        localStorage.setItem('current_admin_id', adminIdFound); // Carga la estructura del evento de su jefe
+        localStorage.setItem('current_capitan_id', capitanIdFound); // Guarda su ID para abrir su cajón de invitados
         navigate(`/admin/${eventoIdFound}`); 
       } else {
         showToast('Credenciales incorrectas. Verifica tu usuario y contraseña.', 'error');
@@ -115,17 +149,14 @@ const LoginScreen = () => {
 
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
         
-        {/* CABECERA MODIFICADA: Fondo azul claro (bg-blue-50) y texto oscuro */}
-        <div className="bg-blue-100 p-8 text-center flex flex-col items-center border-b border-blue-100">
+        <div className="bg-blue-50 p-8 text-center flex flex-col items-center border-b border-blue-100">
           <img 
             src="/logo-gestor-de-turnos.png" 
             alt="Logo Gestor de Turnos" 
             className="w-24 h-24 object-cover mb-4 rounded-3xl shadow-md border border-blue-200 bg-white" 
           />
-          {/* Texto principal en un azul muy oscuro para buen contraste */}
           <h1 className="text-2xl font-black text-blue-950 tracking-tighter uppercase">Gestor de Turnos</h1>
-          {/* Subtítulo en un azul intermedio */}
-          <p className="text-blue-700/80 text-xs font-bold tracking-widest uppercase mt-1">Acceso Interno</p>
+          <p className="text-blue-600/80 text-xs font-bold tracking-widest uppercase mt-1">Acceso Interno</p>
         </div>
 
         <div className="p-8">
