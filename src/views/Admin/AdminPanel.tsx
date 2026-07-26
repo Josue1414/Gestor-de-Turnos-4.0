@@ -1,3 +1,4 @@
+// src/views/Admin/AdminPanel.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from 'react';
 import { Calendar, ShieldCheck } from 'lucide-react';
@@ -8,7 +9,7 @@ import { exportToExcel } from '../../utils/exportExcel';
 import ModalInputHorario from '../../components/ModalInputHorario';
 import ModalAlertaChoque from '../../components/ModalAlertaChoque';
 import { useAdminLogic } from '../../hooks/useAdminLogic';
-import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore'; // <-- AGREGADO getDoc AQUÍ
+import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 
@@ -45,6 +46,7 @@ interface AdminInDB {
   organizationLabel?: string;
   supportArea?: string; 
   permissions?: { cajas?: boolean; horarios?: boolean; especiales?: boolean }; 
+  diasAsignados?: string[]; // <-- AÑADIDO AL TIPO
   [key: string]: unknown;
 }
 
@@ -75,8 +77,10 @@ const AdminPanel = () => {
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
   const [deleteEspecialModal, setDeleteEspecialModal] = useState({ isOpen: false, cajaId: '', turnoId: '' });
   const [showActions, setShowActions] = useState(false);
-  const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string} | null>(null);
   const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
+
+  // Ampliado para incluir los días asignados
+  const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string, diasAsignados?: string[]} | null>(null);
 
   const [adminPerms, setAdminPerms] = useState<AdminPermissions>({
     cajas: true, horarios: true, especiales: true
@@ -91,7 +95,6 @@ const AdminPanel = () => {
     const adminIdL = localStorage.getItem('current_admin_id');
     if (!adminIdL) return;
     
-    // Escucha en tiempo real con onSnapshot
     const unsub = onSnapshot(doc(db, 'eventos', eventoId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -103,7 +106,8 @@ const AdminPanel = () => {
         if (myAdmin) {
           setCurrentAdminInfo({
             name: myAdmin.name || 'Administrador',
-            org: myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada'
+            org: myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada',
+            diasAsignados: myAdmin.diasAsignados // Guardamos sus días asignados
           });
 
           if (myAdmin.permissions) {
@@ -128,12 +132,31 @@ const AdminPanel = () => {
         }
         setCroquisData(listaCroquis);
       }
-    }, (error) => {
-        console.error("Error al escuchar cambios en permisos:", error);
     });
 
     return () => unsub();
   }, [eventoId]);
+
+  // CÁLCULO DE DÍAS PERMITIDOS PARA RENDERIZAR LAS PESTAÑAS
+  const diasPermitidos = useMemo(() => {
+    if (!currentAdminInfo) return [];
+    // Si la propiedad es undefined, por defecto tiene todos los días
+    if (currentAdminInfo.diasAsignados === undefined) return dias;
+    // Filtramos solo los días que el Admin tiene permitidos
+    return dias.filter(d => currentAdminInfo.diasAsignados!.includes(d.nombreDia));
+  }, [dias, currentAdminInfo]);
+
+  // Asegurarnos de que el día activo sea válido si le quitan los permisos al día que estaba viendo
+  useEffect(() => {
+    if (diasPermitidos.length > 0 && dias.length > 0) {
+      const currentDia = dias[diaActivo];
+      if (!currentDia || !diasPermitidos.find(d => d.id === currentDia.id)) {
+        // Encontrar el índice original del primer día permitido y cambiar a él
+        const firstAllowedIndex = dias.findIndex(d => d.id === diasPermitidos[0].id);
+        if (firstAllowedIndex !== -1) setDiaActivo(firstAllowedIndex);
+      }
+    }
+  }, [diasPermitidos, diaActivo, dias, setDiaActivo]);
 
   const permisosEfectivos = isExternalViewer 
     ? { cajas: true, horarios: true, especiales: true } 
@@ -354,12 +377,6 @@ const AdminPanel = () => {
         updatePayload['admins'] = actualizadosAdmins;
         updatePayload[`participantesPorAdmin.${adminIdL}`] = participantesDelAdmin.map(p => ({...p, organizationLabel: nuevaEtiqueta}));
         
-        if (datosActualizados.id === adminIdL) {
-          setCurrentAdminInfo({ 
-            name: datosActualizados.name, 
-            org: datosActualizados.organization ? `${nuevaEtiqueta}: ${datosActualizados.organization}` : 'Sin organización' 
-          });
-        }
       }
       await updateDoc(docRef, updatePayload);
       setIsUsuarioModalOpen(false); 
@@ -435,7 +452,7 @@ const AdminPanel = () => {
     );
   };
 
-  if (loading) {
+  if (loading || !currentAdminInfo) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
         <ShieldCheck size={48} className="text-blue-500 mb-4 animate-pulse" />
@@ -444,20 +461,23 @@ const AdminPanel = () => {
     );
   }
 
-  if (!diaActual && !loading) {
+  // Si no tiene días permitidos (es decir, el arreglo está explícitamente vacío)
+  if (diasPermitidos.length === 0) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
         <ShieldCheck size={48} className="text-slate-300 mb-4" />
-        <h2 className="text-xl font-black text-slate-700">El evento está vacío</h2>
-        <p className="text-sm text-slate-500 mt-2 mb-6">Aún no se han configurado los días para este evento.</p>
+        <h2 className="text-xl font-black text-slate-700">No tienes acceso a ningún día</h2>
+        <p className="text-sm text-slate-500 mt-2 mb-6">Un supervisor ha restringido tus permisos en este evento.</p>
         {isExternalViewer ? (
           <button onClick={handleBack} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition">Regresar</button>
         ) : (
-          <button onClick={() => handleCrearCaja()} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Comenzar a configurar</button>
+          <button onClick={handleLogout} className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold shadow-md hover:bg-red-700 transition">Cerrar Sesión</button>
         )}
       </div>
     );
   }
+
+  if (!diaActual) return null;
 
   return (
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
@@ -500,15 +520,19 @@ const AdminPanel = () => {
 
       <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full">
-          {dias.map((dia, idx) => (
-            <button 
-              key={dia.id} 
-              onClick={() => setDiaActivo(idx)} 
-              className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}
-            >
-              <Calendar size={14} /> {dia.nombreDia}
-            </button>
-          ))}
+          {/* AQUÍ ESTÁ EL FILTRO MÁGICO: Renderizamos solo los permitidos, pero seteamos el índice global */}
+          {diasPermitidos.map((dia) => {
+            const originalIndex = dias.findIndex(d => d.id === dia.id);
+            return (
+              <button 
+                key={dia.id} 
+                onClick={() => setDiaActivo(originalIndex)} 
+                className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === originalIndex ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}
+              >
+                <Calendar size={14} /> {dia.nombreDia}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -529,7 +553,7 @@ const AdminPanel = () => {
           />
       </div>
 
-      {/* --- MODALS --- */}
+      {/* MODALS */}
       <AssignUserModal 
         isOpen={modalAsignacion.isOpen} 
         onClose={cerrarModalAsignacion} 
@@ -540,7 +564,6 @@ const AdminPanel = () => {
         onAssign={asignarUsuarioExistente} 
         onCreateAndAssign={crearYAsignarUsuario} 
       />
-      
       <ParticipantDrawer 
         isOpen={showDirectorio} 
         onClose={() => setShowDirectorio(false)} 
@@ -553,7 +576,6 @@ const AdminPanel = () => {
         turnosLibresCount={turnosLibresCount}
         turnosOcupadosCount={turnosOcupadosCount}
       />
-      
       <EditNameModal 
         isOpen={editModal.isOpen && editModal.type === 'caja'} 
         title={editModal.title} 
@@ -562,13 +584,11 @@ const AdminPanel = () => {
         onClose={() => setEditModal({...editModal, isOpen: false})} 
         onSave={handleSaveEdit} 
       />
-      
       <SpecialBoxModal 
         isOpen={showSpecialModal} 
         onClose={() => setShowSpecialModal(false)} 
         onCreate={handleCrearCajaEspecial} 
       />
-      
       <CountdownDeleteModal 
         isOpen={deletePartModal.isOpen} 
         onClose={() => setDeletePartModal({ isOpen: false, id: '', nombre: '' })} 
@@ -576,7 +596,6 @@ const AdminPanel = () => {
         title={deletePartModal.nombre} 
         message="Se eliminará su perfil y se liberarán todos los turnos que tenía asignados." 
       />
-      
       <CountdownDeleteModal 
         isOpen={deleteEspecialModal.isOpen} 
         onClose={() => setDeleteEspecialModal({ isOpen: false, cajaId: '', turnoId: '' })} 
@@ -584,7 +603,6 @@ const AdminPanel = () => {
         title="Eliminar Horario Especial" 
         message="Se eliminará este bloque de horario." 
       />
-      
       <ModalInfoUsuario 
         isOpen={isUsuarioModalOpen} 
         onClose={() => setIsUsuarioModalOpen(false)} 
@@ -595,7 +613,6 @@ const AdminPanel = () => {
         checkNameExists={handleCheckNameDuplicate} 
         onDownloadImage={() => { setDownloadModal({ isOpen: true, type: isViewingSelf ? 'general' : 'personal', targetUserId: usuarioActivo?.id }); setIsUsuarioModalOpen(false); }} 
       />
-      
       <DownloadScheduleModal 
         isOpen={downloadModal.isOpen} 
         onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })} 
@@ -606,7 +623,6 @@ const AdminPanel = () => {
         participantes={participantesEnriquecidos} 
         targetUserId={downloadModal.targetUserId} 
       />
-      
       <ModalInputHorario 
         isOpen={createShiftModal?.isOpen || false} 
         onClose={() => setCreateShiftModal && setCreateShiftModal({ ...createShiftModal, isOpen: false })} 
@@ -614,14 +630,12 @@ const AdminPanel = () => {
         defaultEnd={createShiftModal?.defaultEnd || '09:00'} 
         onConfirm={handleValidarCrearHorario} 
       />
-      
       <ModalAlertaChoque 
         isOpen={clashModal?.isOpen || false} 
         onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} 
         horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`} 
         horarioCruzado={clashModal?.turnoCruzado || ''} 
       />
-      
       <CroquisModal 
         isOpen={showCroquis} 
         onClose={() => setShowCroquis(false)} 

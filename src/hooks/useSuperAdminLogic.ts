@@ -18,6 +18,7 @@ export interface AdminData {
   necesarios: number;
   disponibles: number;
   inactivos: number;
+  diasAsignados?: string[]; // <-- NUEVA PROPIEDAD
 }
 
 export interface TurnoData { id: string; horario: string; participanteId: string | null; }
@@ -121,7 +122,6 @@ export const useSuperAdminLogic = () => {
 
     try {
       const createdRef = await addDoc(collection(db, 'eventos'), nuevoEvento);
-      // Registrar accesos en índice `accessIds` para optimizar búsquedas globales
       try {
         const eventoId = createdRef.id;
         for (const a of nuevosAdmins) {
@@ -143,7 +143,6 @@ export const useSuperAdminLogic = () => {
   const handleConfirmDelete = async () => {
     try {
       if (deleteModalState.type === 'evento' && deleteModalState.targetId) {
-        // Borrar event y limpiar accessIds de sus admins
         const ev = eventos.find(e => e.id === deleteModalState.targetId);
         if (ev) {
           for (const a of ev.admins) {
@@ -188,7 +187,6 @@ export const useSuperAdminLogic = () => {
       [`diasPorAdmin.${nuevoAdmin.id}`]: baseDias,
       [`participantesPorAdmin.${nuevoAdmin.id}`]: []
     });
-    // Registrar en accessIds (no crítico — si falla, no bloquea la operación)
     try {
       await setDoc(doc(db, 'accessIds', nuevoAdmin.id), { eventoId, type: 'admin' });
     } catch (e) {
