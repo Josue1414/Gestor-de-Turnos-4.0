@@ -1,12 +1,14 @@
+// src/views/User/ParticipantPanel.tsx
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Calendar, Users, ShieldCheck, LogOut } from 'lucide-react';
+import { Calendar, Users, ShieldCheck, LogOut, Settings, LayoutList, LayoutGrid } from 'lucide-react';
 import { db } from '../../firebase';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
 
 import type { DiaEvento, Participante } from '../../types';
 
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
+import VistaTarjetasCajas from '../../components/VistaTarjetasCajas';
 import ModalInfoUsuario, { type UsuarioModalData } from '../../components/ModalInfoUsuario';
 import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
@@ -21,6 +23,9 @@ interface ParticipanteExtendidoDb extends Participante {
   organizationLabel?: string;
   ubicaciones?: string[];
   fechaNacimiento?: string;
+  capitanId?: string; 
+  cajasDelCapitan?: string[]; 
+  capitanNombre?: string; 
 }
 
 const ParticipantPanel = () => {
@@ -32,16 +37,19 @@ const ParticipantPanel = () => {
   const [participantes, setParticipantes] = useState<ParticipanteExtendidoDb[]>([]);
   const [eventoNombre, setEventoNombre] = useState('Evento');
   
+  // NUEVO ESTADO: Guarda las horas globales ocupadas de Rebeca para proteger colisiones
+  const [misHorariosGlobales, setMisHorariosGlobales] = useState<string[]>([]);
+  
   const [croquisGral, setCroquisGral] = useState<string | null>(null);
   const [croquisIndiv, setCroquisIndiv] = useState<string | null>(null);
   
   const [diaActivo, setDiaActivo] = useState(0);
+  const [vistaTarjetas, setVistaTarjetas] = useState(false); 
   const [downloadModal, setDownloadModal] = useState(false);
   const [showDirectorio, setShowDirectorio] = useState(false);
   const [showCroquis, setShowCroquis] = useState(false);
   
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
-  // NUEVO: Estado para controlar el modal de confirmación de salida
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const { showToast } = useToast();
@@ -49,13 +57,82 @@ const ParticipantPanel = () => {
   useEffect(() => {
     if (!eventoId || !adminId) return;
     const docRef = doc(db, 'eventos', eventoId);
+    
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setDias(data.diasPorAdmin?.[adminId] || []);
-        setParticipantes(data.participantesPorAdmin?.[adminId] || []);
         if (data.nombre) setEventoNombre(data.nombre);
         
+        const allPartsMap = new Map<string, ParticipanteExtendidoDb>();
+        const adminParts = data.participantesPorAdmin?.[adminId] || [];
+        adminParts.forEach((p: any) => allPartsMap.set(p.id, { ...p, creador: 'Admin' }));
+        
+        const capitanes = data.capitanesPorAdmin?.[adminId] || [];
+        capitanes.forEach((cap: any) => {
+          const capParts = data.participantesPorCapitan?.[cap.id] || [];
+          capParts.forEach((p: any) => {
+             if (!allPartsMap.has(p.id)) {
+               allPartsMap.set(p.id, {
+                 ...p, 
+                 capitanId: cap.id, 
+                 capitanNombre: cap.nombre, 
+                 cajasDelCapitan: cap.cajasAsignadas || []
+               });
+             }
+          });
+        });
+        
+        const allParts = Array.from(allPartsMap.values());
+        setParticipantes(allParts);
+        
+        const currentUser = allParts.find(p => p.id === participanteId);
+        
+        // 1. ANTES DE FILTRAR LAS CAJAS, GUARDAMOS TODOS SUS HORARIOS (Defensa Global)
+        const rawDias = data.diasPorAdmin?.[adminId] || [];
+        const ocupadosGlobales: string[] = [];
+        rawDias.forEach((d: any) => {
+          d.cajas.forEach((c: any) => {
+            c.turnos.forEach((t: any) => {
+              if (t.participanteId === participanteId) {
+                ocupadosGlobales.push(t.horario);
+              }
+            });
+          });
+        });
+        setMisHorariosGlobales(ocupadosGlobales);
+
+        // 2. APLICAMOS EL FILTRO VISUAL DEPENDIENDO DEL LINK POR EL QUE ENTRÓ
+        let diasProcesados: DiaEvento[] = rawDias;
+        const viewCapitanId = localStorage.getItem('view_capitan_id');
+        let cajasVisibles: string[] | null = null;
+        let nombreEquipoActual = '';
+
+        if (viewCapitanId) {
+           // Entró por un link específico de capitán (Ej: Rebeca entrando al link de Saúl)
+           const capVista = capitanes.find((c: any) => c.id === viewCapitanId);
+           if (capVista) {
+               cajasVisibles = capVista.cajasAsignadas || [];
+               nombreEquipoActual = capVista.nombre;
+           }
+        } else if (currentUser?.capitanId) {
+           // Entró por link general, pero es intrínseco de un capitán
+           cajasVisibles = currentUser.cajasDelCapitan || [];
+           nombreEquipoActual = currentUser.capitanNombre || '';
+        }
+
+        if (cajasVisibles) {
+           diasProcesados = diasProcesados.map(d => ({
+             ...d,
+             cajas: d.cajas.filter((c: any) => cajasVisibles!.includes(c.id))
+           }));
+        }
+
+        // Actualizamos para que la vista de UI muestre el equipo correcto
+        if (currentUser && nombreEquipoActual) {
+            currentUser.capitanNombre = nombreEquipoActual;
+        }
+        
+        setDias(diasProcesados);
         setCroquisGral(data.croquisUrl || null);
         setCroquisIndiv(data.croquisPorAdmin?.[adminId] || null);
       } else {
@@ -66,7 +143,21 @@ const ParticipantPanel = () => {
     });
 
     return () => unsubscribe();
-  }, [eventoId, adminId, navigate]);
+  }, [eventoId, adminId, navigate, participanteId, showToast]);
+
+  const formatHorario12h = (horario: string) => {
+    const formatPart = (t: string) => {
+      if(!t) return '';
+      const [hStr, mStr] = t.trim().split(':');
+      let h = parseInt(hStr) || 0;
+      const ampm = h >= 12 ? 'pm' : 'am';
+      h = h % 12 || 12;
+      return `${h}:${mStr} ${ampm}`;
+    };
+    const partes = horario.split('-');
+    if(partes.length === 2) return `${formatPart(partes[0])} - ${formatPart(partes[1])}`;
+    return formatPart(horario);
+  };
 
   const participantesEnriquecidos = useMemo(() => {
     return participantes.map((p) => {
@@ -75,7 +166,10 @@ const ParticipantPanel = () => {
         dia.cajas.forEach((caja) => {
           caja.turnos.forEach((turno) => {
             if (turno.participanteId === p.id) {
-              ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${caja.nombre}`);
+              const horario12 = formatHorario12h(turno.horario);
+              const rawName = String(caja.nombre || '').trim();
+              const textoCaja = rawName.toLowerCase().includes('caja') ? rawName : `Caja ${rawName}`;
+              ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${horario12} - ${textoCaja}`);
             }
           });
         });
@@ -90,6 +184,22 @@ const ParticipantPanel = () => {
 
   const miUsuario = participantesEnriquecidos.find(p => p.id === participanteId);
 
+  // FILTRO AISLADO PARA EL DIRECTORIO: Solo vemos compañeros del mismo link
+  const participantesDirectorio = useMemo(() => {
+    if (!miUsuario) return [];
+    const capitanVistaId = localStorage.getItem('view_capitan_id') || miUsuario.capitanId;
+
+    return participantesEnriquecidos.filter(p => {
+       if (capitanVistaId) {
+          if (p.capitanId === capitanVistaId) return true;
+          if (!p.capitanId && p.ubicaciones && p.ubicaciones.length > 0) return true;
+          return false;
+       } else {
+          return !p.capitanId;
+       }
+    });
+  }, [participantesEnriquecidos, miUsuario]);
+
   const datosParaModal: UsuarioModalData | null = useMemo(() => {
     if (!miUsuario) return null;
 
@@ -98,10 +208,13 @@ const ParticipantPanel = () => {
       dia.cajas.forEach(caja => {
         caja.turnos.forEach(turno => {
           if (turno.participanteId === miUsuario.id) {
+            const horario12 = formatHorario12h(turno.horario);
+            const rawName = String(caja.nombre || '').trim();
+            const textoCaja = rawName.toLowerCase().includes('caja') ? rawName : `Caja ${rawName}`;
             misTurnos.push({
               dia: dia.nombreDia || 'Día',
-              horario: turno.horario,
-              caja: caja.nombre
+              horario: horario12,
+              caja: textoCaja
             });
           }
         });
@@ -129,7 +242,16 @@ const ParticipantPanel = () => {
     
     try {
       const docRef = doc(db, 'eventos', eventoId);
-      const actualizados = participantes.map((p) => 
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      
+      const data = docSnap.data();
+      const isCapitanUser = !!miUsuario.capitanId;
+      const targetId = isCapitanUser ? miUsuario.capitanId : adminId;
+      const targetProperty = isCapitanUser ? 'participantesPorCapitan' : 'participantesPorAdmin';
+      
+      const participantesBase = data[targetProperty]?.[targetId as string] || [];
+      const actualizados = participantesBase.map((p: any) => 
         p.id === miUsuario.id 
           ? { 
               ...p, 
@@ -144,10 +266,7 @@ const ParticipantPanel = () => {
           : p
       );
 
-      await updateDoc(docRef, {
-        [`participantesPorAdmin.${adminId}`]: actualizados
-      });
-      
+      await updateDoc(docRef, { [`${targetProperty}.${targetId}`]: actualizados });
       setIsUsuarioModalOpen(false);
     } catch (error) {
       console.error("Error guardando perfil:", error);
@@ -160,35 +279,67 @@ const ParticipantPanel = () => {
   const turnosLibresCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActual ? diaActual.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
 
-  const syncEvent = async (nuevosDias: DiaEvento[]) => {
+  const hayChoque = useCallback((h1: string, h2: string) => {
+    try {
+      const parse = (t: string) => {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+      const r1 = h1.split('-'), r2 = h2.split('-');
+      const i1 = parse(r1[0].trim()), f1 = r1.length > 1 ? parse(r1[1].trim()) : i1 + 59;
+      const i2 = parse(r2[0].trim()), f2 = r2.length > 1 ? parse(r2[1].trim()) : i2 + 59;
+      return i1 < f2 && i2 < f1;
+    } catch { return false; }
+  }, []);
+
+  // LÓGICA REESCRITA: Ahora usamos misHorariosGlobales para evitar sobreposición en otras listas invisibles
+  const isBusy = useCallback((horario: string) => {
+      return misHorariosGlobales.some(miHor => hayChoque(miHor, horario));
+  }, [misHorariosGlobales, hayChoque]);
+
+  const handleAsignarme = async (cajaId: string, turnoId: string) => {
+    if (!miUsuario || !eventoId || !adminId) return;
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      const rawDias = data.diasPorAdmin?.[adminId] || [];
+      
+      const nuevosDias = rawDias.map((d: any, i: number) => i === diaActivo ? {
+        ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
+          ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: miUsuario.id } : t)
+        } : c)
+      } : d);
+      
+      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+    } catch (error) { console.error(error); }
+  };
+
+  const handleQuitarme = async (cajaId: string, turnoId: string) => {
     if (!eventoId || !adminId) return;
-    await updateDoc(doc(db, 'eventos', eventoId), {
-      [`diasPorAdmin.${adminId}`]: nuevosDias
-    });
-  };
-
-  const handleAsignarme = (cajaId: string, turnoId: string) => {
-    if (!miUsuario) return;
-    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
-      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
-        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: miUsuario.id } : t)
-      } : c)
-    } : d);
-    syncEvent(nuevosDias);
-  };
-
-  const handleQuitarme = (cajaId: string, turnoId: string) => {
-    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
-      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
-        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: null } : t)
-      } : c)
-    } : d);
-    syncEvent(nuevosDias);
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      const rawDias = data.diasPorAdmin?.[adminId] || [];
+      
+      const nuevosDias = rawDias.map((d: any, i: number) => i === diaActivo ? {
+        ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
+          ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: null } : t)
+        } : c)
+      } : d);
+      
+      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+    } catch (error) { console.error(error); }
   };
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
+    localStorage.removeItem('view_capitan_id'); // Limpiar el contexto temporal
     if (eventoId && adminId) {
       navigate(`/invite/${eventoId}/${adminId}`);
     } else {
@@ -233,11 +384,9 @@ const ParticipantPanel = () => {
   return (
     <div className="h-[100dvh] w-full bg-slate-100 font-sans flex flex-col overflow-auto relative">
       
-      {/* 1. HEADER REESTRUCTURADO */}
       <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 pb-2 shrink-0 z-10 box-border">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 w-full max-w-[1400px] mx-auto gap-4">
           
-          {/* LADO IZQUIERDO: Botón Salir + Saludo (Separados visualmente) */}
           <div className="flex items-center gap-3 w-full sm:w-auto border-b border-slate-100 pb-3 sm:border-none sm:pb-0">
             <button 
               onClick={() => setShowLogoutConfirm(true)} 
@@ -249,32 +398,37 @@ const ParticipantPanel = () => {
 
             <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
 
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight mb-0.5 truncate">
+            <div className="min-w-0 flex flex-col items-start">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight mb-1 truncate">
                 Hola, <span className="text-blue-600">{miUsuario.nombre}</span>
               </h1>
-              <p className="text-[10px] sm:text-xs font-bold text-slate-500 truncate">{eventoNombre}</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 mt-0.5">
+                <p className="text-sm sm:text-base font-black text-slate-800 truncate">{eventoNombre}</p>
+                {miUsuario.capitanNombre && (
+                  <span className="inline-flex items-center text-[11px] sm:text-sm font-black bg-amber-100 text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg w-fit uppercase tracking-wider shadow-sm">
+                    Equipo de {miUsuario.capitanNombre}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           
-          {/* LADO DERECHO: Herramientas del Participante */}
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
             <button onClick={() => setShowCroquis(true)} className="bg-slate-50 border border-slate-200 text-slate-700 p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm hover:bg-slate-100">
               📍 <span className="hidden sm:inline">Croquis</span>
             </button>
             
             <button onClick={() => setShowDirectorio(true)} className="bg-blue-50 border border-blue-200 text-blue-700 p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-blue-100 transition shadow-sm">
-              <Users size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Directorio</span>
+              <Users size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Directorio ({participantesDirectorio.length})</span>
             </button>
 
             <button onClick={() => setIsUsuarioModalOpen(true)} className="bg-indigo-50 text-indigo-700 p-2 sm:px-3 border border-indigo-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-indigo-100 transition shadow-sm">
-               Mi Perfil
+               <Settings size={16} className="w-4 h-4" /> Mi Perfil
             </button>
           </div>
         </header>
       </div>
 
-      {/* 2. BARRA DE DÍAS */}
       <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full px-1">
           {dias.map((dia, idx) => (
@@ -285,37 +439,64 @@ const ParticipantPanel = () => {
         </div>
       </div>
 
-      {/* 3. TABLA DE TURNOS */}
-      <div className="px-2 sm:px-6 w-max min-w-[100vw] pb-10 flex flex-col z-0 mx-auto">
+      <div className={`px-2 sm:px-6 pb-10 flex flex-col z-0 mx-auto ${vistaTarjetas ? 'w-full max-w-[1400px]' : 'w-max min-w-[100vw]'}`}>
+        
+        <div className="w-full max-w-[1400px] mt-2 mb-4 flex justify-start">
+          <div className="bg-slate-200/70 p-1 rounded-xl flex items-center">
+            <button 
+              onClick={() => setVistaTarjetas(false)} 
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!vistaTarjetas ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <LayoutList size={16} /> Tabla
+            </button>
+            <button 
+              onClick={() => setVistaTarjetas(true)} 
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${vistaTarjetas ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <LayoutGrid size={16} /> Tarjetas
+            </button>
+          </div>
+        </div>
+
         {diaActual ? (
-          <MatrizTurnosParticipante 
-            diaActual={diaActual} 
-            getParticipante={(id) => participantes.find(p => p.id === id)} 
-            miUsuarioId={miUsuario.id} 
-            onAsignarme={handleAsignarme} 
-            onQuitarme={handleQuitarme} 
-          />
+          vistaTarjetas ? (
+            <VistaTarjetasCajas 
+              diaActual={diaActual} 
+              getParticipante={(id) => participantes.find(p => p.id === id)}
+              miUsuarioId={miUsuario.id} 
+              isBusy={isBusy}
+              onAsignar={(c, _cn, t, _h) => handleAsignarme(c, t)} 
+              onQuitar={handleQuitarme} 
+              onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
+              adminPerms={{ cajas: false, horarios: false, especiales: false }}
+            />
+          ) : (
+            <MatrizTurnosParticipante 
+              diaActual={diaActual} 
+              getParticipante={(id) => participantes.find(p => p.id === id)} 
+              miUsuarioId={miUsuario.id} 
+              onAsignarme={handleAsignarme} 
+              onQuitarme={handleQuitarme} 
+            />
+          )
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 mt-10">
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 mt-10 w-full">
             <Calendar size={48} className="mb-4 opacity-50" />
-            <p className="font-bold">Aún no hay días configurados.</p>
+            <p className="font-bold">Aún no hay días configurados para ti.</p>
           </div>
         )}
       </div>
 
-      {/* MODALES ADICIONALES */}
       <ParticipantDrawer 
         isOpen={showDirectorio} 
         onClose={() => setShowDirectorio(false)} 
-        participantes={participantesEnriquecidos} 
+        participantes={participantesDirectorio} 
         currentUserId={miUsuario.id} 
         currentUserRole="Participante" 
         onEditParticipante={(id) => { if (id === miUsuario.id) setIsUsuarioModalOpen(true); }}
         onDeleteParticipante={() => {}} 
-        eventoId={eventoId}
-        adminId={adminId}
-        turnosLibresCount={turnosLibresCount}
-        turnosOcupadosCount={turnosOcupadosCount}
+        eventoId={eventoId} adminId={adminId}
+        turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount}
       />
 
       <ModalInfoUsuario 
@@ -329,27 +510,12 @@ const ParticipantPanel = () => {
       />
 
       <DownloadScheduleModal 
-        isOpen={downloadModal} 
-        onClose={() => setDownloadModal(false)} 
-        type="personal" 
-        seccionName="Mis Accesos" 
-        dias={dias} 
-        diaActivo={diaActivo} 
-        participantes={participantes} 
-        targetUserId={miUsuario.id} 
+        isOpen={downloadModal} onClose={() => setDownloadModal(false)} type="personal" 
+        seccionName="Mis Accesos" dias={dias} diaActivo={diaActivo} participantes={participantes} targetUserId={miUsuario.id} 
       />
 
-      <CroquisModal 
-        isOpen={showCroquis} 
-        onClose={() => setShowCroquis(false)} 
-        canEdit={false} 
-        croquis={croquisDataParaMostrar} 
-        onSaveCroquis={async (_file: File | null, _id: string) => {
-          return Promise.resolve();
-        }}
-      />
+      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisDataParaMostrar} onSaveCroquis={async () => Promise.resolve()}/>
 
-      {/* NUEVO: Modal de Confirmación de Salida Segura */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
@@ -359,18 +525,8 @@ const ParticipantPanel = () => {
             <h3 className="text-xl font-black text-slate-800 mb-2">¿Cerrar Sesión?</h3>
             <p className="text-sm text-slate-500 mb-6 font-medium">Estás a punto de salir de tu cuenta. Tendrás que volver a ingresar con tu fecha de nacimiento.</p>
             <div className="flex gap-3 w-full">
-              <button 
-                onClick={() => setShowLogoutConfirm(false)} 
-                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleLogout} 
-                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black shadow-md hover:bg-red-600 transition"
-              >
-                Sí, salir
-              </button>
+              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition">Cancelar</button>
+              <button onClick={handleLogout} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black shadow-md hover:bg-red-600 transition">Sí, salir</button>
             </div>
           </div>
         </div>

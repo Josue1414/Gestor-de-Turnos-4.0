@@ -117,21 +117,73 @@ export const useAdminLogic = (eventoId: string) => {
 
         // 3. CARGAR PARTICIPANTES (AISLAMIENTO TOTAL)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        
+        // 3. CARGAR PARTICIPANTES (AISLAMIENTO TOTAL + CRUCE SIN DUPLICADOS)
         let allParts: any[] = [];
         
         if (isCapitan) {
-          // El Capitán SOLO descarga a sus propios invitados
-          allParts = data.participantesPorCapitan?.[capitanIdL] || [];
-        } else {
-          // El Admin descarga los suyos + los de todos sus capitanes (para ver el panorama completo)
-          const misParts = data.participantesPorAdmin?.[adminIdL] || [];
-          allParts = [...misParts];
+          // El Capitán SOLO descarga a sus propios invitados y los que estén en sus cajas
+          const misParts = data.participantesPorCapitan?.[capitanIdL] || [];
+          const adminParts = data.participantesPorAdmin?.[adminIdL] || [];
+          const miDataCapitan = misCapitanes.find((c: any) => c.id === capitanIdL);
+          const misCajas = miDataCapitan?.cajasAsignadas || [];
           
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const partsEnMisCajas = adminParts.filter((p: any) => {
+            const rawDias = data.diasPorAdmin?.[adminIdL] || [];
+            return rawDias.some((dia: any) => 
+              dia.cajas.some((caja: any) => 
+                misCajas.includes(caja.id) && caja.turnos.some((t: any) => t.participanteId === p.id)
+              )
+            );
+          });
+          
+          // Agrupamos para evitar duplicados en la vista del capitán
+          const mapCapitan = new Map();
+          [...misParts, ...partsEnMisCajas].forEach(p => mapCapitan.set(p.id, p));
+          allParts = Array.from(mapCapitan.values());
+
+        } else {
+          // ADMIN: Consolida todos los participantes sin duplicar usando un Map
+          const allPartsMap = new Map<string, any>();
+
+          // 3.1 Cargar los creados por el Admin
+          const misParts = data.participantesPorAdmin?.[adminIdL] || [];
+          misParts.forEach((p: any) => {
+            allPartsMap.set(p.id, { ...p, creador: 'Admin', capitanesInvolucrados: new Set() });
+          });
+
+          // 3.2 Cargar los creados por los Capitanes
           misCapitanes.forEach((cap: any) => {
             const capParts = data.participantesPorCapitan?.[cap.id] || [];
-            allParts = [...allParts, ...capParts];
+            capParts.forEach((p: any) => {
+              if (!allPartsMap.has(p.id)) {
+                allPartsMap.set(p.id, { ...p, creador: cap.nombre, capitanesInvolucrados: new Set([cap.nombre]) });
+              }
+            });
           });
+
+          // 3.3 Calcular etiquetas dinámicas según los turnos asignados
+          const rawDias = data.diasPorAdmin?.[adminIdL] || [];
+          rawDias.forEach((dia: any) => {
+            dia.cajas.forEach((caja: any) => {
+              // Verificamos si esta caja le pertenece a algún capitán
+              const capitanDuenio = misCapitanes.find((c: any) => c.cajasAsignadas?.includes(caja.id));
+              if (capitanDuenio) {
+                caja.turnos.forEach((t: any) => {
+                  if (t.participanteId && allPartsMap.has(t.participanteId)) {
+                    const p = allPartsMap.get(t.participanteId);
+                    p.capitanesInvolucrados.add(capitanDuenio.nombre);
+                  }
+                });
+              }
+            });
+          });
+
+          // Convertir el Map a Array y los Sets a Arrays para el renderizado
+          allParts = Array.from(allPartsMap.values()).map(p => ({
+            ...p,
+            capitanesInvolucrados: Array.from(p.capitanesInvolucrados)
+          }));
         }
 
         const validatedParts = Array.isArray(allParts)
@@ -207,7 +259,11 @@ export const useAdminLogic = (eventoId: string) => {
       dia.cajas.forEach(caja => {
         caja.turnos.forEach(turno => {
           if (turno.participanteId === p.id) {
-            ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${caja.nombre}`);
+            // Evaluamos si el nombre de la caja ya dice "Caja", si no, se lo agregamos
+            const nombreCaja = caja.nombre as string;
+            const textoCaja = nombreCaja.toLowerCase().includes('caja') ? nombreCaja : `Caja ${nombreCaja}`;
+            
+            ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${textoCaja}`);
           }
         });
       });
@@ -350,9 +406,13 @@ export const useAdminLogic = (eventoId: string) => {
   const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[]) => {
     if (!eventoId || !adminIdL) return;
 
-    // VALIDACIÓN DE NOMBRES DUPLICADOS
-    const nombreNormalizado = nombre.trim().toLowerCase();
-    const existeDuplicado = capitanes.some(c => c.nombre.trim().toLowerCase() === nombreNormalizado);
+    // VALIDACIÓN DE NOMBRES DUPLICADOS (Ignorando mayúsculas y acentos)
+    const normalizeText = (text: string) => {
+      return text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    };
+
+    const nombreNormalizado = normalizeText(nombre);
+    const existeDuplicado = capitanes.some(c => normalizeText(c.nombre) === nombreNormalizado);
     if (existeDuplicado) {
       showToast('Ya existe un capitán con ese nombre. Por favor elige otro.', 'error');
       return;

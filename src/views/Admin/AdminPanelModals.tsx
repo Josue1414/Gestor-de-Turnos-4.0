@@ -10,7 +10,7 @@ import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import ModalInputHorario from '../../components/ModalInputHorario';
 import ModalAlertaChoque from '../../components/ModalAlertaChoque';
 import CroquisModal from '../../components/CroquisModal';
-import ModalAsignarCapitan from '../../components/ModalAsignarCapitan'; // <-- IMPORTACIÓN NUEVA
+import ModalAsignarCapitan from '../../components/ModalAsignarCapitan'; 
 
 const AdminPanelModals = (props: any) => {
   const {
@@ -25,15 +25,16 @@ const AdminPanelModals = (props: any) => {
     createShiftModal, setCreateShiftModal, handleValidarCrearHorario,
     clashModal, setClashModal,
     showCroquis, setShowCroquis, croquisData,
-    // PROPS NUEVAS PARA CAPITANES
-    showCapitanModal, setShowCapitanModal, cajasDisponibles, handleCrearCapitan
+    showCapitanModal, setShowCapitanModal, cajasDisponibles, handleCrearCapitan,
+    customInviteLink // <-- RECIBIMOS EL LINK DEL CAPITÁN LOGUEADO
   } = props;
 
   return (
     <>
       <AssignUserModal isOpen={modalAsignacion.isOpen} onClose={cerrarModalAsignacion} horario={modalAsignacion.horario} cajaNombre={modalAsignacion.cajaNombre} participantes={participantesEnriquecidos} busyUserIds={localBusyUserIds} onAssign={asignarUsuarioExistente} onCreateAndAssign={crearYAsignarUsuario} />
       
-      <ParticipantDrawer isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} currentUserRole="Administrador" onEditParticipante={handleAbrirPerfilParticipante} onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })} eventoId={eventoId} adminId={localStorage.getItem('current_admin_id') || 'demo'} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount} />
+      {/* SE LO PASAMOS AL CAJÓN */}
+      <ParticipantDrawer customInviteLink={customInviteLink} isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'} onEditParticipante={handleAbrirPerfilParticipante} onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })} eventoId={eventoId} adminId={localStorage.getItem('current_admin_id') || 'demo'} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount} />
       
       <EditNameModal isOpen={editModal.isOpen && editModal.type === 'caja'} title={editModal.title} initialValue={editModal.initialValue} label={editModal.label} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
       
@@ -43,7 +44,7 @@ const AdminPanelModals = (props: any) => {
       
       <CountdownDeleteModal isOpen={deleteEspecialModal.isOpen} onClose={() => setDeleteEspecialModal({ isOpen: false, cajaId: '', turnoId: '' })} onConfirm={() => { handleDeleteTurnoEspecial(deleteEspecialModal.cajaId, deleteEspecialModal.turnoId); setDeleteEspecialModal({ isOpen: false, cajaId: '', turnoId: '' }); }} title="Eliminar Horario Especial" message="Se eliminará este bloque de horario." />
       
-      <ModalInfoUsuario isOpen={isUsuarioModalOpen} onClose={() => setIsUsuarioModalOpen(false)} data={getDatosParaModal()} isViewingSelf={isViewingSelf} currentUserRole="Administrador" onSave={handleGuardarPerfilAjustado} checkNameExists={handleCheckNameDuplicate} onDownloadImage={() => { setDownloadModal({ isOpen: true, type: isViewingSelf ? 'general' : 'personal', targetUserId: usuarioActivo?.id }); setIsUsuarioModalOpen(false); }} />
+      <ModalInfoUsuario isOpen={isUsuarioModalOpen} onClose={() => setIsUsuarioModalOpen(false)} data={getDatosParaModal()} isViewingSelf={isViewingSelf} currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'} onSave={handleGuardarPerfilAjustado} checkNameExists={handleCheckNameDuplicate} onDownloadImage={() => { setDownloadModal({ isOpen: true, type: isViewingSelf ? 'general' : 'personal', targetUserId: usuarioActivo?.id }); setIsUsuarioModalOpen(false); }} />
       
       <DownloadScheduleModal isOpen={downloadModal.isOpen} onClose={() => setDownloadModal({ ...downloadModal, isOpen: false })} type={downloadModal.type} seccionName={seccionName} dias={dias} diaActivo={diaActivo} participantes={participantesEnriquecidos} targetUserId={downloadModal.targetUserId} />
       
@@ -53,7 +54,6 @@ const AdminPanelModals = (props: any) => {
       
       <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisData} onSaveCroquis={async () => Promise.resolve()} />
       
-      {/* NUEVO MODAL DE CAPITANES */}
       <ModalAsignarCapitan 
         isOpen={showCapitanModal} 
         onClose={() => setShowCapitanModal(false)} 

@@ -1,3 +1,4 @@
+// src/components/CountdownDeleteModal.tsx
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 

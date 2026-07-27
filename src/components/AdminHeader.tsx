@@ -55,6 +55,7 @@ interface AdminHeaderProps {
   onOpenCapitanModal?: () => void;
   onDeleteCapitan?: (id: string) => void;
   onSimularCapitan?: (id: string) => void;
+  dias?: any[];
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -70,7 +71,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
   onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
   adminPerms, isCapitan, 
-  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan
+  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias
 }) => {
   const [showStats, setShowStats] = useState(false);
 
@@ -108,9 +109,11 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isCapitan ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                 {isCapitan ? 'Capitán:' : 'Admin:'} <span className={isCapitan ? 'text-amber-900' : 'text-slate-700'}>{adminInfo.name}</span>
               </span>
-              <span className="text-[10px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 truncate max-w-[200px]">
-                {adminInfo.org}
-              </span>
+              {adminInfo.org && (
+                <span className="text-[10px] sm:text-xs font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 truncate max-w-[200px]">
+                  {adminInfo.org}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -149,10 +152,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             </button>
           )}
           
-          {/* BOTÓN: Ver Capitanes (Ahora controla el acordeón interno) */}
+          {/* BOTÓN: Ver Capitanes (Ahora controla el acordeón interno y muestra la cantidad) */}
           {!isCapitan && onToggleCapitanes && (
              <button onClick={onToggleCapitanes} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold transition shadow-sm ${showCapitanes ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300'}`}>
-               <Shield size={14} /> {showCapitanes ? 'Cerrar Capitanes' : 'Capitanes'}
+               <Shield size={14} /> {showCapitanes ? 'Cerrar Capitanes' : 'Capitanes'} {capitanes && capitanes.length > 0 ? `(${capitanes.length})` : ''}
              </button>
           )}
 
@@ -190,6 +193,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
              onDeleteCapitan={onDeleteCapitan}
              onSimularCapitan={onSimularCapitan}
              isOpen={true} 
+             dias={dias || []}
           />
         </div>
       )}

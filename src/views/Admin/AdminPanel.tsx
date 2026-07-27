@@ -17,7 +17,6 @@ import type { UsuarioModalData } from '../../components/ModalInfoUsuario';
 import type { CroquisItem } from '../../components/CroquisModal';
 import { calculateAdminStats } from '../../utils/statsCalculator';
 
-// --- IMPORTACIONES PARTICIONADAS ---
 import { getLocalBusyUserIds, getSiguienteHorario, validarNuevoHorario } from './AdminPanelFunciones';
 import AdminPanelModals from './AdminPanelModals';
 
@@ -29,6 +28,7 @@ interface ParticipanteExtendidoDb extends Participante {
   organizationLabel?: string;
   ubicaciones?: string[]; 
   fechaNacimiento?: string;
+  capitanAsignado?: string;
 }
 
 interface AdminInDB {
@@ -68,7 +68,6 @@ const AdminPanel = () => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan,
-    // EXTRACCIÓN DE DATOS PARA FILTRADO DE CAPITANES
     isCapitan, cajasAsignadasCapitan
   } = useAdminLogic(eventoId || 'demo'); 
 
@@ -78,15 +77,9 @@ const AdminPanel = () => {
   const [croquisData, setCroquisData] = useState<CroquisItem[]>([]);
   
   const [showCapitanModal, setShowCapitanModal] = useState(false);
-  // ESTADO PARA CONTROLAR EL ACORDEÓN DESDE EL HEADER
   const [showSeccionCapitanes, setShowSeccionCapitanes] = useState(false);
-
   const [currentAdminInfo, setCurrentAdminInfo] = useState<{name: string, org: string, diasAsignados?: string[]} | null>(null);
-
-  const [adminPerms, setAdminPerms] = useState<AdminPermissions>({
-    cajas: true, horarios: true, especiales: true
-  });
-
+  const [adminPerms, setAdminPerms] = useState<AdminPermissions>({ cajas: true, horarios: true, especiales: true });
   const [vistaTarjetas, setVistaTarjetas] = useState(false);
 
   useEffect(() => {
@@ -100,26 +93,28 @@ const AdminPanel = () => {
         const data = snap.data();
         const admins = (data.admins as AdminInDB[]) || [];
         const myAdmin = admins.find((a) => a.id === adminIdL);
-        
         const globalPerms = data.globalPermissions || { cajas: true, horarios: true, especiales: true };
 
-        // BUSCAMOS EL NOMBRE DEL CAPITÁN SI ESTAMOS EN ESA VISTA
         let nombreDisplay = 'Administrador';
+        let orgDisplay = ''; // Inicializamos vacío
+
         if (isCapitan && capitanIdL) {
             const capitanesDelAdmin = data.capitanesPorAdmin?.[adminIdL] || [];
             const miCapitan = capitanesDelAdmin.find((c: any) => c.id === capitanIdL);
             if (miCapitan) {
-                // Formato: Nombre del Capitan (Admin: Nombre del Admin)
                 nombreDisplay = `${miCapitan.nombre} (Admin: ${myAdmin?.name || 'General'})`;
+                // Si el capitán tiene organización, la mostramos. Si no, queda vacía.
+                orgDisplay = miCapitan.organizacion ? (miCapitan.organizationLabel ? `${miCapitan.organizationLabel}: ${miCapitan.organizacion}` : miCapitan.organizacion) : '';
             }
         } else if (myAdmin) {
             nombreDisplay = myAdmin.name || 'Administrador';
+            orgDisplay = myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada';
         }
 
         if (myAdmin) {
           setCurrentAdminInfo({
             name: nombreDisplay,
-            org: myAdmin.organizationLabel && myAdmin.organization ? `${myAdmin.organizationLabel}: ${myAdmin.organization}` : myAdmin.organization || 'Sin organización asignada',
+            org: orgDisplay,
             diasAsignados: myAdmin.diasAsignados
           });
 
@@ -136,9 +131,7 @@ const AdminPanel = () => {
 
         const listaCroquis: CroquisItem[] = [{ id: 'general', title: 'Croquis General del Evento', url: data.croquisUrl || null }];
         const croquisIndividual = data.croquisPorAdmin?.[adminIdL];
-        if (croquisIndividual) {
-          listaCroquis.push({ id: adminIdL, title: `Croquis Individual (${myAdmin?.name || 'Área'})`, url: croquisIndividual });
-        }
+        if (croquisIndividual) listaCroquis.push({ id: adminIdL, title: `Croquis Individual (${myAdmin?.name || 'Área'})`, url: croquisIndividual });
         setCroquisData(listaCroquis);
       }
     });
@@ -172,22 +165,16 @@ const AdminPanel = () => {
     }
   }, [diasFiltrados, diaActivo, dias, setDiaActivo]);
 
-  const permisosEfectivos = isCapitan
-    ? { cajas: false, horarios: false, especiales: false }
-    : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
-
+  const permisosEfectivos = isCapitan ? { cajas: false, horarios: false, especiales: false } : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
   const statsActuales = calculateAdminStats(diasFiltrados, participantesEnriquecidos as any);
   const turnosLibresCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
-
-  const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActualFiltrado, modalAsignacion.horario || ''), [diaActualFiltrado, modalAsignacion.horario]);
-
+  const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
+  
   const cajasDisponibles = useMemo(() => {
     if (!diaActual || !capitanes) return [];
     const cajasEnUso = capitanes.flatMap((c: any) => c.cajasAsignadas || []);
-    return diaActual.cajas
-      .filter((caja) => !cajasEnUso.includes(caja.id))
-      .map((caja) => ({ id: caja.id, nombre: caja.nombre as string }));
+    return diaActual.cajas.filter((caja) => !cajasEnUso.includes(caja.id)).map((caja) => ({ id: caja.id, nombre: caja.nombre as string }));
   }, [diaActual, capitanes]);
 
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
@@ -225,10 +212,7 @@ const AdminPanel = () => {
         }))
       }));
 
-      await updateDoc(docRef, {
-        [`participantesPorAdmin.${adminIdL}`]: participantesFiltrados,
-        [`diasPorAdmin.${adminIdL}`]: diasLimpios
-      });
+      await updateDoc(docRef, { [`participantesPorAdmin.${adminIdL}`]: participantesFiltrados, [`diasPorAdmin.${adminIdL}`]: diasLimpios });
     } catch (error) { console.error(error); }
   };
 
@@ -255,18 +239,42 @@ const AdminPanel = () => {
       const updatePayload: Record<string, unknown> = {};
 
       if (datosActualizados.role === 'Participante') {
-        const targetId = isCapitan ? capitanIdL : adminIdL;
-        const targetProperty = isCapitan ? 'participantesPorCapitan' : 'participantesPorAdmin';
+        // VALIDACIÓN DE ORIGEN DEL PARTICIPANTE
+        // Verificamos si este participante le pertenece a este capitán
+        const participantesDelCapitan = data.participantesPorCapitan?.[capitanIdL as string] || [];
+        const creadoPorMiCapitan = participantesDelCapitan.some((p: any) => p.id === datosActualizados.id);
         
-        const participantesBase: ParticipanteExtendidoDb[] = data[targetProperty]?.[targetId as string] || [];
+        // Si el logueado es capitán, pero el participante NO está en su lista local, significa que es del Admin
+        const belongsToCapitan = isCapitan && creadoPorMiCapitan;
+        
+        const targetProperty = belongsToCapitan ? 'participantesPorCapitan' : 'participantesPorAdmin';
+        const finalTargetId = belongsToCapitan ? capitanIdL : adminIdL;
+        
+        const participantesBase: ParticipanteExtendidoDb[] = data[targetProperty]?.[finalTargetId as string] || [];
         const actualizados = participantesBase.map((p) => 
-          p.id === datosActualizados.id ? { ...p, nombre: datosActualizados.name || p.nombre, telefono: datosActualizados.phone || '', codigoPais: datosActualizados.countryCode || '+52', notas: datosActualizados.notes || '', organizacion: datosActualizados.organization || '', organizationLabel: nuevaEtiqueta, fechaNacimiento: datosActualizados.birthDate || '' } : { ...p, organizationLabel: nuevaEtiqueta }
+          p.id === datosActualizados.id ? { 
+            ...p, 
+            nombre: datosActualizados.name || p.nombre, 
+            telefono: datosActualizados.phone || '', 
+            codigoPais: datosActualizados.countryCode || '+52', 
+            notas: datosActualizados.notes || '', 
+            organizacion: datosActualizados.organization || '', 
+            organizationLabel: nuevaEtiqueta, 
+            fechaNacimiento: datosActualizados.birthDate || '' 
+          } : p
         );
-        updatePayload[`${targetProperty}.${targetId}`] = actualizados;
+        updatePayload[`${targetProperty}.${finalTargetId}`] = actualizados;
         
       } else if ((datosActualizados.role as string) === 'Capitan' && isCapitan) {
         const capitanesList = data.capitanesPorAdmin?.[adminIdL] || [];
-        const actualizadosCapitanes = capitanesList.map((c: any) => c.id === capitanIdL ? { ...c, nombre: datosActualizados.name } : c);
+        const actualizadosCapitanes = capitanesList.map((c: any) => c.id === capitanIdL ? { 
+            ...c, 
+            nombre: datosActualizados.name,
+            telefono: datosActualizados.phone || '',
+            codigoPais: datosActualizados.countryCode || '+52',
+            organizacion: datosActualizados.organization || '',
+            organizationLabel: nuevaEtiqueta 
+        } : c);
         updatePayload[`capitanesPorAdmin.${adminIdL}`] = actualizadosCapitanes;
 
       } else if (datosActualizados.role === 'Administrador' || datosActualizados.role === 'SuperAdmin') {
@@ -283,6 +291,24 @@ const AdminPanel = () => {
 
   const getDatosParaModal = (): UsuarioModalData | null => {
     if (!usuarioActivo) return null;
+
+    if (isCapitan && usuarioActivo.role === 'Capitan') {
+      const capitanIdL = localStorage.getItem('current_capitan_id');
+      const miCapitan = capitanes.find((c: any) => c.id === capitanIdL);
+      return { 
+        id: capitanIdL as string, 
+        name: miCapitan?.nombre || 'Capitán', 
+        role: 'Capitan', 
+        phone: miCapitan?.telefono || '', 
+        countryCode: miCapitan?.codigoPais || '+52', 
+        supportArea: 'Gestión de Cajas', 
+        notes: '', 
+        organization: miCapitan?.organizacion || '', 
+        organizationLabel: miCapitan?.organizationLabel || 'Congregación', 
+        ubicaciones: [] 
+      };
+    }
+
     if (usuarioActivo.role === 'Participante') {
       const p = participantesEnriquecidos.find(x => x.id === usuarioActivo.id) as ParticipanteExtendidoDb | undefined;
       return { id: usuarioActivo.id, name: p?.nombre || usuarioActivo.name, role: 'Participante', phone: p?.telefono || '', countryCode: p?.codigoPais || '+52', supportArea: usuarioActivo.supportArea || '', notes: p?.notas || '', organization: p?.organizacion || '', organizationLabel: p?.organizationLabel || 'Congregación', ubicaciones: p?.ubicaciones || [], birthDate: p?.fechaNacimiento || '' };
@@ -332,6 +358,9 @@ const AdminPanel = () => {
     exportToExcel(seccionName || 'Evento', diasFiltrados as any, participantesEnriquecidos as any, statsActuales, currentAdminInfo);
   };
 
+  const currentCapitan = isCapitan ? capitanes.find((c: any) => c.id === localStorage.getItem('current_capitan_id')) : null;
+  const customInviteLink = currentCapitan ? currentCapitan.linkUnico : undefined;
+
   if (loading || !currentAdminInfo) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -364,7 +393,7 @@ const AdminPanel = () => {
           <AdminHeader 
             seccionName={seccionName} setSeccionName={setSeccionName} 
             isEditingTitle={isEditingTitle} setIsEditingTitle={setIsEditingTitle} 
-            onOpenProfile={isCapitan ? undefined : handleAbrirMiPerfil} 
+            onOpenProfile={handleAbrirMiPerfil} 
             onSave={isCapitan ? undefined : (handleSaveEventName as any)} 
             onShowCroquis={() => setShowCroquis(true)} 
             onBack={isExternalViewer || localStorage.getItem('simulando_capitan') === 'true' ? handleBack : undefined} 
@@ -384,14 +413,7 @@ const AdminPanel = () => {
             onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
             isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel} stats={statsActuales} adminPerms={permisosEfectivos}
             isCapitan={isCapitan}
-            
-            // PASAMOS LAS PROPIEDADES AL HEADER PARA EL ACORDEÓN
-            showCapitanes={showSeccionCapitanes}
-            onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)}
-            capitanes={capitanes || []}
-            onOpenCapitanModal={() => setShowCapitanModal(true)}
-            onDeleteCapitan={handleEliminarCapitan}
-            onSimularCapitan={handleSimularCapitan}
+            showCapitanes={showSeccionCapitanes} onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)} capitanes={capitanes || []} onOpenCapitanModal={() => setShowCapitanModal(true)} onDeleteCapitan={handleEliminarCapitan} onSimularCapitan={handleSimularCapitan} dias={diasFiltrados}
           />
         </div>
       </div>
@@ -429,13 +451,9 @@ const AdminPanel = () => {
          </div>
 
          {vistaTarjetas ? (
-           <VistaTarjetasCajas 
-              diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} 
-           />
+           <VistaTarjetasCajas diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
          ) : (
-           <MatrizTurnos 
-              diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} 
-            />
+           <MatrizTurnos diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
          )}
       </div>
 
@@ -449,9 +467,9 @@ const AdminPanel = () => {
         isUsuarioModalOpen={isUsuarioModalOpen} setIsUsuarioModalOpen={setIsUsuarioModalOpen} getDatosParaModal={getDatosParaModal} isViewingSelf={isViewingSelf} handleGuardarPerfilAjustado={handleGuardarPerfilAjustado} handleCheckNameDuplicate={handleCheckNameDuplicate} setDownloadModal={setDownloadModal} usuarioActivo={usuarioActivo}
         downloadModal={downloadModal} seccionName={seccionName} dias={diasFiltrados} diaActivo={diaActivo}
         createShiftModal={createShiftModal} setCreateShiftModal={setCreateShiftModal} handleValidarCrearHorario={handleValidarCrearHorario}
-        clashModal={clashModal} setClashModal={setClashModal}
-        showCroquis={showCroquis} setShowCroquis={setShowCroquis} croquisData={croquisData}
+        clashModal={clashModal} setClashModal={setClashModal} showCroquis={showCroquis} setShowCroquis={setShowCroquis} croquisData={croquisData}
         showCapitanModal={showCapitanModal} setShowCapitanModal={setShowCapitanModal} cajasDisponibles={cajasDisponibles} handleCrearCapitan={handleCrearCapitan}
+        isCapitan={isCapitan} customInviteLink={customInviteLink} 
       />
     </div>
   );

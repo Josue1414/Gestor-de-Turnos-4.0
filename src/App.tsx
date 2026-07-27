@@ -44,7 +44,9 @@ function App() {
 
           {/* Rutas para participantes e invitados */}
           <Route path="/p/:eventoId/:adminId/:participanteId" element={<ParticipantPanel />} />
-          <Route path="/invite/:eventoId/:adminId" element={<InviteScreen />} />
+          
+          {/* AÑADIMOS EL PARÁMETRO OPCIONAL :capitanLink? */}
+          <Route path="/invite/:eventoId/:adminId/:capitanLink?" element={<InviteScreen />} />
         </Routes>
 
       </ToastProvider>

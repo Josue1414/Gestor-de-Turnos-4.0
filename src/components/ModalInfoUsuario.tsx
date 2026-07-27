@@ -4,7 +4,7 @@ import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock } from
 export interface UsuarioModalData {
   id: string; 
   name: string; 
-  role: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; // <-- AÑADIDO CAPITÁN AQUÍ
+  role: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; 
   phone: string; 
   countryCode?: string;
   supportArea: string; 
@@ -23,7 +23,7 @@ interface ModalInfoUsuarioProps {
   data: UsuarioModalData | null; 
   isViewingSelf?: boolean;
   checkNameExists?: (name: string, currentId: string) => boolean;
-  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; // <-- AÑADIDO CAPITÁN AQUÍ
+  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan';
   onDownloadImage?: () => void; 
 }
 
@@ -39,7 +39,6 @@ const FieldItem = ({ icon, label, children }: { icon: React.ReactNode, label: st
 const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { data: UsuarioModalData }> = ({
   onClose, onSave, data, isViewingSelf, checkNameExists, currentUserRole = 'Administrador', onDownloadImage
 }) => {
-  // Inicialización estricta: Garantizamos que nada sea undefined
   const [formData, setFormData] = useState<UsuarioModalData>({
     ...data,
     birthDate: data.birthDate || '',
@@ -51,7 +50,8 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
   });
   const [errorName, setErrorName] = useState('');
 
-  const isEditable = isViewingSelf || (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin');
+  // HABILITADO TAMBIÉN PARA CAPITANES
+  const isEditable = isViewingSelf || (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin' || currentUserRole === 'Capitan');
   const isAdmin = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
 
   const handleSave = () => {
@@ -60,7 +60,6 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
       setErrorName('Ya existe alguien con este nombre. Agrega un apellido.');
       return;
     }
-    // Aseguramos de nuevo que se envíen textos vacíos en lugar de undefined
     onSave({
       ...formData,
       phone: formData.phone || '',
@@ -68,6 +67,14 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
       notes: formData.notes || '',
       organization: formData.organization || ''
     });
+  };
+
+  // Función para manejar solo 10 números
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numericValue = e.target.value.replace(/\D/g, ''); // Elimina todo lo que no sea número
+    if (numericValue.length <= 10) {
+      setFormData({ ...formData, phone: numericValue });
+    }
   };
 
   return (
@@ -97,7 +104,7 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          <FieldItem icon={<Phone size={18} />} label="Teléfono (Opcional)">
+          <FieldItem icon={<Phone size={18} />} label="Teléfono (10 dígitos)">
             {isEditable ? (
               <div className="flex gap-2">
                 <input 
@@ -105,8 +112,8 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
                   className="w-20 bg-white border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:border-blue-400 font-medium text-slate-700 text-center"
                 />
                 <input 
-                  type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700" placeholder="Ej. 55 1234 5678"
+                  type="tel" value={formData.phone} onChange={handlePhoneChange}
+                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700" placeholder="Ej. 5512345678"
                 />
               </div>
             ) : (
@@ -114,16 +121,19 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          <FieldItem icon={<Calendar size={18} />} label="Fecha de Nacimiento (Clave)">
-            {isEditable ? (
-              <input 
-                type="date" value={formData.birthDate} onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700"
-              />
-            ) : (
-              <span className="font-bold text-slate-800">{formData.birthDate || 'No registrada'}</span>
-            )}
-          </FieldItem>
+          {/* SOLO SE MUESTRA SI ES UN PARTICIPANTE */}
+          {formData.role === 'Participante' && (
+            <FieldItem icon={<Calendar size={18} />} label="Fecha de Nacimiento (Clave)">
+              {isEditable ? (
+                <input 
+                  type="date" value={formData.birthDate} onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700"
+                />
+              ) : (
+                <span className="font-bold text-slate-800">{formData.birthDate || 'No registrada'}</span>
+              )}
+            </FieldItem>
+          )}
 
           <FieldItem icon={<Briefcase size={18} />} label={formData.organizationLabel || "Congregación"}>
             {isEditable ? (

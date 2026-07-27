@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+// src/views/User/InviteScreen.tsx
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { User, Calendar } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ParticipanteSchema } from '../../utils/schemas';
 
-// Interfaz 100% estricta sin 'any'
 interface ParticipanteEnDB {
   id: string;
   nombre?: string;
@@ -16,16 +16,44 @@ interface ParticipanteEnDB {
 
 interface EventoDB {
   participantesPorAdmin?: Record<string, ParticipanteEnDB[]>;
+  participantesPorCapitan?: Record<string, ParticipanteEnDB[]>;
+  capitanesPorAdmin?: Record<string, any[]>;
+  nombre?: string;
 }
 
 const InviteScreen = () => {
-  const { eventoId, adminId } = useParams<{ eventoId: string; adminId: string }>();
+  const { eventoId, adminId, capitanLink } = useParams<{ eventoId: string; adminId: string; capitanLink?: string }>();
   
-  // Ya no usamos useNavigate porque necesitamos forzar la recarga de permisos en App.tsx
   const [nombre, setNombre] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [eventoNombre, setEventoNombre] = useState('Cargando...');
+  const [capitanNombre, setCapitanNombre] = useState('');
+
+  useEffect(() => {
+    const fetchEventoInfo = async () => {
+      if (!eventoId || !adminId) return;
+      try {
+        const docRef = doc(db, 'eventos', eventoId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as EventoDB;
+          setEventoNombre(data.nombre || 'Evento');
+          
+          if (capitanLink) {
+             const capitanes = data.capitanesPorAdmin?.[adminId] || [];
+             const capitanEncontrado = capitanes.find((c: any) => c.linkUnico === capitanLink);
+             if (capitanEncontrado) {
+               setCapitanNombre(capitanEncontrado.nombre);
+             }
+          }
+        }
+      } catch (err) { console.error(err); }
+    };
+    fetchEventoInfo();
+  }, [eventoId, adminId, capitanLink]);
 
   if (!eventoId || !adminId) {
     return (
@@ -55,11 +83,18 @@ const InviteScreen = () => {
       }
 
       const eventoData = docSnap.data() as EventoDB;
-      const participantesDelAdmin: ParticipanteEnDB[] = eventoData?.participantesPorAdmin?.[adminId] || [];
+      
+      const capitanes = eventoData.capitanesPorAdmin?.[adminId] || [];
+      const capitanObj = capitanLink ? capitanes.find((c:any) => c.linkUnico === capitanLink) : null;
+      
+      const isCapitanLink = !!capitanObj;
+      const targetId = isCapitanLink ? capitanObj.id : adminId;
+      const targetProp = isCapitanLink ? 'participantesPorCapitan' : 'participantesPorAdmin';
+      
+      const participantesDelTarget: ParticipanteEnDB[] = eventoData[targetProp]?.[targetId] || [];
 
       const nombreBuscado = nombre.trim().toLowerCase();
-      
-      const participanteExistente = participantesDelAdmin.find(
+      const participanteExistente = participantesDelTarget.find(
         (p) => p.nombre?.trim().toLowerCase() === nombreBuscado
       );
 
@@ -75,10 +110,10 @@ const InviteScreen = () => {
           miId = participanteExistente.id;
         } else {
           miId = participanteExistente.id;
-          const actualizados = participantesDelAdmin.map((p) => 
+          const actualizados = participantesDelTarget.map((p) => 
             p.id === miId ? { ...p, fechaNacimiento } : p
           );
-          await updateDoc(docRef, { [`participantesPorAdmin.${adminId}`]: actualizados });
+          await updateDoc(docRef, { [`${targetProp}.${targetId}`]: actualizados });
         }
       } else {
         miId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -90,28 +125,30 @@ const InviteScreen = () => {
           fechaNacimiento
         };
 
-        // Validar con Zod antes de escribir en Firestore
         const validation = ParticipanteSchema.safeParse(nuevoParticipante);
         if (!validation.success) {
-          console.error('Participante inválido, no se guardará:', validation.error);
           setError('Datos inválidos en el participante. Contacta al organizador.');
           setLoading(false);
           return;
         }
 
-        const actualizados = [...participantesDelAdmin, validation.data];
-        await updateDoc(docRef, { [`participantesPorAdmin.${adminId}`]: actualizados });
+        const actualizados = [...participantesDelTarget, validation.data];
+        await updateDoc(docRef, { [`${targetProp}.${targetId}`]: actualizados });
       }
 
-      // Guardamos los permisos
       localStorage.setItem('user_role', 'participante');
       localStorage.setItem('current_admin_id', adminId);
       
-      // SOLUCIÓN AL ERROR DE RUTAS BLANCAS: 
-      // Redirección nativa que obliga a App.tsx a leer el localStorage actualizado
+      // GUARDAMOS EL CONTEXTO VISUAL (Si entró con link de capitán, guardamos su ID)
+      if (capitanObj) {
+        localStorage.setItem('view_capitan_id', capitanObj.id);
+      } else {
+        localStorage.removeItem('view_capitan_id');
+      }
+      
       setTimeout(() => {
         window.location.href = `/p/${eventoId}/${adminId}/${miId}`;
-      }, 300); // 300ms permite que el botón muestre un bonito "Entrando..." antes de cambiar
+      }, 300);
 
     } catch (err) {
       console.error("Error en login de participante:", err);
@@ -127,7 +164,6 @@ const InviteScreen = () => {
 
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 animate-in zoom-in-95 duration-500 max-h-[95vh] flex flex-col">
         
-        {/* CABECERA REDUCIDA: Padding más pequeño, logo más pequeño, textos ajustados */}
         <div className="bg-blue-100 p-4 sm:p-5 text-center flex flex-col items-center border-b border-blue-200 shrink-0">
           <img 
             src="/logo-gestor-de-turnos.png" 
@@ -135,10 +171,15 @@ const InviteScreen = () => {
             className="w-14 h-14 sm:w-16 sm:h-16 object-cover mx-auto mb-2 sm:mb-3 rounded-2xl shadow-sm border border-blue-200 bg-white" 
           />
           <h1 className="text-lg sm:text-xl font-black text-blue-950 mb-0.5 tracking-tight uppercase">Acceso a Turnos</h1>
-          <p className="text-blue-700 text-[9px] sm:text-[10px] font-bold tracking-widest uppercase">Participantes</p>
+          
+          <div className="mt-1">
+             <span className={`text-[10px] sm:text-xs font-black px-2 py-1 rounded-md tracking-wider uppercase inline-block ${capitanNombre ? 'bg-amber-500 text-white shadow-sm' : 'bg-blue-600 text-white shadow-sm'}`}>
+               {capitanNombre ? `Equipo de ${capitanNombre}` : 'Acceso Libre/General'}
+             </span>
+             <p className="text-[10px] text-blue-700 font-bold mt-1.5 opacity-80 uppercase tracking-widest">{eventoNombre}</p>
+          </div>
         </div>
 
-        {/* CONTENEDOR DEL FORMULARIO: padding ligeramente reducido y clase flex-1 */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
           <p className="text-slate-500 text-xs sm:text-sm font-medium mb-4 sm:mb-5 leading-relaxed text-center">
             Ingresa tu nombre y fecha de nacimiento. La fecha servirá como tu clave de acceso personal.

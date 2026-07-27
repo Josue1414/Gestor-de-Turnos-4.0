@@ -1,11 +1,14 @@
+// src/components/ParticipantDrawer.tsx
 import React, { useState } from 'react';
-import { X, Users, Settings, Share2, Copy, CheckCircle, MessageCircle, Trash2, UserPlus } from 'lucide-react';
+import { X, Users, Settings, Share2, CheckCircle, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
 import type { Participante } from '../types';
 import { useToast } from './ToastProvider';
 
 export interface ParticipanteExtendido extends Participante {
   telefono?: string;
   notas?: string;
+  creador?: string; 
+  capitanesInvolucrados?: string[]; 
 }
 
 interface ParticipantDrawerProps {
@@ -15,46 +18,46 @@ interface ParticipantDrawerProps {
   onEditParticipante: (id: string) => void;
   onDeleteParticipante: (id: string, nombre: string) => void;
   currentUserId?: string; 
-  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin'; 
+  currentUserRole?: 'Administrador' | 'Participante' | 'SuperAdmin' | 'Capitan'; 
   eventoId?: string; 
   adminId?: string;  
   turnosLibresCount?: number;
   turnosOcupadosCount?: number;
+  customInviteLink?: string; 
 }
 
 const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({ 
   isOpen, onClose, participantes, onEditParticipante, onDeleteParticipante, currentUserId, currentUserRole = 'Administrador',
-  eventoId = 'demo-evento', adminId = 'demo-admin',
+  eventoId = 'demo-evento', adminId = 'demo-admin', customInviteLink
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
   const { showToast } = useToast();
 
-  const participantesFiltrados = participantes.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim())
-  );
+  // ORDENAMOS PARA QUE EL USUARIO ACTUAL QUEDE HASTA ARRIBA
+  const participantesFiltrados = participantes
+    .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim()))
+    .sort((a, b) => {
+      if (a.id === currentUserId) return -1;
+      if (b.id === currentUserId) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
 
-  const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
+  const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin' || currentUserRole === 'Capitan';
 
-  // NUEVO: Función segura de copiado (Evita el error en IP Local)
   const copiarSeguro = (texto: string) => {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(texto);
     } else {
-      // Truco para conexiones HTTP locales (192.168.x.x)
       const textArea = document.createElement("textarea");
       textArea.value = texto;
       textArea.style.position = "absolute";
       textArea.style.left = "-999999px";
       document.body.prepend(textArea);
       textArea.select();
-      try {
-        document.execCommand('copy');
-      } catch (error) {
-        console.error("Error copiando texto", error);
-      } finally {
-        textArea.remove();
-      }
+      try { document.execCommand('copy'); } catch (error) { console.error(error); } finally { textArea.remove(); }
     }
   };
 
@@ -72,27 +75,22 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
       showToast('Este participante no tiene número de teléfono registrado.', 'error'); 
       return; 
     }
-    
     const numeroLimpio = participante.telefono.replace(/\D/g, '');
     const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participante.id}`;
     const mensaje = `¡Hola ${participante.nombre}! 👋\n\nAquí tienes tu link de acceso único para elegir tus turnos en el evento:\n${url}\n\nPor favor, no compartas este link, es solo tuyo.`;
-    
     window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   const handleCopyInviteLink = () => {
-    const url = `${window.location.origin}/invite/${eventoId}/${adminId}`;
+    const base = `${window.location.origin}/invite/${eventoId}/${adminId}`;
+    const url = customInviteLink ? `${base}/${customInviteLink}` : base;
     copiarSeguro(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
     showToast('¡Link de invitación general copiado!', 'success');
   };
 
-  const handleCopyAllLinks = () => {
-    let textoMasivo = `📋 *Lista de Accesos Personales - Turnos*\n\n`;
-    participantes.forEach(p => {
-      textoMasivo += `• ${p.nombre}:\n  ${window.location.origin}/p/${eventoId}/${adminId}/${p.id}\n\n`;
-    });
-    copiarSeguro(textoMasivo);
-    showToast('¡Lista copiada! Pégala en tu grupo o lista de difusión de WhatsApp.', 'success');
+  const toggleTurnos = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedId(expandedId === id ? null : id);
   };
 
   return (
@@ -124,10 +122,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
           {canEdit && (
             <div className="flex flex-col gap-2 mt-2">
               <button onClick={handleCopyInviteLink} className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
-                <UserPlus size={16} /> Copiar Link de Invitación General
-              </button>
-              <button onClick={handleCopyAllLinks} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
-                <Copy size={14} /> Copiar Todos los Links (Para Grupo)
+                <UserPlus size={16} /> Copiar Link de Invitación
               </button>
             </div>
           )}
@@ -138,17 +133,38 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
             participantesFiltrados.map((p) => {
               const esMiUsuario = p.id === currentUserId;
               const tieneTelefono = Boolean(p.telefono && p.telefono.trim().length > 7);
+              const isExpanded = expandedId === p.id;
               
               return (
                 <div key={p.id} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${esMiUsuario ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'}`}>
-                  <div className="flex justify-between items-center">
-                    <div className="font-bold text-sm text-slate-700 flex items-center gap-2 truncate pr-2">
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.estado === 'Libre' ? 'bg-emerald-400 shadow-sm shadow-emerald-300' : 'bg-blue-400 shadow-sm shadow-blue-300'}`}></span>
-                      {p.nombre} {esMiUsuario && <span className="text-xs text-blue-500 font-black">(Tú)</span>}
+                  <div className="flex justify-between items-start">
+                    
+                    <div className="min-w-0 pr-2 flex-1">
+                      <div className="font-bold text-sm text-slate-700 flex items-center gap-2 truncate">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.estado === 'Libre' ? 'bg-emerald-400 shadow-sm shadow-emerald-300' : 'bg-blue-400 shadow-sm shadow-blue-300'}`}></span>
+                        <span className="truncate">{p.nombre}</span>
+                        {esMiUsuario && <span className="text-xs text-blue-500 font-black shrink-0">(Tú)</span>}
+                      </div>
+
+                      {/* ETIQUETAS. Bloqueamos la de Admin si es vista Participante */}
+                      {currentUserRole !== 'Participante' && (
+                        <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
+                          {p.creador === 'Admin' && (
+                            <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                              Creado por Admin
+                            </span>
+                          )}
+
+                          {currentUserRole === 'Administrador' && p.capitanesInvolucrados && p.capitanesInvolucrados.map((capNombre, idx) => (
+                            <span key={idx} className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                              Capitán: {capNombre}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      
                       {canEdit && (
                         <>
                           <button 
@@ -192,12 +208,24 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                   </div>
                   
                   {p.estado === 'Asignado' && p.ubicaciones && p.ubicaciones.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {p.ubicaciones.map((ubi, index) => (
-                        <p key={index} className="text-[11px] text-blue-600 font-bold ml-4 flex items-center gap-1 bg-blue-50/50 w-fit px-2 py-0.5 rounded-md border border-blue-100">
-                          📍 {ubi}
-                        </p>
-                      ))}
+                    <div className="mt-3 ml-4">
+                      <button 
+                        onClick={(e) => toggleTurnos(p.id, e)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                      >
+                        <ChevronDown size={14} className={`transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        {isExpanded ? 'Ocultar Turnos' : `Ver Turnos (${p.ubicaciones.length})`}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-2 space-y-1.5 animate-in slide-in-from-top-1 fade-in duration-200">
+                          {p.ubicaciones.map((ubi, index) => (
+                            <p key={index} className="text-[11px] text-blue-700 font-bold flex items-center gap-1.5 bg-blue-50/70 w-fit px-2.5 py-1 rounded-md border border-blue-100/50">
+                              📍 {ubi}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
