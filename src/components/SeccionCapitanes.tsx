@@ -1,5 +1,6 @@
+// src/components/SeccionCapitanes.tsx
 import React, { useState } from 'react';
-import { Shield, Copy, Key, User, Trash2, Play, Box, CheckCircle, Users, Clock } from 'lucide-react';
+import { Shield, Key, User, Trash2, Play, Box, CheckCircle, Users, Clock } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import CountdownDeleteModal from './CountdownDeleteModal';
 
@@ -18,7 +19,7 @@ interface SeccionCapitanesProps {
   onDeleteCapitan: (id: string) => void;
   onSimularCapitan: (id: string) => void;
   isOpen: boolean;
-  dias: any[]; // Recibimos los días para poder extraer nombres y contar turnos
+  dias: any[];
 }
 
 const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({ 
@@ -26,25 +27,19 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
 }) => {
   const { showToast } = useToast();
   
-  // ESTADO PARA EL MODAL DE ELIMINACIÓN
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: '', nombre: '' });
-
-  const handleCopyLink = (link: string) => {
-    navigator.clipboard.writeText(link);
-    showToast('Enlace único de capitán copiado al portapapeles.', 'success');
-  };
 
   const handleCopyAccess = (usuario: string, pass: string) => {
     navigator.clipboard.writeText(`Usuario: ${usuario}\nContraseña: ${pass}`);
     showToast('Credenciales copiadas.', 'success');
   };
 
-  // Función para calcular las estadísticas y obtener nombres de cajas
+  // LÓGICA CORREGIDA: Contar participantes únicos
   const getCapitanStats = (cajasAsignadasIds: string[]) => {
     const nombresCajas: string[] = [];
     let totalTurnos = 0;
     let turnosDisponibles = 0;
-    let turnosOcupados = 0; // Representa a los participantes asignados
+    const participantesUnicos = new Set<string>(); // Utilizamos un Set para evitar duplicados
 
     dias.forEach(dia => {
       dia.cajas.forEach((caja: any) => {
@@ -55,7 +50,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
           totalTurnos += caja.turnos.length;
           caja.turnos.forEach((turno: any) => {
             if (turno.participanteId) {
-              turnosOcupados++;
+              participantesUnicos.add(turno.participanteId); // Añadimos el ID, el Set ignora repetidos
             } else {
               turnosDisponibles++;
             }
@@ -64,7 +59,12 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
       });
     });
 
-    return { nombresCajas, totalTurnos, turnosDisponibles, turnosOcupados };
+    return { 
+      nombresCajas, 
+      totalTurnos, 
+      turnosDisponibles, 
+      turnosOcupados: participantesUnicos.size // Devolvemos el tamaño del Set (participantes únicos)
+    };
   };
 
   const handleConfirmDelete = () => {
@@ -104,7 +104,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
               return (
                 <div key={capitan.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative group flex flex-col h-full">
                   
-                  {/* MODIFICACIÓN AQUÍ: Ahora abre el modal en lugar de eliminar directo */}
                   <button 
                     onClick={() => setDeleteModal({ isOpen: true, id: capitan.id, nombre: capitan.nombre })}
                     className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
@@ -118,7 +117,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                   </h4>
                   
                   <div className="flex-1 space-y-4 mb-4">
-                    {/* Bloque de Accesos Compacto */}
                     <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex items-center justify-between">
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide leading-none">Usr: <span className="text-slate-700 lowercase">{capitan.usuario}</span></span>
@@ -133,7 +131,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                       </button>
                     </div>
 
-                    {/* Lista de Cajas Asignadas */}
                     <div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">Cajas Asignadas</span>
                       <div className="flex flex-wrap gap-1.5">
@@ -149,7 +146,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                       </div>
                     </div>
 
-                    {/* Resumen de Asignaciones Dinámico */}
                     <div>
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">Desempeño de Horarios</span>
                        <div className="grid grid-cols-3 gap-2">
@@ -169,14 +165,8 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                     </div>
                   </div>
 
-                  {/* Botones de Acción */}
+                  {/* ELIMINADO EL BOTÓN NEGRO. Solo queda el de simular vista */}
                   <div className="flex flex-col gap-2 mt-auto">
-                     <button 
-                       onClick={() => handleCopyLink(capitan.linkUnico)}
-                       className="w-full bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-bold py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
-                     >
-                       <Copy size={12} /> Copiar Link Invitación
-                     </button>
                      <button 
                        onClick={() => onSimularCapitan(capitan.id)}
                        className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
@@ -192,7 +182,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
         </div>
       </div>
 
-      {/* IMPLEMENTACIÓN DEL MODAL DE ELIMINACIÓN */}
       <CountdownDeleteModal 
         isOpen={deleteModal.isOpen} 
         onClose={() => setDeleteModal({ isOpen: false, id: '', nombre: '' })} 

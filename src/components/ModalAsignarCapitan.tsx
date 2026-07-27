@@ -11,12 +11,38 @@ interface ModalAsignarCapitanProps {
   isOpen: boolean;
   onClose: () => void;
   cajasDisponibles: CajaDisponible[];
-  onSave: (nombre: string, cajasAsignadas: string[]) => void;
+  // Se actualiza onSave para recibir la contraseña segura generada
+  onSave: (nombre: string, cajasAsignadas: string[], passwordGenerado: string) => void;
 }
 
 const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClose, cajasDisponibles, onSave }) => {
   const [nombre, setNombre] = useState('');
   const [cajasSeleccionadas, setCajasSeleccionadas] = useState<string[]>([]);
+
+  // Función para generar contraseña de 8 caracteres (letras, números y símbolos)
+  const generarPasswordSegura = () => {
+    const mayusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const minusculas = 'abcdefghijkmnpqrstuvwxyz';
+    const numeros = '23456789';
+    const simbolos = '!@#$%&*';
+
+    let password = '';
+    
+    // Aseguramos al menos un carácter de cada tipo para cumplir con los estándares de seguridad
+    password += mayusculas[Math.floor(Math.random() * mayusculas.length)];
+    password += minusculas[Math.floor(Math.random() * minusculas.length)];
+    password += numeros[Math.floor(Math.random() * numeros.length)];
+    password += simbolos[Math.floor(Math.random() * simbolos.length)];
+
+    // Completamos los caracteres restantes hasta llegar a 8
+    const todos = mayusculas + minusculas + numeros + simbolos;
+    for (let i = password.length; i < 8; i++) {
+      password += todos[Math.floor(Math.random() * todos.length)];
+    }
+
+    // Mezclamos los caracteres para que el patrón no sea predecible
+    return password.split('').sort(() => 0.5 - Math.random()).join('');
+  };
 
   // Limpiar el formulario cuando se abre el modal
   useEffect(() => {
@@ -37,7 +63,12 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
   const handleGuardar = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre.trim() || cajasSeleccionadas.length === 0) return;
-    onSave(nombre.trim(), cajasSeleccionadas);
+    
+    // Generamos la contraseña en el momento de confirmar la creación
+    const passwordSeguro = generarPasswordSegura();
+    
+    // Pasamos el nombre, las cajas y la nueva contraseña
+    onSave(nombre.trim(), cajasSeleccionadas, passwordSeguro);
     onClose();
   };
 

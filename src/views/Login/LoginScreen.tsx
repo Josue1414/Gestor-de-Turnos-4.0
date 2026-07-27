@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useToast } from '../../components/ToastProvider';
 
-// TIPADOS ESTRICTOS
 interface AdminLoginData {
   id: string;
   password?: string;
@@ -16,10 +15,9 @@ interface SupervisorLoginData {
   password?: string;
 }
 
-// 1. Añadimos la interfaz para el Capitán (CORRECCIÓN APLICADA AQUÍ)
 interface CapitanLoginData {
   id: string;
-  usuario?: string; // Ahora TypeScript sabe que los capitanes tienen un nombre de usuario corto
+  usuario?: string; 
   password?: string;
 }
 
@@ -39,16 +37,29 @@ const LoginScreen = () => {
   const SUPERADMIN_USER = import.meta.env.VITE_SUPERADMIN_USER;
   const SUPERADMIN_PASSWORD = import.meta.env.VITE_SUPERADMIN_PASSWORD;
 
+  // 1. LÓGICA DE RECUPERACIÓN AUTOMÁTICA PWA (Celulares)
+  useEffect(() => {
+    const role = localStorage.getItem('user_role');
+    const eventoId = localStorage.getItem('current_evento_id'); // Ahora también lo guardamos
+    const pUrl = localStorage.getItem('saved_participant_url');
+
+    if (role === 'superadmin') navigate('/super-admin', { replace: true });
+    else if (role === 'supervisor' && eventoId) navigate(`/supervisor/${eventoId}`, { replace: true });
+    else if (role === 'admin' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
+    else if (role === 'capitan' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
+    else if (role === 'participante' && pUrl) navigate(pUrl, { replace: true });
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const cod = codigo.trim();
     const pass = password.trim();
     
-    // Limpiamos memorias antiguas por seguridad
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
-    localStorage.removeItem('current_capitan_id'); // Limpiamos rastro de capitán
+    localStorage.removeItem('current_capitan_id'); 
+    localStorage.removeItem('current_evento_id'); // Limpiamos el evento
     sessionStorage.removeItem('visor_externo_tipo');
 
     if (!cod || !pass) {
@@ -56,14 +67,12 @@ const LoginScreen = () => {
       return;
     }
 
-    // 1. VALIDACIÓN DEL SUPER ADMIN
     if (cod === SUPERADMIN_USER && pass === SUPERADMIN_PASSWORD) {
       localStorage.setItem('user_role', 'superadmin');
       navigate('/super-admin');
       return;
     } 
 
-    // 2. BUSCAR EN FIREBASE (Supervisor, Administrador o Capitán)
     setIsLoading(true);
     try {
       const eventosRef = collection(db, 'eventos');
@@ -80,13 +89,11 @@ const LoginScreen = () => {
       snapshot.forEach(doc => {
         const evento = doc.data() as EventoLoginData;
         
-        // 2.1 REVISAR SI ES SUPERVISOR
         if (evento.supervisor && evento.supervisor.usuario === cod && evento.supervisor.password === pass) {
           supervisorFound = true;
           eventoIdFound = doc.id;
         }
 
-        // 2.2 REVISAR SI ES ADMINISTRADOR NORMAL
         const admins = evento.admins || [];
         const matchedAdmin = admins.find((a) => a.id === cod && a.password === pass);
 
@@ -96,37 +103,34 @@ const LoginScreen = () => {
           adminIdFound = matchedAdmin.id;
         }
 
-        // 2.3 REVISAR SI ES CAPITÁN (CORRECCIÓN APLICADA AQUÍ)
         const capitanesDict = evento.capitanesPorAdmin || {};
-        // Recorremos las listas de capitanes de todos los admins del evento
         for (const adminIdPadre in capitanesDict) {
           const listaCapitanes = capitanesDict[adminIdPadre] || [];
-          
-          // Cambiamos c.id por c.usuario, ya que el Capitán ingresa su usuario corto (ej. cap-ABCD)
           const matchedCapitan = listaCapitanes.find((c) => c.usuario === cod && c.password === pass);
           
           if (matchedCapitan) {
             capitanFound = true;
             eventoIdFound = doc.id;
-            capitanIdFound = matchedCapitan.id; // Guardamos su ID interno para las consultas
-            adminIdFound = adminIdPadre; // Necesitamos saber de qué admin es este capitán
+            capitanIdFound = matchedCapitan.id; 
+            adminIdFound = adminIdPadre; 
           }
         }
       });
 
-      // 3. DECISIÓN DE RUTAS BASADA EN EL ROL ENCONTRADO
       if (supervisorFound) {
         localStorage.setItem('user_role', 'supervisor');
+        localStorage.setItem('current_evento_id', eventoIdFound);
         navigate(`/supervisor/${eventoIdFound}`);
       } else if (adminFound) {
         localStorage.setItem('user_role', 'admin');
         localStorage.setItem('current_admin_id', adminIdFound);
+        localStorage.setItem('current_evento_id', eventoIdFound);
         navigate(`/admin/${eventoIdFound}`); 
       } else if (capitanFound) {
-        // Redirección para el Capitán
         localStorage.setItem('user_role', 'capitan');
-        localStorage.setItem('current_admin_id', adminIdFound); // Carga la estructura del evento de su jefe
-        localStorage.setItem('current_capitan_id', capitanIdFound); // Guarda su ID para abrir su cajón de invitados
+        localStorage.setItem('current_admin_id', adminIdFound); 
+        localStorage.setItem('current_capitan_id', capitanIdFound); 
+        localStorage.setItem('current_evento_id', eventoIdFound);
         navigate(`/admin/${eventoIdFound}`); 
       } else {
         showToast('Credenciales incorrectas. Verifica tu usuario y contraseña.', 'error');

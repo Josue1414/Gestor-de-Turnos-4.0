@@ -37,7 +37,6 @@ const ParticipantPanel = () => {
   const [participantes, setParticipantes] = useState<ParticipanteExtendidoDb[]>([]);
   const [eventoNombre, setEventoNombre] = useState('Evento');
   
-  // NUEVO ESTADO: Guarda las horas globales ocupadas de Rebeca para proteger colisiones
   const [misHorariosGlobales, setMisHorariosGlobales] = useState<string[]>([]);
   
   const [croquisGral, setCroquisGral] = useState<string | null>(null);
@@ -53,6 +52,14 @@ const ParticipantPanel = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const { showToast } = useToast();
+
+  // PROTECCIÓN DE RUTA Y BOTÓN "ATRÁS"
+  useEffect(() => {
+    const role = localStorage.getItem('user_role');
+    if (role !== 'participante') {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     if (!eventoId || !adminId) return;
@@ -87,7 +94,6 @@ const ParticipantPanel = () => {
         
         const currentUser = allParts.find(p => p.id === participanteId);
         
-        // 1. ANTES DE FILTRAR LAS CAJAS, GUARDAMOS TODOS SUS HORARIOS (Defensa Global)
         const rawDias = data.diasPorAdmin?.[adminId] || [];
         const ocupadosGlobales: string[] = [];
         rawDias.forEach((d: any) => {
@@ -101,21 +107,18 @@ const ParticipantPanel = () => {
         });
         setMisHorariosGlobales(ocupadosGlobales);
 
-        // 2. APLICAMOS EL FILTRO VISUAL DEPENDIENDO DEL LINK POR EL QUE ENTRÓ
         let diasProcesados: DiaEvento[] = rawDias;
         const viewCapitanId = localStorage.getItem('view_capitan_id');
         let cajasVisibles: string[] | null = null;
         let nombreEquipoActual = '';
 
         if (viewCapitanId) {
-           // Entró por un link específico de capitán (Ej: Rebeca entrando al link de Saúl)
            const capVista = capitanes.find((c: any) => c.id === viewCapitanId);
            if (capVista) {
                cajasVisibles = capVista.cajasAsignadas || [];
                nombreEquipoActual = capVista.nombre;
            }
         } else if (currentUser?.capitanId) {
-           // Entró por link general, pero es intrínseco de un capitán
            cajasVisibles = currentUser.cajasDelCapitan || [];
            nombreEquipoActual = currentUser.capitanNombre || '';
         }
@@ -127,7 +130,6 @@ const ParticipantPanel = () => {
            }));
         }
 
-        // Actualizamos para que la vista de UI muestre el equipo correcto
         if (currentUser && nombreEquipoActual) {
             currentUser.capitanNombre = nombreEquipoActual;
         }
@@ -184,7 +186,6 @@ const ParticipantPanel = () => {
 
   const miUsuario = participantesEnriquecidos.find(p => p.id === participanteId);
 
-  // FILTRO AISLADO PARA EL DIRECTORIO: Solo vemos compañeros del mismo link
   const participantesDirectorio = useMemo(() => {
     if (!miUsuario) return [];
     const capitanVistaId = localStorage.getItem('view_capitan_id') || miUsuario.capitanId;
@@ -293,7 +294,6 @@ const ParticipantPanel = () => {
     } catch { return false; }
   }, []);
 
-  // LÓGICA REESCRITA: Ahora usamos misHorariosGlobales para evitar sobreposición en otras listas invisibles
   const isBusy = useCallback((horario: string) => {
       return misHorariosGlobales.some(miHor => hayChoque(miHor, horario));
   }, [misHorariosGlobales, hayChoque]);
@@ -336,14 +336,26 @@ const ParticipantPanel = () => {
     } catch (error) { console.error(error); }
   };
 
+  // LOGOUT ACTUALIZADO PARA DEVOLVER AL ENLACE DEL CAPITÁN SI APLICA
+  // Fragmento de ParticipantPanel.tsx
   const handleLogout = useCallback(() => {
+    const savedCapitanLink = localStorage.getItem('saved_capitan_link');
+    
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
-    localStorage.removeItem('view_capitan_id'); // Limpiar el contexto temporal
+    localStorage.removeItem('view_capitan_id');
+    localStorage.removeItem('saved_capitan_link');
+    localStorage.removeItem('saved_participant_url');
+    
     if (eventoId && adminId) {
-      navigate(`/invite/${eventoId}/${adminId}`);
+      if (savedCapitanLink) {
+         // ACTUALIZAMOS A LA NUEVA RUTA AQUÍ:
+         navigate(`/invite-team/${eventoId}/${adminId}/${savedCapitanLink}`, { replace: true });
+      } else {
+         navigate(`/invite/${eventoId}/${adminId}`, { replace: true });
+      }
     } else {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   }, [eventoId, adminId, navigate]);
 

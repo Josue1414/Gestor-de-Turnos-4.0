@@ -82,10 +82,21 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   };
 
   const handleCopyInviteLink = () => {
-    const base = `${window.location.origin}/invite/${eventoId}/${adminId}`;
-    const url = customInviteLink ? `${base}/${customInviteLink}` : base;
+    // 1. Definimos ambas bases (General y Equipo)
+    const baseGeneral = `${window.location.origin}/invite/${eventoId}/${adminId}`;
+    const baseEquipo = `${window.location.origin}/invite-team/${eventoId}/${adminId}`;
+    
+    // 2. Si existe un customInviteLink, usamos la ruta de equipo. Si no, la general.
+    const url = customInviteLink ? `${baseEquipo}/${customInviteLink}` : baseGeneral;
+    
     copiarSeguro(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
-    showToast('¡Link de invitación general copiado!', 'success');
+    
+    // Mensaje dinámico para dar mejor retroalimentación
+    const mensajeToast = customInviteLink 
+      ? '¡Link de invitación del equipo copiado!' 
+      : '¡Link de invitación general copiado!';
+      
+    showToast(mensajeToast, 'success');
   };
 
   const toggleTurnos = (id: string, e: React.MouseEvent) => {

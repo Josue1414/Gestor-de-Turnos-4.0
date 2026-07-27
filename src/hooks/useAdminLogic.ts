@@ -403,7 +403,8 @@ export const useAdminLogic = (eventoId: string) => {
   const handleCheckNameDuplicate = (name: string, currentId: string) => participantes.some(p => p.id !== currentId && p.nombre.trim().toLowerCase() === name.trim().toLowerCase());
 
   // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
-  const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[]) => {
+  // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
+  const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[], passwordSeguro: string) => {
     if (!eventoId || !adminIdL) return;
 
     // VALIDACIÓN DE NOMBRES DUPLICADOS (Ignorando mayúsculas y acentos)
@@ -425,7 +426,7 @@ export const useAdminLogic = (eventoId: string) => {
         id: `cap_${Date.now()}_${randomString}`,
         nombre,
         usuario: `cap-${randomString.toUpperCase()}`,
-        password: randomString,
+        password: passwordSeguro, // <-- AQUÍ SE GUARDA LA NUEVA CONTRASEÑA DE 8 CARACTERES
         cajasAsignadas,
         linkUnico: `inv-cap-${randomString}`
       };

@@ -58,7 +58,7 @@ const AdminPanelModals = (props: any) => {
         isOpen={showCapitanModal} 
         onClose={() => setShowCapitanModal(false)} 
         cajasDisponibles={cajasDisponibles} 
-        onSave={handleCrearCapitan} 
+        onSave={(nombre, cajas, pwd) => handleCrearCapitan(nombre, cajas, pwd)} // <-- ASEGÚRATE DE QUE ESTÉ ASÍ
       />
     </>
   );

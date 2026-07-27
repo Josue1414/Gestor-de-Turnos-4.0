@@ -335,11 +335,20 @@ const AdminPanel = () => {
 
   const handleBack = () => {
     if (localStorage.getItem('simulando_capitan') === 'true') {
+      // SOLUCIÓN: Restaurar el rol correcto dependiendo de quién estaba simulando
+      // Leemos el visorTipo que ya declaraste arriba en este archivo
+      if (visorTipo === 'SuperAdmin') {
+        localStorage.setItem('user_role', 'superadmin');
+      } else if (visorTipo === 'Supervisor') {
+        localStorage.setItem('user_role', 'supervisor');
+      } else {
         localStorage.setItem('user_role', 'admin');
-        localStorage.removeItem('current_capitan_id');
-        localStorage.removeItem('simulando_capitan');
-        window.location.reload();
-        return;
+      }
+      
+      localStorage.removeItem('current_capitan_id');
+      localStorage.removeItem('simulando_capitan');
+      window.location.reload();
+      return;
     }
 
     const destino = visorTipo === 'SuperAdmin' ? '/super-admin' : `/supervisor/${eventoId}`;
@@ -433,7 +442,7 @@ const AdminPanel = () => {
 
       <div className={`px-2 sm:px-6 pb-10 flex flex-col z-0 overflow-visible bg-transparent rounded-none sm:rounded-2xl border-none sm:border border-transparent mb-0 sm:mb-4 ${vistaTarjetas ? 'w-full' : 'min-w-max'}`}>
          
-         <div className="w-full max-w-[1400px] mx-auto mt-2 mb-4 flex justify-end">
+         <div className="w-full max-w-[1400px] mx-auto mt-2 mb-4 flex justify-start">
             <div className="bg-slate-200/70 p-1 rounded-xl flex items-center">
               <button 
                 onClick={() => setVistaTarjetas(false)} 
