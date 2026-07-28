@@ -67,7 +67,7 @@ const AdminPanel = () => {
     handleCrearCaja, handleCrearCajaEspecial, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
-    capitanes, handleCrearCapitan, handleEliminarCapitan,
+    capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan, // <-- AGREGADO handleEditarCapitan
     isCapitan, cajasAsignadasCapitan
   } = useAdminLogic(eventoId || 'demo'); 
 
@@ -96,14 +96,13 @@ const AdminPanel = () => {
         const globalPerms = data.globalPermissions || { cajas: true, horarios: true, especiales: true };
 
         let nombreDisplay = 'Administrador';
-        let orgDisplay = ''; // Inicializamos vacío
+        let orgDisplay = '';
 
         if (isCapitan && capitanIdL) {
             const capitanesDelAdmin = data.capitanesPorAdmin?.[adminIdL] || [];
             const miCapitan = capitanesDelAdmin.find((c: any) => c.id === capitanIdL);
             if (miCapitan) {
                 nombreDisplay = `${miCapitan.nombre} (Admin: ${myAdmin?.name || 'General'})`;
-                // Si el capitán tiene organización, la mostramos. Si no, queda vacía.
                 orgDisplay = miCapitan.organizacion ? (miCapitan.organizationLabel ? `${miCapitan.organizationLabel}: ${miCapitan.organizacion}` : miCapitan.organizacion) : '';
             }
         } else if (myAdmin) {
@@ -112,10 +111,19 @@ const AdminPanel = () => {
         }
 
         if (myAdmin) {
+          // Extraemos a la fuerza los días asignados: Del capitán si es capitán, o del Admin
+          let diasReales: string[] | undefined = myAdmin.diasAsignados;
+          
+          if (isCapitan && capitanIdL) {
+            const capitanesDelAdmin = data.capitanesPorAdmin?.[adminIdL] || [];
+            const miCapitan = capitanesDelAdmin.find((c: any) => c.id === capitanIdL);
+            diasReales = miCapitan?.diasAsignados;
+          }
+
           setCurrentAdminInfo({
             name: nombreDisplay,
             org: orgDisplay,
-            diasAsignados: myAdmin.diasAsignados
+            diasAsignados: diasReales // <-- AHORA ALIMENTA AL CAPITÁN SUS DÍAS
           });
 
           if (myAdmin.permissions) {
@@ -142,7 +150,11 @@ const AdminPanel = () => {
   const diasPermitidos = useMemo(() => {
     if (!currentAdminInfo) return [];
     if (currentAdminInfo.diasAsignados === undefined) return dias;
-    return dias.filter(d => currentAdminInfo.diasAsignados!.includes(d.nombreDia));
+    // Soporta búsqueda por ID (Capitanes) o por Nombre (Admin)
+    return dias.filter(d => 
+      currentAdminInfo.diasAsignados!.includes(d.nombreDia) || 
+      currentAdminInfo.diasAsignados!.includes(d.id)
+    );
   }, [dias, currentAdminInfo]);
 
   const diasFiltrados = useMemo(() => {
@@ -165,18 +177,33 @@ const AdminPanel = () => {
     }
   }, [diasFiltrados, diaActivo, dias, setDiaActivo]);
 
+  // ==========================================
+  // DATOS PARA CAPITANES (CREACIÓN Y EDICIÓN)
+  // ==========================================
+  const listadoDiasDisponibles = useMemo(() => {
+    return diasPermitidos.map(d => ({ id: d.id, nombreDia: d.nombreDia }));
+  }, [diasPermitidos]);
+
+  const cajasTotalesParaCapitanes = useMemo(() => {
+    if (!diasPermitidos) return [];
+    return diasPermitidos.flatMap(dia => 
+      dia.cajas.map(caja => ({ id: caja.id, nombre: `${caja.nombre} (${dia.nombreDia})`, diaId: dia.id }))
+    );
+  }, [diasPermitidos]);
+
+  const cajasLibresParaCrear = useMemo(() => {
+    if (!capitanes) return cajasTotalesParaCapitanes;
+    const cajasEnUso = capitanes.flatMap((c: any) => c.cajasAsignadas || []);
+    return cajasTotalesParaCapitanes.filter(c => !cajasEnUso.includes(c.id));
+  }, [cajasTotalesParaCapitanes, capitanes]);
+  // ==========================================
+
   const permisosEfectivos = isCapitan ? { cajas: false, horarios: false, especiales: false } : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
   const statsActuales = calculateAdminStats(diasFiltrados, participantesEnriquecidos as any);
   const turnosLibresCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
   
-  const cajasDisponibles = useMemo(() => {
-    if (!diaActual || !capitanes) return [];
-    const cajasEnUso = capitanes.flatMap((c: any) => c.cajasAsignadas || []);
-    return diaActual.cajas.filter((caja) => !cajasEnUso.includes(caja.id)).map((caja) => ({ id: caja.id, nombre: caja.nombre as string }));
-  }, [diaActual, capitanes]);
-
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
     const validacion = validarNuevoHorario(inicio, fin, diaActual);
     if (validacion.error) { alert(validacion.error); return; }
@@ -239,12 +266,9 @@ const AdminPanel = () => {
       const updatePayload: Record<string, unknown> = {};
 
       if (datosActualizados.role === 'Participante') {
-        // VALIDACIÓN DE ORIGEN DEL PARTICIPANTE
-        // Verificamos si este participante le pertenece a este capitán
         const participantesDelCapitan = data.participantesPorCapitan?.[capitanIdL as string] || [];
         const creadoPorMiCapitan = participantesDelCapitan.some((p: any) => p.id === datosActualizados.id);
         
-        // Si el logueado es capitán, pero el participante NO está en su lista local, significa que es del Admin
         const belongsToCapitan = isCapitan && creadoPorMiCapitan;
         
         const targetProperty = belongsToCapitan ? 'participantesPorCapitan' : 'participantesPorAdmin';
@@ -335,8 +359,6 @@ const AdminPanel = () => {
 
   const handleBack = () => {
     if (localStorage.getItem('simulando_capitan') === 'true') {
-      // SOLUCIÓN: Restaurar el rol correcto dependiendo de quién estaba simulando
-      // Leemos el visorTipo que ya declaraste arriba en este archivo
       if (visorTipo === 'SuperAdmin') {
         localStorage.setItem('user_role', 'superadmin');
       } else if (visorTipo === 'Supervisor') {
@@ -370,8 +392,8 @@ const AdminPanel = () => {
       participantesEnriquecidos as any, 
       statsActuales, 
       currentAdminInfo,
-      capitanes, // PASAMOS LA LISTA DE CAPITANES
-      isCapitan  // PASAMOS EL ROL ACTUAL (True = descarga su Excel filtrado, False = descarga el global del Admin)
+      capitanes, 
+      isCapitan 
     );
   };
 
@@ -430,7 +452,12 @@ const AdminPanel = () => {
             onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
             isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel} stats={statsActuales} adminPerms={permisosEfectivos}
             isCapitan={isCapitan}
+            
             showCapitanes={showSeccionCapitanes} onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)} capitanes={capitanes || []} onOpenCapitanModal={() => setShowCapitanModal(true)} onDeleteCapitan={handleEliminarCapitan} onSimularCapitan={handleSimularCapitan} dias={diasFiltrados}
+            // PASAMOS LAS NUEVAS PROPS A ADMIN HEADER PARA QUE SECCION CAPITANES PUEDA EDITAR
+            diasDisponibles={listadoDiasDisponibles} 
+            cajasDisponibles={cajasTotalesParaCapitanes} 
+            onEditCapitan={handleEditarCapitan}
           />
         </div>
       </div>
@@ -485,7 +512,13 @@ const AdminPanel = () => {
         downloadModal={downloadModal} seccionName={seccionName} dias={diasFiltrados} diaActivo={diaActivo}
         createShiftModal={createShiftModal} setCreateShiftModal={setCreateShiftModal} handleValidarCrearHorario={handleValidarCrearHorario}
         clashModal={clashModal} setClashModal={setClashModal} showCroquis={showCroquis} setShowCroquis={setShowCroquis} croquisData={croquisData}
-        showCapitanModal={showCapitanModal} setShowCapitanModal={setShowCapitanModal} cajasDisponibles={cajasDisponibles} handleCrearCapitan={handleCrearCapitan}
+        showCapitanModal={showCapitanModal} setShowCapitanModal={setShowCapitanModal} 
+        
+        // PASAMOS SOLO LAS CAJAS LIBRES AL MODAL DE CREACIÓN DE CAPITANES
+        cajasDisponibles={cajasLibresParaCrear} 
+        diasDisponibles={listadoDiasDisponibles}
+
+        handleCrearCapitan={handleCrearCapitan}
         isCapitan={isCapitan} customInviteLink={customInviteLink} 
       />
     </div>

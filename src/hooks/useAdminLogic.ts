@@ -404,13 +404,13 @@ export const useAdminLogic = (eventoId: string) => {
 
   // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
   // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
-  const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[], passwordSeguro: string) => {
+  // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
+  
+  // Modificar handleCrearCapitan para que reciba diasAsignados
+  const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[], diasAsignados: string[], passwordSeguro: string) => {
     if (!eventoId || !adminIdL) return;
 
-    // VALIDACIÓN DE NOMBRES DUPLICADOS (Ignorando mayúsculas y acentos)
-    const normalizeText = (text: string) => {
-      return text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    };
+    const normalizeText = (text: string) => text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
     const nombreNormalizado = normalizeText(nombre);
     const existeDuplicado = capitanes.some(c => normalizeText(c.nombre) === nombreNormalizado);
@@ -426,14 +426,28 @@ export const useAdminLogic = (eventoId: string) => {
         id: `cap_${Date.now()}_${randomString}`,
         nombre,
         usuario: `cap-${randomString.toUpperCase()}`,
-        password: passwordSeguro, // <-- AQUÍ SE GUARDA LA NUEVA CONTRASEÑA DE 8 CARACTERES
+        password: passwordSeguro,
         cajasAsignadas,
+        diasAsignados, // <-- SE GUARDA LOS DIAS AQUI
         linkUnico: `inv-cap-${randomString}`
       };
       const actualizados = [...capitanes, nuevoCapitan];
       await updateDoc(docRef, { [`capitanesPorAdmin.${adminIdL}`]: actualizados });
       showToast('Capitán creado exitosamente.', 'success');
     } catch (error) { console.error(error); showToast('Error al crear el capitán.', 'error'); }
+  };
+
+  // NUEVA FUNCION PARA EDITAR
+  const handleEditarCapitan = async (capitanId: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => {
+    if (!eventoId || !adminIdL) return;
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const actualizados = capitanes.map(c => 
+        c.id === capitanId ? { ...c, nombre, diasAsignados, cajasAsignadas } : c
+      );
+      await updateDoc(docRef, { [`capitanesPorAdmin.${adminIdL}`]: actualizados });
+      showToast('Capitán actualizado exitosamente.', 'success');
+    } catch (error) { console.error(error); showToast('Error al actualizar el capitán.', 'error'); }
   };
 
   const handleEliminarCapitan = async (capitanId: string) => {
@@ -458,7 +472,7 @@ export const useAdminLogic = (eventoId: string) => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, horarioEditando, setHorarioEditando,
     clashModal, setClashModal, misDatosAdmin,
-    capitanes, handleCrearCapitan, handleEliminarCapitan,
+    capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
     // EXPORTAMOS LA DATA CLAVE PARA EL FILTRADO VISUAL
     isCapitan, cajasAsignadasCapitan
   };

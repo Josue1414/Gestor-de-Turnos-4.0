@@ -1,15 +1,18 @@
 // src/components/SeccionCapitanes.tsx
 import React, { useState } from 'react';
-import { Shield, Key, User, Trash2, Play, Box, CheckCircle, Users, Clock } from 'lucide-react';
+import { Shield, Key, User, Trash2, Play, Box, CheckCircle, Users, Clock, Edit3, Eye, EyeOff, Calendar } from 'lucide-react';
 import { useToast } from './ToastProvider';
 import CountdownDeleteModal from './CountdownDeleteModal';
+import ModalEditarCapitan from './ModalEditarCapitan';
+import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
 
 export interface CapitanData {
   id: string; 
   nombre: string;
   usuario: string; 
   password?: string;
-  cajasAsignadas: string[]; 
+  cajasAsignadas: string[];
+  diasAsignados?: string[];
   linkUnico: string;
 }
 
@@ -18,30 +21,42 @@ interface SeccionCapitanesProps {
   onOpenModal: () => void;
   onDeleteCapitan: (id: string) => void;
   onSimularCapitan: (id: string) => void;
+  onEditCapitan: (id: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => void;
   isOpen: boolean;
   dias: any[];
+  diasDisponibles: DiaDisponible[];
+  cajasDisponibles: CajaDisponible[];
 }
 
 const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({ 
-  capitanes, onOpenModal, onDeleteCapitan, onSimularCapitan, isOpen, dias
+  capitanes, onOpenModal, onDeleteCapitan, onSimularCapitan, onEditCapitan, isOpen, dias, diasDisponibles, cajasDisponibles
 }) => {
   const { showToast } = useToast();
   
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: '', nombre: '' });
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; capitan: CapitanData | null }>({ isOpen: false, capitan: null });
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
 
   const handleCopyAccess = (usuario: string, pass: string) => {
     navigator.clipboard.writeText(`Usuario: ${usuario}\nContraseña: ${pass}`);
     showToast('Credenciales copiadas.', 'success');
   };
 
-  // LÓGICA CORREGIDA: Contar participantes únicos
-  const getCapitanStats = (cajasAsignadasIds: string[]) => {
+  const togglePasswordVisibility = (id: string) => {
+    setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // LÓGICA CORREGIDA: Contamos usuarios únicos en lugar de turnos ocupados
+  const getCapitanStats = (cajasAsignadasIds: string[], diasAsignadosIds: string[] = []) => {
     const nombresCajas: string[] = [];
     let totalTurnos = 0;
     let turnosDisponibles = 0;
-    const participantesUnicos = new Set<string>(); // Utilizamos un Set para evitar duplicados
+    const participantesUnicos = new Set<string>(); // Recolector de IDs sin duplicados
 
     dias.forEach(dia => {
+      // Si este día no le fue asignado al capitán, lo ignoramos por completo
+      if (!diasAsignadosIds.includes(dia.id)) return;
+
       dia.cajas.forEach((caja: any) => {
         if (cajasAsignadasIds.includes(caja.id)) {
           if (!nombresCajas.includes(caja.nombre)) {
@@ -50,7 +65,8 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
           totalTurnos += caja.turnos.length;
           caja.turnos.forEach((turno: any) => {
             if (turno.participanteId) {
-              participantesUnicos.add(turno.participanteId); // Añadimos el ID, el Set ignora repetidos
+              // Agregamos el ID al Set. Si el participante ya estaba, el Set lo ignora automáticamente.
+              participantesUnicos.add(turno.participanteId); 
             } else {
               turnosDisponibles++;
             }
@@ -63,7 +79,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
       nombresCajas, 
       totalTurnos, 
       turnosDisponibles, 
-      turnosOcupados: participantesUnicos.size // Devolvemos el tamaño del Set (participantes únicos)
+      cantidadParticipantes: participantesUnicos.size // Devolvemos el total de IDs únicos
     };
   };
 
@@ -74,6 +90,11 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
   };
 
   if (!isOpen) return null;
+
+  const cajasParaEdicion = cajasDisponibles.filter(caja => {
+    const perteneceAOtro = capitanes.some(c => c.id !== editModal.capitan?.id && (c.cajasAsignadas || []).includes(caja.id));
+    return !perteneceAOtro;
+  });
 
   return (
     <>
@@ -99,18 +120,30 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
             </div>
           ) : (
             capitanes.map(capitan => {
-              const { nombresCajas, totalTurnos, turnosDisponibles, turnosOcupados } = getCapitanStats(capitan.cajasAsignadas);
+              // Obtenemos los stats actualizados con el recuento único
+              const { nombresCajas, totalTurnos, turnosDisponibles, cantidadParticipantes } = getCapitanStats(capitan.cajasAsignadas, capitan.diasAsignados);
+              
+              const nombresDias = (capitan.diasAsignados || []).map(id => diasDisponibles.find(d => d.id === id)?.nombreDia).filter(Boolean);
 
               return (
-                <div key={capitan.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative group flex flex-col h-full">
+                <div key={capitan.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative flex flex-col h-full pt-10">
                   
-                  <button 
-                    onClick={() => setDeleteModal({ isOpen: true, id: capitan.id, nombre: capitan.nombre })}
-                    className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    title="Eliminar capitán"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="absolute top-3 right-3 flex gap-2">
+                    <button 
+                      onClick={() => setEditModal({ isOpen: true, capitan })}
+                      className="p-1.5 text-blue-500 hover:text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
+                      title="Editar capitán"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => setDeleteModal({ isOpen: true, id: capitan.id, nombre: capitan.nombre })}
+                      className="p-1.5 text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+                      title="Eliminar capitán"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
 
                   <h4 className="font-black text-slate-800 flex items-center gap-1.5 mb-3 pr-8">
                     <User size={16} className="text-amber-500" /> {capitan.nombre}
@@ -118,17 +151,44 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                   
                   <div className="flex-1 space-y-4 mb-4">
                     <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex items-center justify-between">
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1.5">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide leading-none">Usr: <span className="text-slate-700 lowercase">{capitan.usuario}</span></span>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide leading-none">Psw: <span className="text-slate-700">{capitan.password}</span></span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide leading-none">Psw: </span>
+                          <span className="text-[10px] text-slate-700 font-mono tracking-widest bg-slate-200 px-1.5 py-0.5 rounded leading-none">
+                            {showPassword[capitan.id] ? capitan.password : '••••••••'}
+                          </span>
+                          <button 
+                            onClick={() => togglePasswordVisibility(capitan.id)} 
+                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors bg-white rounded shadow-sm border border-slate-200"
+                            title={showPassword[capitan.id] ? "Ocultar" : "Mostrar"}
+                          >
+                            {showPassword[capitan.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                          </button>
+                        </div>
                       </div>
                       <button 
                         onClick={() => handleCopyAccess(capitan.usuario, capitan.password || '')}
-                        className="p-1.5 text-slate-400 hover:text-amber-600 bg-white border border-slate-200 rounded-md transition"
+                        className="p-2 text-slate-400 hover:text-amber-600 bg-white border border-slate-200 rounded-lg transition shadow-sm"
                         title="Copiar credenciales"
                       >
-                        <Key size={14} />
+                        <Key size={16} />
                       </button>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">Días Asignados</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {nombresDias.length > 0 ? (
+                          nombresDias.map((nombre, idx) => (
+                            <span key={idx} className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Calendar size={10} /> {nombre}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">Sin días</span>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -141,7 +201,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                             </span>
                           ))
                         ) : (
-                          <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md">Sin cajas</span>
+                          <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">Sin cajas</span>
                         )}
                       </div>
                     </div>
@@ -149,27 +209,26 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
                     <div>
                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1.5 block">Desempeño de Horarios</span>
                        <div className="grid grid-cols-3 gap-2">
-                          <div className="bg-slate-50 border border-slate-100 p-2 rounded-lg flex flex-col items-center justify-center">
+                          <div className="bg-slate-50 border border-slate-100 p-2 rounded-lg flex flex-col items-center justify-center shadow-sm">
                              <span className="text-xs font-black text-slate-700 flex items-center gap-1"><Clock size={12}/> {totalTurnos}</span>
                              <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">Totales</span>
                           </div>
-                          <div className="bg-emerald-50 border border-emerald-100 p-2 rounded-lg flex flex-col items-center justify-center">
+                          <div className="bg-emerald-50 border border-emerald-100 p-2 rounded-lg flex flex-col items-center justify-center shadow-sm">
                              <span className="text-xs font-black text-emerald-700 flex items-center gap-1"><CheckCircle size={12}/> {turnosDisponibles}</span>
                              <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-wider mt-0.5">Libres</span>
                           </div>
-                          <div className="bg-blue-50 border border-blue-100 p-2 rounded-lg flex flex-col items-center justify-center">
-                             <span className="text-xs font-black text-blue-700 flex items-center gap-1"><Users size={12}/> {turnosOcupados}</span>
+                          <div className="bg-blue-50 border border-blue-100 p-2 rounded-lg flex flex-col items-center justify-center shadow-sm">
+                             <span className="text-xs font-black text-blue-700 flex items-center gap-1"><Users size={12}/> {cantidadParticipantes}</span>
                              <span className="text-[8px] font-bold text-blue-500 uppercase tracking-wider mt-0.5">Participantes</span>
                           </div>
                        </div>
                     </div>
                   </div>
 
-                  {/* ELIMINADO EL BOTÓN NEGRO. Solo queda el de simular vista */}
                   <div className="flex flex-col gap-2 mt-auto">
                      <button 
                        onClick={() => onSimularCapitan(capitan.id)}
-                       className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm"
+                       className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider py-2 rounded-xl transition flex items-center justify-center gap-1.5 shadow-sm"
                      >
                        <Play size={12} fill="currentColor" /> Simular Vista
                      </button>
@@ -188,6 +247,16 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
         onConfirm={handleConfirmDelete} 
         title={`Capitán: ${deleteModal.nombre}`} 
         message="Esta acción no se puede deshacer. Perderá inmediatamente el acceso a sus cajas." 
+      />
+
+      <ModalEditarCapitan
+        isOpen={editModal.isOpen}
+        onClose={() => setEditModal({ isOpen: false, capitan: null })}
+        capitan={editModal.capitan}
+        capitanesExistentes={capitanes}
+        diasDisponibles={diasDisponibles}
+        cajasDisponibles={cajasParaEdicion}
+        onSave={onEditCapitan}
       />
     </>
   );

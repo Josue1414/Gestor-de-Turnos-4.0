@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
+import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
 
 interface AdminInfo {
   name: string;
@@ -56,6 +57,11 @@ interface AdminHeaderProps {
   onDeleteCapitan?: (id: string) => void;
   onSimularCapitan?: (id: string) => void;
   dias?: any[];
+  
+  // NUEVAS PROPS: Para la edición de capitanes
+  diasDisponibles?: DiaDisponible[];
+  cajasDisponibles?: CajaDisponible[];
+  onEditCapitan?: (id: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => void;
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -71,7 +77,8 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
   onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
   adminPerms, isCapitan, 
-  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias
+  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
+  diasDisponibles, cajasDisponibles, onEditCapitan
 }) => {
   const [showStats, setShowStats] = useState(false);
 
@@ -152,7 +159,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             </button>
           )}
           
-          {/* BOTÓN: Ver Capitanes (Ahora controla el acordeón interno y muestra la cantidad) */}
+          {/* BOTÓN: Ver Capitanes */}
           {!isCapitan && onToggleCapitanes && (
              <button onClick={onToggleCapitanes} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold transition shadow-sm ${showCapitanes ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300'}`}>
                <Shield size={14} /> {showCapitanes ? 'Cerrar Capitanes' : 'Capitanes'} {capitanes && capitanes.length > 0 ? `(${capitanes.length})` : ''}
@@ -194,6 +201,9 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
              onSimularCapitan={onSimularCapitan}
              isOpen={true} 
              dias={dias || []}
+             diasDisponibles={diasDisponibles || []}
+             cajasDisponibles={cajasDisponibles || []}
+             onEditCapitan={onEditCapitan!}
           />
         </div>
       )}

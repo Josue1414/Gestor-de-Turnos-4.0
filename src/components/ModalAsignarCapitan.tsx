@@ -1,25 +1,31 @@
 // src/components/ModalAsignarCapitan.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Box, UserPlus } from 'lucide-react';
+import { X, Shield, Box, UserPlus, Calendar } from 'lucide-react';
 
-interface CajaDisponible {
+export interface DiaDisponible {
+  id: string;
+  nombreDia: string;
+}
+
+export interface CajaDisponible {
   id: string;
   nombre: string;
+  diaId: string;
 }
 
 interface ModalAsignarCapitanProps {
   isOpen: boolean;
   onClose: () => void;
+  diasDisponibles: DiaDisponible[];
   cajasDisponibles: CajaDisponible[];
-  // Se actualiza onSave para recibir la contraseña segura generada
-  onSave: (nombre: string, cajasAsignadas: string[], passwordGenerado: string) => void;
+  onSave: (nombre: string, cajasAsignadas: string[], diasAsignados: string[], passwordGenerado: string) => void;
 }
 
-const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClose, cajasDisponibles, onSave }) => {
+const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClose, diasDisponibles, cajasDisponibles, onSave }) => {
   const [nombre, setNombre] = useState('');
   const [cajasSeleccionadas, setCajasSeleccionadas] = useState<string[]>([]);
+  const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
 
-  // Función para generar contraseña de 8 caracteres (letras, números y símbolos)
   const generarPasswordSegura = () => {
     const mayusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     const minusculas = 'abcdefghijkmnpqrstuvwxyz';
@@ -27,50 +33,54 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
     const simbolos = '!@#$%&*';
 
     let password = '';
-    
-    // Aseguramos al menos un carácter de cada tipo para cumplir con los estándares de seguridad
     password += mayusculas[Math.floor(Math.random() * mayusculas.length)];
     password += minusculas[Math.floor(Math.random() * minusculas.length)];
     password += numeros[Math.floor(Math.random() * numeros.length)];
     password += simbolos[Math.floor(Math.random() * simbolos.length)];
 
-    // Completamos los caracteres restantes hasta llegar a 8
     const todos = mayusculas + minusculas + numeros + simbolos;
     for (let i = password.length; i < 8; i++) {
       password += todos[Math.floor(Math.random() * todos.length)];
     }
 
-    // Mezclamos los caracteres para que el patrón no sea predecible
     return password.split('').sort(() => 0.5 - Math.random()).join('');
   };
 
-  // Limpiar el formulario cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
       setNombre('');
       setCajasSeleccionadas([]);
+      setDiasSeleccionados([]);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    setCajasSeleccionadas(prev => prev.filter(cajaId => {
+      const caja = cajasDisponibles.find(c => c.id === cajaId);
+      return caja ? diasSeleccionados.includes(caja.diaId) : false;
+    }));
+  }, [diasSeleccionados, cajasDisponibles]);
 
   if (!isOpen) return null;
 
   const toggleCaja = (cajaId: string) => {
-    setCajasSeleccionadas(prev => 
-      prev.includes(cajaId) ? prev.filter(id => id !== cajaId) : [...prev, cajaId]
-    );
+    setCajasSeleccionadas(prev => prev.includes(cajaId) ? prev.filter(id => id !== cajaId) : [...prev, cajaId]);
+  };
+
+  const toggleDia = (diaId: string) => {
+    setDiasSeleccionados(prev => prev.includes(diaId) ? prev.filter(id => id !== diaId) : [...prev, diaId]);
   };
 
   const handleGuardar = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre.trim() || cajasSeleccionadas.length === 0) return;
+    if (!nombre.trim() || cajasSeleccionadas.length === 0 || diasSeleccionados.length === 0) return;
     
-    // Generamos la contraseña en el momento de confirmar la creación
     const passwordSeguro = generarPasswordSegura();
-    
-    // Pasamos el nombre, las cajas y la nueva contraseña
-    onSave(nombre.trim(), cajasSeleccionadas, passwordSeguro);
+    onSave(nombre.trim(), cajasSeleccionadas, diasSeleccionados, passwordSeguro);
     onClose();
   };
+
+  const cajasVisibles = cajasDisponibles.filter(caja => diasSeleccionados.includes(caja.diaId));
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
@@ -85,9 +95,9 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
-          <p className="text-xs font-bold text-slate-500 mb-5 leading-relaxed">
-            Crea un acceso limitado para un asistente. Solo podrá ver y gestionar las cajas que le asignes.
+        <div className="p-6 overflow-y-auto flex-1 space-y-5">
+          <p className="text-xs font-bold text-slate-500 leading-relaxed">
+            Crea un acceso limitado. Asigna los días y cajas que podrá gestionar.
           </p>
 
           <form id="form-capitan" onSubmit={handleGuardar} className="space-y-5">
@@ -105,27 +115,74 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
 
             <div>
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1 mb-2 block">
-                Cajas a su cargo
+                1. Días a su cargo
               </label>
-              {cajasDisponibles.length === 0 ? (
+              {diasDisponibles.length === 0 ? (
                 <p className="text-sm text-red-500 font-bold bg-red-50 p-3 rounded-xl border border-red-100">
-                  No hay cajas creadas en este día.
+                  No hay días disponibles.
                 </p>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {cajasDisponibles.map(caja => (
-                    <label key={caja.id} className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border transition-all ${cajasSeleccionadas.includes(caja.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:border-indigo-300'}`}>
-                      <span className={`text-sm font-bold flex items-center gap-2 ${cajasSeleccionadas.includes(caja.id) ? 'text-indigo-700' : 'text-slate-700'}`}>
-                        <Box size={16} /> {caja.nombre}
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                  {diasDisponibles.map(dia => (
+                    <label key={dia.id} className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border transition-all ${diasSeleccionados.includes(dia.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:border-indigo-300'}`}>
+                      <span className={`text-sm font-bold flex items-center gap-2 ${diasSeleccionados.includes(dia.id) ? 'text-indigo-700' : 'text-slate-700'}`}>
+                        <Calendar size={16} /> {dia.nombreDia}
                       </span>
                       <input 
                         type="checkbox" 
-                        checked={cajasSeleccionadas.includes(caja.id)} 
-                        onChange={() => toggleCaja(caja.id)} 
+                        checked={diasSeleccionados.includes(dia.id)} 
+                        onChange={() => toggleDia(dia.id)} 
                         className="w-5 h-5 accent-indigo-600 cursor-pointer"
                       />
                     </label>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1 mb-2 block">
+                2. Cajas a su cargo
+              </label>
+              
+              {diasSeleccionados.length === 0 ? (
+                <p className="text-xs text-amber-600 font-bold bg-amber-50 p-3 rounded-xl border border-amber-200">
+                  Primero selecciona al menos un día arriba.
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                  {diasSeleccionados.map(diaId => {
+                    const dia = diasDisponibles.find(d => d.id === diaId);
+                    const cajasDelDia = cajasVisibles.filter(c => c.diaId === diaId);
+                    if (!dia) return null;
+
+                    return (
+                      <div key={diaId} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block border-b border-slate-200 pb-1">
+                          {dia.nombreDia}
+                        </span>
+                        {cajasDelDia.length === 0 ? (
+                          <p className="text-[10px] text-red-400 font-bold italic mt-1">Sin cajas disponibles</p>
+                        ) : (
+                          <div className="space-y-1.5 mt-2">
+                            {cajasDelDia.map(caja => (
+                              <label key={caja.id} className={`flex items-center justify-between cursor-pointer p-2.5 rounded-lg border transition-all ${cajasSeleccionadas.includes(caja.id) ? 'bg-indigo-100 border-indigo-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
+                                <span className={`text-sm font-bold flex items-center gap-2 ${cajasSeleccionadas.includes(caja.id) ? 'text-indigo-700' : 'text-slate-600'}`}>
+                                  <Box size={14} /> {caja.nombre.split('(')[0]} {/* Quitar sufijo de nombreDia */}
+                                </span>
+                                <input 
+                                  type="checkbox" 
+                                  checked={cajasSeleccionadas.includes(caja.id)} 
+                                  onChange={() => toggleCaja(caja.id)} 
+                                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -136,7 +193,7 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
           <button 
             type="submit" 
             form="form-capitan"
-            disabled={!nombre.trim() || cajasSeleccionadas.length === 0}
+            disabled={!nombre.trim() || cajasSeleccionadas.length === 0 || diasSeleccionados.length === 0}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-black text-sm p-4 rounded-xl transition shadow-md flex items-center justify-center gap-2 uppercase tracking-wide"
           >
             <UserPlus size={18} /> Crear Capitán

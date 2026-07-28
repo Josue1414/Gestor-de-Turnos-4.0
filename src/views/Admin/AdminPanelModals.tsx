@@ -25,15 +25,14 @@ const AdminPanelModals = (props: any) => {
     createShiftModal, setCreateShiftModal, handleValidarCrearHorario,
     clashModal, setClashModal,
     showCroquis, setShowCroquis, croquisData,
-    showCapitanModal, setShowCapitanModal, cajasDisponibles, handleCrearCapitan,
-    customInviteLink // <-- RECIBIMOS EL LINK DEL CAPITÁN LOGUEADO
+    showCapitanModal, setShowCapitanModal, cajasDisponibles, diasDisponibles, handleCrearCapitan, // <-- Incluimos diasDisponibles
+    customInviteLink,
   } = props;
 
   return (
     <>
       <AssignUserModal isOpen={modalAsignacion.isOpen} onClose={cerrarModalAsignacion} horario={modalAsignacion.horario} cajaNombre={modalAsignacion.cajaNombre} participantes={participantesEnriquecidos} busyUserIds={localBusyUserIds} onAssign={asignarUsuarioExistente} onCreateAndAssign={crearYAsignarUsuario} />
       
-      {/* SE LO PASAMOS AL CAJÓN */}
       <ParticipantDrawer customInviteLink={customInviteLink} isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'} onEditParticipante={handleAbrirPerfilParticipante} onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })} eventoId={eventoId} adminId={localStorage.getItem('current_admin_id') || 'demo'} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount} />
       
       <EditNameModal isOpen={editModal.isOpen && editModal.type === 'caja'} title={editModal.title} initialValue={editModal.initialValue} label={editModal.label} onClose={() => setEditModal({...editModal, isOpen: false})} onSave={handleSaveEdit} />
@@ -57,8 +56,9 @@ const AdminPanelModals = (props: any) => {
       <ModalAsignarCapitan 
         isOpen={showCapitanModal} 
         onClose={() => setShowCapitanModal(false)} 
+        diasDisponibles={diasDisponibles} 
         cajasDisponibles={cajasDisponibles} 
-        onSave={(nombre, cajas, pwd) => handleCrearCapitan(nombre, cajas, pwd)} // <-- ASEGÚRATE DE QUE ESTÉ ASÍ
+        onSave={(nombre, cajas, diasAsig, pwd) => handleCrearCapitan(nombre, cajas, diasAsig, pwd)}
       />
     </>
   );
