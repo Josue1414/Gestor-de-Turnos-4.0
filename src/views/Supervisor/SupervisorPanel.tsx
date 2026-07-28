@@ -91,7 +91,10 @@ const SupervisorPanel = () => {
         eventoExtData.nombre || 'Evento_General', 
         eventoExtData.admins || [], 
         (eventoExtData.diasPorAdmin || {}) as any, 
-        (eventoExtData.participantesPorAdmin || {}) as any
+        (eventoExtData.participantesPorAdmin || {}) as any,
+        // PASAMOS LOS DATOS DE CAPITANES
+        (eventoExtData as any).capitanesPorAdmin || {}, 
+        (eventoExtData as any).participantesPorCapitan || {} 
       );
     }
   };
@@ -195,7 +198,31 @@ const SupervisorPanel = () => {
 
             const handleExport = () => {
               const adminInfo = { name: admin.name, org: admin.org || 'Sin Organización' };
-              exportToExcel(eventoExt?.nombre || 'Evento', adminDias, adminParticipantes, statsObj, adminInfo);
+              
+              // OBTENEMOS CAPITANES DE ESTE ADMIN
+              const adminCapitanes = (eventoExt as any).capitanesPorAdmin?.[admin.id] || [];
+              
+              // CONSOLIDAMOS A SUS PARTICIPANTES + LOS DE SUS CAPITANES PARA QUE SEAN VISIBLES
+              const adminParticipantesCapitanes = adminCapitanes.flatMap((c: any) => 
+                ((eventoExt as any).participantesPorCapitan?.[c.id] || []).map((p: any) => ({ ...p, creador: c.nombre }))
+              );
+              const allParticipantes = [
+                ...adminParticipantes.map((p: any) => ({ ...p, creador: 'Admin' })), 
+                ...adminParticipantesCapitanes
+              ];
+              
+              // RECALCULAMOS LAS ESTADÍSTICAS FINALES
+              const fullStats = calculateAdminStats(adminDias, allParticipantes);
+
+              exportToExcel(
+                eventoExt?.nombre || 'Evento', 
+                adminDias, 
+                allParticipantes, 
+                fullStats, 
+                adminInfo,
+                adminCapitanes, // PASAMOS LOS CAPITANES
+                false           // false porque lo está descargando el Supervisor (vista completa de ese Admin)
+              );
             };
 
             return (

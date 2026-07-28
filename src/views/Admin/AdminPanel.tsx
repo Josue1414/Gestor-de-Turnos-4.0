@@ -364,7 +364,15 @@ const AdminPanel = () => {
   };
 
   const handleExportExcel = () => {
-    exportToExcel(seccionName || 'Evento', diasFiltrados as any, participantesEnriquecidos as any, statsActuales, currentAdminInfo);
+    exportToExcel(
+      seccionName || 'Evento', 
+      diasFiltrados as any, 
+      participantesEnriquecidos as any, 
+      statsActuales, 
+      currentAdminInfo,
+      capitanes, // PASAMOS LA LISTA DE CAPITANES
+      isCapitan  // PASAMOS EL ROL ACTUAL (True = descarga su Excel filtrado, False = descarga el global del Admin)
+    );
   };
 
   const currentCapitan = isCapitan ? capitanes.find((c: any) => c.id === localStorage.getItem('current_capitan_id')) : null;
