@@ -127,7 +127,7 @@ const ParticipantPanel = () => {
            diasProcesados = diasProcesados.map(d => ({
              ...d,
              cajas: d.cajas.filter((c: any) => cajasVisibles!.includes(c.id))
-           }));
+           })).filter(d => d.cajas.length > 0); // <-- Esta línea oculta los días sin cajas
         }
 
         if (currentUser && nombreEquipoActual) {
@@ -299,7 +299,7 @@ const ParticipantPanel = () => {
   }, [misHorariosGlobales, hayChoque]);
 
   const handleAsignarme = async (cajaId: string, turnoId: string) => {
-    if (!miUsuario || !eventoId || !adminId) return;
+    if (!miUsuario || !eventoId || !adminId || !diaActual) return;
     try {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
@@ -307,7 +307,8 @@ const ParticipantPanel = () => {
       const data = docSnap.data();
       const rawDias = data.diasPorAdmin?.[adminId] || [];
       
-      const nuevosDias = rawDias.map((d: any, i: number) => i === diaActivo ? {
+      // En lugar de (d: any, i: number) y comprobar "i === diaActivo", usamos "d.id === diaActual.id"
+      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
           ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: miUsuario.id } : t)
         } : c)
@@ -318,7 +319,7 @@ const ParticipantPanel = () => {
   };
 
   const handleQuitarme = async (cajaId: string, turnoId: string) => {
-    if (!eventoId || !adminId) return;
+    if (!eventoId || !adminId || !diaActual) return;
     try {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
@@ -326,7 +327,8 @@ const ParticipantPanel = () => {
       const data = docSnap.data();
       const rawDias = data.diasPorAdmin?.[adminId] || [];
       
-      const nuevosDias = rawDias.map((d: any, i: number) => i === diaActivo ? {
+      // En lugar de (d: any, i: number) y comprobar "i === diaActivo", usamos "d.id === diaActual.id"
+      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
           ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: null } : t)
         } : c)

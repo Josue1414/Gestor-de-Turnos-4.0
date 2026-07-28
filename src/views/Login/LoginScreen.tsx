@@ -40,14 +40,17 @@ const LoginScreen = () => {
   // 1. LÓGICA DE RECUPERACIÓN AUTOMÁTICA PWA (Celulares)
   useEffect(() => {
     const role = localStorage.getItem('user_role');
-    const eventoId = localStorage.getItem('current_evento_id'); // Ahora también lo guardamos
+    const eventoId = localStorage.getItem('current_evento_id');
     const pUrl = localStorage.getItem('saved_participant_url');
+    const lastInviteUrl = localStorage.getItem('last_invite_url'); // <-- Añadido
 
     if (role === 'superadmin') navigate('/super-admin', { replace: true });
     else if (role === 'supervisor' && eventoId) navigate(`/supervisor/${eventoId}`, { replace: true });
     else if (role === 'admin' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
     else if (role === 'capitan' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
     else if (role === 'participante' && pUrl) navigate(pUrl, { replace: true });
+    // Si no tiene rol activo, pero tiene una invitación guardada, lo rebotamos allí
+    else if (!role && lastInviteUrl) navigate(lastInviteUrl, { replace: true });
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {

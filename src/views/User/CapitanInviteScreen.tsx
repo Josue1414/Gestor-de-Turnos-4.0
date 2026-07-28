@@ -1,6 +1,6 @@
 // src/views/User/CapitanInviteScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { User, Calendar } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -23,6 +23,7 @@ interface EventoDB {
 const CapitanInviteScreen = () => {
   const { eventoId, adminId, capitanLink } = useParams<{ eventoId: string; adminId: string; capitanLink: string }>();
   const navigate = useNavigate(); // <-- 2. INICIALIZAR navigate
+  const location = useLocation();
   
   const [nombre, setNombre] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -32,6 +33,10 @@ const CapitanInviteScreen = () => {
   const [eventoNombre, setEventoNombre] = useState('Cargando...');
   const [capitanNombre, setCapitanNombre] = useState('');
   const [capitanId, setCapitanId] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('last_invite_url', location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchEventoInfo = async () => {
@@ -201,6 +206,9 @@ const CapitanInviteScreen = () => {
           ) : (
             <p className="text-center text-slate-500 font-bold">Verificando enlace...</p>
           )}
+
+          
+          
         </div>
       </div>
     </div>

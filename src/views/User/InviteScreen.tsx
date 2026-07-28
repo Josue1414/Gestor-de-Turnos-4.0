@@ -1,6 +1,6 @@
 // src/views/User/InviteScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { User, Calendar } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -22,12 +22,17 @@ interface EventoDB {
 const InviteScreen = () => {
   const { eventoId, adminId } = useParams<{ eventoId: string; adminId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [nombre, setNombre] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [eventoNombre, setEventoNombre] = useState('Cargando...');
+
+  useEffect(() => {
+    localStorage.setItem('last_invite_url', location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchEventoInfo = async () => {
@@ -188,6 +193,21 @@ const InviteScreen = () => {
               {loading ? 'Conectando...' : 'Entrar a la Tabla'}
             </button>
           </form>
+
+          {/* --- NUEVO BOTÓN DE ACCESO ADMINISTRATIVO --- */}
+          <div className="mt-5 text-center">
+            <button 
+              type="button"
+              onClick={() => {
+                localStorage.removeItem('last_invite_url');
+                navigate('/', { replace: true });
+              }} 
+              className="text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors uppercase tracking-wider"
+            >
+              ¿Acceso Administrativo?
+            </button>
+          </div>
+          
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ import AdminPanel from './views/Admin/AdminPanel';
 import ParticipantPanel from './views/User/ParticipantPanel';
 import LoginScreen from './views/Login/LoginScreen'; 
 import InviteScreen from './views/User/InviteScreen';
-import CapitanInviteScreen from './views/User/CapitanInviteScreen'; // <-- NUEVA IMPORTACIÓN
+import CapitanInviteScreen from './views/User/CapitanInviteScreen';
 import SupervisorPanel from './views/Supervisor/SupervisorPanel';
 
 // --- NUEVAS IMPORTACIONES GLOBALES ---
@@ -22,9 +22,21 @@ function SessionHandler() {
   useEffect(() => {
     const role = localStorage.getItem('user_role');
     const savedUrl = localStorage.getItem('saved_participant_url');
+    const lastInviteUrl = localStorage.getItem('last_invite_url');
 
+    // 1. Si es participante y entra a la raíz, redirigir a su panel
     if (location.pathname === '/' && role === 'participante' && savedUrl) {
       navigate(savedUrl, { replace: true });
+    }
+
+    // 2. Si alguien SIN sesión retrocede a un panel de participante (usando el botón atrás del navegador)
+    // Lo devolvemos inmediatamente a su link de invitación para no romper su contexto.
+    if (location.pathname.startsWith('/p/') && role !== 'participante') {
+      if (lastInviteUrl) {
+        navigate(lastInviteUrl, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     }
   }, [location, navigate]);
 
