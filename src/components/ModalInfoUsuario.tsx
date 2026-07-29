@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock } from 'lucide-react';
+import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock, MessageCircle } from 'lucide-react';
 
 export interface UsuarioModalData {
   id: string; 
@@ -117,7 +117,26 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
                 />
               </div>
             ) : (
-              <span className="font-bold text-slate-800">{formData.phone || 'No registrado'}</span>
+              /* ESTA ES LA NUEVA VISTA DE WHATSAPP OPACA/ACTIVA */
+              <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl shadow-sm">
+                <span className="font-bold text-slate-800 ml-2">
+                  {formData.phone ? `${formData.countryCode} ${formData.phone}` : 'No registrado'}
+                </span>
+                
+                <a 
+                  href={formData.phone ? `https://wa.me/${(formData.countryCode || '+52').replace(/\D/g, '')}${formData.phone}` : undefined}
+                  target={formData.phone ? "_blank" : undefined}
+                  rel="noreferrer"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+                    formData.phone 
+                      ? 'bg-[#25D366] hover:bg-[#1EBE5D] text-white hover:scale-105' 
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
+                  }`}
+                  onClick={(e) => !formData.phone && e.preventDefault()}
+                >
+                  <MessageCircle size={16} /> WhatsApp
+                </a>
+              </div>
             )}
           </FieldItem>
 

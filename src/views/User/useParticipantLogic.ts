@@ -20,6 +20,7 @@ export interface ParticipanteExtendidoDb extends Participante {
   capitanId?: string; 
   cajasDelCapitan?: string[]; 
   capitanNombre?: string; 
+  capitanTelefono?: string; // <-- NUEVO: Para guardar el teléfono del capitán
 }
 
 export const useParticipantLogic = () => {
@@ -46,6 +47,9 @@ export const useParticipantLogic = () => {
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // NUEVO ESTADO: Guardará la info de contacto del Admin
+  const [adminContacto, setAdminContacto] = useState({ nombre: 'Administrador', telefono: '' });
+
   // PROTECCIÓN DE RUTA Y BOTÓN "ATRÁS"
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -63,6 +67,14 @@ export const useParticipantLogic = () => {
         const data = docSnap.data();
         if (data.nombre) setEventoNombre(data.nombre);
         
+        // --- EXTRAER INFO DEL ADMIN ---
+        const adminsList = data.admins || [];
+        const currentAdmin = adminsList.find((a: any) => a.id === adminId);
+        setAdminContacto({
+          nombre: currentAdmin?.name || 'Administrador',
+          telefono: currentAdmin?.phone || ''
+        });
+        
         const allPartsMap = new Map<string, ParticipanteExtendidoDb>();
         const adminParts = data.participantesPorAdmin?.[adminId] || [];
         adminParts.forEach((p: any) => allPartsMap.set(p.id, { ...p, creador: 'Admin' }));
@@ -76,6 +88,7 @@ export const useParticipantLogic = () => {
                  ...p, 
                  capitanId: cap.id, 
                  capitanNombre: cap.nombre, 
+                 capitanTelefono: cap.telefono || '', // <-- Rescatamos el teléfono del Capitán
                  cajasDelCapitan: cap.cajasAsignadas || []
                });
              }
@@ -124,7 +137,7 @@ export const useParticipantLogic = () => {
         }
 
         if (currentUser && nombreEquipoActual) {
-            currentUser.capitanNombre = nombreEquipoActual;
+             currentUser.capitanNombre = nombreEquipoActual;
         }
         
         setDias(diasProcesados);
@@ -372,39 +385,16 @@ export const useParticipantLogic = () => {
     return arr;
   }, [croquisGral, croquisIndiv, adminId]);
 
-  // Al final, exportamos todas las variables y funciones que la vista (UI) va a necesitar.
   return {
-    eventoId,
-    adminId,
-    loading,
-    dias,
-    participantes,
-    eventoNombre,
-    diaActivo,
-    setDiaActivo,
-    vistaTarjetas,
-    setVistaTarjetas,
-    downloadModal,
-    setDownloadModal,
-    showDirectorio,
-    setShowDirectorio,
-    showCroquis,
-    setShowCroquis,
-    isUsuarioModalOpen,
-    setIsUsuarioModalOpen,
-    showLogoutConfirm,
-    setShowLogoutConfirm,
-    miUsuario,
-    participantesDirectorio,
-    datosParaModal,
-    diaActual,
-    turnosLibresCount,
-    turnosOcupadosCount,
-    croquisDataParaMostrar,
-    handleGuardarPerfilAjustado,
-    isBusy,
-    handleAsignarme,
-    handleQuitarme,
-    handleLogout
+    eventoId, adminId, loading, dias, participantes, eventoNombre,
+    diaActivo, setDiaActivo, vistaTarjetas, setVistaTarjetas,
+    downloadModal, setDownloadModal, showDirectorio, setShowDirectorio,
+    showCroquis, setShowCroquis, isUsuarioModalOpen, setIsUsuarioModalOpen,
+    showLogoutConfirm, setShowLogoutConfirm, miUsuario, participantesDirectorio,
+    datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
+    croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
+    handleAsignarme, handleQuitarme, handleLogout,
+    // EXPORTAMOS EL NUEVO DATO
+    adminContacto 
   };
 };

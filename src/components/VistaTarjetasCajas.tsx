@@ -4,6 +4,12 @@ import { Clock, Edit2, Trash2, User, UserPlus, Box, Star, Users, CheckCircle2 } 
 import { useTurnoModal } from '../hooks/useTurnoModal';
 import ModalInfoTurno from './ModalInfoTurno';
 
+interface ContactoWA {
+  nombre: string;
+  telefono: string;
+  rol: string;
+}
+
 interface VistaTarjetasCajasProps {
   diaActual: any;
   getParticipante: (id: string | null) => any;
@@ -20,11 +26,12 @@ interface VistaTarjetasCajasProps {
   adminPerms: { cajas: boolean; horarios: boolean; especiales: boolean };
   miUsuarioId?: string;
   isBusy?: (horario: string) => boolean; 
+  contactosWhatsApp?: ContactoWA[];
 }
 
 const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
   diaActual, getParticipante, onAsignar, onQuitar, 
-  onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno
+  onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno, contactosWhatsApp
 }) => {
 
   const { isOpen, openModal, closeModal, turnoData, countdown, cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta } = useTurnoModal();
@@ -102,7 +109,7 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     const isMiTurno = miUsuarioId && turno.participanteId === miUsuarioId;
                     const estaOcupadoEnOtroLado = miUsuarioId && isBusy && isBusy(turno.horario) && !isMiTurno;
 
-                    // Click para Admin/Capitan (abre el modal flotante que acabamos de hacer)
+                    // Click para Admin/Capitan/Participante
                     const handleClickCard = () => {
                       if (estaOcupado && !miUsuarioId) {
                         openModal(caja.id, turno.id, turno.horario, caja.nombre, participante, turno);
@@ -126,10 +133,17 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                         <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
                           
                           {isMiTurno ? (
-                             <button onClick={(e) => { e.stopPropagation(); onQuitar(caja.id, turno.id); }} className="w-full sm:w-auto text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 transition-colors shadow-sm relative group overflow-hidden">
+                             <button 
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 // <-- AHORA ABRE EL MODAL EN LUGAR DE QUITAR DIRECTAMENTE
+                                 openModal(caja.id, turno.id, turno.horario, caja.nombre, getParticipante(miUsuarioId), turno); 
+                               }} 
+                               className="w-full sm:w-auto text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 transition-colors shadow-sm relative group overflow-hidden"
+                             >
                                 <div className="flex justify-between items-center gap-2">
                                   <span className="font-black text-[9px] truncate">TÚ ESTÁS AQUÍ</span>
-                                  <span className="text-[8px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1">Quitar</span>
+                                  <span className="text-[8px] bg-white text-blue-700 px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1">Ver</span>
                                 </div>
                              </button>
                           ) : estaOcupado ? (
@@ -182,6 +196,8 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
         isOpen={isOpen} onClose={closeModal} turnoData={turnoData} countdown={countdown}
         cajaEntregada={cajaEntregada} setCajaEntregada={setCajaEntregada}
         cajaDevuelta={cajaDevuelta} setCajaDevuelta={setCajaDevuelta}
+        isParticipantView={!!miUsuarioId} // <--- SE INDICA QUE ES LA VISTA DE USUARIO
+        contactosWhatsApp={contactosWhatsApp} // <--- SE LE PASA EL ARREGLO DE CONTACTOS
         onRemove={() => {
           if (turnoData?.participante) onQuitar(turnoData.cajaId, turnoData.turnoId, turnoData.participante.id);
           closeModal();

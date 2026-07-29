@@ -1,8 +1,15 @@
-// src/components/MatrizTurnosParticipante.tsx
 import React, { useMemo } from 'react';
 import { Plus, User, Lock, Clock } from 'lucide-react';
 import type { DiaEvento, Participante } from '../types';
 import CajasEspeciales from './CajasEspeciales';
+import { useTurnoModal } from '../hooks/useTurnoModal';
+import ModalInfoTurno from './ModalInfoTurno';
+
+interface ContactoWA {
+  nombre: string;
+  telefono: string;
+  rol: string;
+}
 
 interface MatrizTurnosParticipanteProps {
   diaActual: DiaEvento;
@@ -10,13 +17,16 @@ interface MatrizTurnosParticipanteProps {
   miUsuarioId: string;
   onAsignarme: (cajaId: string, turnoId: string) => void;
   onQuitarme: (cajaId: string, turnoId: string) => void;
+  contactosWhatsApp?: ContactoWA[];
 }
 
 interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; nombre?: unknown; }
 
 const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({ 
-  diaActual, getParticipante, miUsuarioId, onAsignarme, onQuitarme
+  diaActual, getParticipante, miUsuarioId, onAsignarme, onQuitarme, contactosWhatsApp
 }) => {
+
+  const { isOpen, openModal, closeModal, turnoData, countdown } = useTurnoModal();
 
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
@@ -59,7 +69,6 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
 
   const isBusy = (horario: string) => misHorariosOcupados.some(miHor => hayChoque(miHor, horario));
 
-  // Función interna para renderizar los colores de los horarios
   const formatTimeColor = (t: string) => {
     if (!t) return { text: '', isPM: false };
     const [hStr, mStr] = t.trim().split(':');
@@ -92,7 +101,6 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                     <div className="flex items-center gap-1 text-slate-500 font-black text-[10px] sm:text-xs uppercase tracking-wider">
                       <Clock size={14} /> Horario
                     </div>
-                    {/* PASTILLAS GUÍA AM Y PM */}
                     <div className="flex gap-1.5 mt-0.5">
                       <span className="text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-500">AM</span>
                       <span className="text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">PM</span>
@@ -111,8 +119,6 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
             </thead>
             <tbody>
               {horariosUnicos.map((horario, rowIndex) => {
-                
-                // Procesar horas para aplicar colores individuales
                 const partes = horario.split('-');
                 const t1 = formatTimeColor(partes[0]);
                 const t2 = partes.length > 1 ? formatTimeColor(partes[1]) : null;
@@ -145,11 +151,14 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                               return (
                                 <div key={turno.id} className="w-full">
                                   {isMiTurno ? (
-                                    <button onClick={() => onQuitarme(caja.id, turno.id)} className="w-full text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 sm:p-2 transition-colors shadow-md relative group overflow-hidden">
+                                    <button 
+                                      onClick={() => openModal(caja.id, turno.id, turno.horario, caja.nombre, getParticipante(miUsuarioId), turno)} 
+                                      className="w-full text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 sm:p-2 transition-colors shadow-md relative group overflow-hidden"
+                                    >
                                       <div className="flex justify-between items-center">
                                         <span className="font-black text-[9px] sm:text-sm truncate">TÚ ESTÁS AQUÍ</span>
                                         <Lock size={10} className="group-hover:hidden sm:w-3 sm:h-3 shrink-0" />
-                                        <span className="text-[8px] sm:text-[10px] bg-red-500 text-white px-1 sm:px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1">Quitar</span>
+                                        <span className="text-[8px] sm:text-[10px] bg-white text-blue-700 px-1 sm:px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1">Ver</span>
                                       </div>
                                     </button>
                                   ) : participanteTurno ? (
@@ -190,6 +199,17 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
           </table>
         </div>
       )}
+
+      {/* RENDERIZADO DEL MODAL PARA EL PARTICIPANTE */}
+      <ModalInfoTurno
+        isOpen={isOpen} onClose={closeModal} turnoData={turnoData} countdown={countdown}
+        isParticipantView={true}
+        contactosWhatsApp={contactosWhatsApp}
+        onRemove={() => {
+          if (turnoData?.participante) onQuitarme(turnoData.cajaId, turnoData.turnoId);
+          closeModal();
+        }}
+      />
     </div>
   );
 };

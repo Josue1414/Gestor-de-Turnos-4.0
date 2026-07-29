@@ -8,11 +8,9 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 
-// Importamos nuestro nuevo "cerebro"
 import { useParticipantLogic } from './useParticipantLogic';
 
 const ParticipantPanel = () => {
-  // Extraemos toda la lógica y datos desde nuestro hook
   const {
     eventoId, adminId, loading, dias, participantes, eventoNombre,
     diaActivo, setDiaActivo, vistaTarjetas, setVistaTarjetas,
@@ -21,7 +19,8 @@ const ParticipantPanel = () => {
     showLogoutConfirm, setShowLogoutConfirm, miUsuario, participantesDirectorio,
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
-    handleAsignarme, handleQuitarme, handleLogout
+    handleAsignarme, handleQuitarme, handleLogout,
+    adminContacto // <-- ¡Lo extraemos del hook!
   } = useParticipantLogic();
 
   if (loading) {
@@ -112,8 +111,28 @@ const ParticipantPanel = () => {
           </div>
         </div>
 
-        {diaActual ? (
-          vistaTarjetas ? (
+        {diaActual ? (() => {
+          
+          // CONSTRUIMOS EL ARREGLO DE WHATSAPP DINÁMICO
+          const numerosDeAsistencia = [];
+          
+          // Solo si tiene Capitán lo agregamos
+          if (miUsuario.capitanNombre) {
+            numerosDeAsistencia.push({ 
+              nombre: miUsuario.capitanNombre, 
+              telefono: miUsuario.capitanTelefono || '', 
+              rol: 'Capitán' 
+            });
+          }
+          
+          // Agregamos siempre al Administrador
+          numerosDeAsistencia.push({ 
+            nombre: adminContacto.nombre, 
+            telefono: adminContacto.telefono || '', 
+            rol: 'Admin' 
+          });
+
+          return vistaTarjetas ? (
             <VistaTarjetasCajas 
               diaActual={diaActual} 
               getParticipante={(id) => participantes.find(p => p.id === id)}
@@ -123,7 +142,8 @@ const ParticipantPanel = () => {
               onQuitar={handleQuitarme} 
               onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
               adminPerms={{ cajas: false, horarios: false, especiales: false }}
-              onActualizarEstadoTurno={() => {}} // <--- SOLUCIÓN AQUÍ
+              onActualizarEstadoTurno={() => {}} 
+              contactosWhatsApp={numerosDeAsistencia}
             />
           ) : (
             <MatrizTurnosParticipante 
@@ -132,9 +152,10 @@ const ParticipantPanel = () => {
               miUsuarioId={miUsuario.id} 
               onAsignarme={handleAsignarme} 
               onQuitarme={handleQuitarme} 
+              contactosWhatsApp={numerosDeAsistencia}
             />
           )
-        ) : (
+        })() : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 mt-10 w-full">
             <Calendar size={48} className="mb-4 opacity-50" />
             <p className="font-bold">Aún no hay días configurados para ti.</p>
@@ -192,4 +213,3 @@ const ParticipantPanel = () => {
 };
 
 export default ParticipantPanel;
-// End of src/views/User/ParticipantPanel.tsx
