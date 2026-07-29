@@ -36,7 +36,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   
   const { showToast } = useToast();
 
-  // ORDENAMOS PARA QUE EL USUARIO ACTUAL QUEDE HASTA ARRIBA
   const participantesFiltrados = participantes
     .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim()))
     .sort((a, b) => {
@@ -82,16 +81,13 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   };
 
   const handleCopyInviteLink = () => {
-    // 1. Definimos ambas bases (General y Equipo)
     const baseGeneral = `${window.location.origin}/invite/${eventoId}/${adminId}`;
     const baseEquipo = `${window.location.origin}/invite-team/${eventoId}/${adminId}`;
     
-    // 2. Si existe un customInviteLink, usamos la ruta de equipo. Si no, la general.
     const url = customInviteLink ? `${baseEquipo}/${customInviteLink}` : baseGeneral;
     
     copiarSeguro(`¡Hola! Únete al evento registrándote en este enlace:\n${url}`);
     
-    // Mensaje dinámico para dar mejor retroalimentación
     const mensajeToast = customInviteLink 
       ? '¡Link de invitación del equipo copiado!' 
       : '¡Link de invitación general copiado!';
@@ -106,9 +102,9 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
   return (
     <>
-      {isOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity" onClick={onClose} />}
+      {isOpen && <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] transition-opacity" onClick={onClose} />}
 
-      <div className={`fixed inset-y-0 right-0 w-80 sm:w-[420px] bg-slate-50 shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 w-80 sm:w-[420px] bg-slate-50 shadow-2xl z-[210] transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
         <div className="bg-slate-800 p-5 flex flex-col gap-4 text-white shrink-0">
           <div className="flex justify-between items-center">
@@ -157,7 +153,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         {esMiUsuario && <span className="text-xs text-blue-500 font-black shrink-0">(Tú)</span>}
                       </div>
 
-                      {/* ETIQUETAS. Bloqueamos la de Admin si es vista Participante */}
                       {currentUserRole !== 'Participante' && (
                         <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
                           {p.creador === 'Admin' && (
@@ -198,7 +193,11 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
                       {(canEdit || esMiUsuario) && (
                         <button 
-                          onClick={(e) => { e.stopPropagation(); onEditParticipante(p.id); }}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            onEditParticipante(p.id); 
+                            onClose(); // <-- SOLUCIÓN: Cierra el cajón para mostrar libremente el modal
+                          }}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
                           title={esMiUsuario ? "Editar mi Perfil" : "Ver/Editar Perfil"}
                         >
@@ -208,7 +207,11 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
 
                       {canEdit && (
                         <button 
-                          onClick={(e) => { e.stopPropagation(); onDeleteParticipante(p.id, p.nombre); }}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            onDeleteParticipante(p.id, p.nombre); 
+                            onClose(); // <-- SOLUCIÓN
+                          }}
                           className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
                           title="Eliminar Participante"
                         >

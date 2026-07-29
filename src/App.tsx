@@ -27,15 +27,25 @@ function SessionHandler() {
     // 1. Si es participante y entra a la raíz, redirigir a su panel
     if (location.pathname === '/' && role === 'participante' && savedUrl) {
       navigate(savedUrl, { replace: true });
+      return;
     }
 
-    // 2. Si alguien SIN sesión retrocede a un panel de participante (usando el botón atrás del navegador)
-    // Lo devolvemos inmediatamente a su link de invitación para no romper su contexto.
+    // 2. Gestión de Auto-Login para links directos de participante (/p/...)
     if (location.pathname.startsWith('/p/') && role !== 'participante') {
-      if (lastInviteUrl) {
-        navigate(lastInviteUrl, { replace: true });
+      // Separamos la URL. Ejemplo: ['', 'p', 'evento123', 'admin456', 'part789']
+      const pathParts = location.pathname.split('/').filter(Boolean);
+      
+      // Si el enlace tiene la estructura completa de un participante
+      if (pathParts.length === 4) {
+        localStorage.setItem('user_role', 'participante');
+        // No redirigimos. Lo dejamos fluir para que el PrivacyBanner no pierda la ruta.
       } else {
-        navigate('/', { replace: true });
+        // Si el link está roto o incompleto, lo expulsamos por seguridad
+        if (lastInviteUrl) {
+          navigate(lastInviteUrl, { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
       }
     }
   }, [location, navigate]);
