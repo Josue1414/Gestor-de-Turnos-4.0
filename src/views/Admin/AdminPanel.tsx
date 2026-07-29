@@ -68,7 +68,7 @@ const AdminPanel = () => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
-    isCapitan, cajasAsignadasCapitan
+    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -488,9 +488,9 @@ const AdminPanel = () => {
          </div>
 
          {vistaTarjetas ? (
-           <VistaTarjetasCajas diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
+           <VistaTarjetasCajas diaActual={diaActualFiltrado} onActualizarEstadoTurno={actualizarEstadoTurno} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
          ) : (
-           <MatrizTurnos diaActual={diaActualFiltrado} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
+           <MatrizTurnos diaActual={diaActualFiltrado} onActualizarEstadoTurno={actualizarEstadoTurno} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
          )}
       </div>
 

@@ -1,3 +1,4 @@
+// src/types/index.ts
 // ==========================================
 // 1. CONFIGURACIÓN GLOBAL (SÚPERUSUARIO)
 // ==========================================
@@ -37,7 +38,9 @@ export interface Administrador {
 export interface Turno {
   id: string;
   horario: string; // Ej: "08:00 - 10:00"
-  participanteId: string | null; // null significa que está libre (➕ Ocupar turno)
+  participanteId: string | null; // null significa que está libre
+  entregada?: boolean; // Para el checkbox 1
+  devuelta?: boolean;  // Para el checkbox 2
 }
 
 export interface Caja {

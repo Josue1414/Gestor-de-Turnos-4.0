@@ -100,7 +100,18 @@ export const useAdminLogic = (eventoId: string) => {
           ? rawDias.map((d: any) => {
               const res = DiaEventoSchema.safeParse(d);
               if (!res.success) return d;
-              return res.data as DiaEvento;
+              
+              const diaLimpio = res.data as DiaEvento;
+              diaLimpio.cajas = diaLimpio.cajas.map((caja, cIdx) => ({
+                ...caja,
+                turnos: caja.turnos.map((turno, tIdx) => ({
+                  ...turno,
+                  // Rescatamos los valores originales que vienen de Firebase
+                  entregada: d.cajas[cIdx]?.turnos[tIdx]?.entregada || false,
+                  devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false
+                }))
+              }));
+              return diaLimpio;
             })
           : [];
         setDias(validatedDias as DiaEvento[]);
@@ -464,6 +475,29 @@ export const useAdminLogic = (eventoId: string) => {
     } catch (error) { console.error(error); showToast('Error al eliminar.', 'error'); }
   };
 
+  // AGREGAR ESTO antes del "return {" final del hook
+  const actualizarEstadoTurno = async (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => {
+    if (!diaActual || !eventoId) return;
+    
+    // Mapeamos los días para encontrar el turno específico e inyectarle los booleanos (true o false)
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+      ...d,
+      cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c,
+        turnos: c.turnos.map(t => t.id === turnoId ? { ...t, entregada, devuelta } : t)
+      } : c)
+    } : d);
+
+    try {
+      // Guardamos la estructura en Firebase
+      await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+      showToast('Estado del turno actualizado', 'success');
+    } catch (error) {
+      console.error("Error guardando checkbox:", error);
+      showToast('Error al guardar el estado', 'error');
+    }
+  };
+
   return {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
     isEditingTitle, setIsEditingTitle, seccionName, setSeccionName, showSpecialModal, setShowSpecialModal,
@@ -477,6 +511,6 @@ export const useAdminLogic = (eventoId: string) => {
     clashModal, setClashModal, misDatosAdmin,
     capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
     // EXPORTAMOS LA DATA CLAVE PARA EL FILTRADO VISUAL
-    isCapitan, cajasAsignadasCapitan
+    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno
   };
 };

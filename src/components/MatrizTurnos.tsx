@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useMemo } from 'react';
-import { Plus, User, X, Clock, Lock } from 'lucide-react';
+import { Clock, Lock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
 import CajasEspeciales from './CajasEspeciales';
+import { useTurnoModal } from '../hooks/useTurnoModal'; 
+import TurnoCell from './TurnoCell';
+import ModalInfoTurno from './ModalInfoTurno';
 
 // NUEVA INTERFAZ: Permisos del administrador
 interface AdminPermissions {
@@ -25,7 +28,8 @@ interface MatrizTurnosProps {
   onEditHorario: (horario: string) => void;
   onDeleteTurnoEspecial?: (cajaId: string, turnoId: string) => void;
   onEditTurnoEspecial?: (cajaId: string, turnoId: string) => void;
-  // NUEVA PROP: Recibe los permisos
+  // NUEVA PROP: Para actualizar el estado en Firebase (Opcional por si acaso)
+  onActualizarEstadoTurno?: (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => void;
   adminPerms?: AdminPermissions;
 }
 
@@ -34,8 +38,14 @@ interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
   diaActual, getParticipante, onAsignar, onQuitar,
   onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial,
-  adminPerms // <-- Recibimos los permisos
+  onActualizarEstadoTurno, adminPerms
 }) => {
+
+  // --- INICIALIZAMOS EL NUEVO HOOK ---
+  const { 
+    isOpen, openModal, closeModal, turnoData, countdown, 
+    cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta 
+  } = useTurnoModal();
 
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
@@ -106,9 +116,9 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
   };
 
   return (
-    // ELIMINAMOS los bloqueos de scroll aquí. Dejamos que la página principal mande.
     <div className="flex-1 w-full max-w-none bg-slate-50 font-sans px-0 py-2 sm:px-0 sm:py-2">
       
+      {/* Eliminamos el adminPerms para quitar el error de TypeScript */}
       <CajasEspeciales 
         cajas={cajasEspeciales as never}
         getParticipante={getParticipante}
@@ -119,19 +129,13 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         onQuitar={onQuitar} 
         onDeleteTurnoEspecial={onDeleteTurnoEspecial}
         onEditTurnoEspecial={onEditTurnoEspecial}
-        // Asumiendo que CajasEspeciales recibe adminPerms para ocultar sus propios menús de ActionMenu
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        adminPerms={adminPerms}
       />
 
       {cajasNormales.length > 0 ? (
         <div className="w-full max-w-full bg-white rounded-none sm:rounded-3xl shadow-sm border border-slate-200 mt-2">
-          {/* Al quitar overflow-x-auto, la tabla se expande libremente y los sticky nativos funcionan a la perfección */}
           <table className="border-separate border-spacing-0 min-w-max w-full">
             <thead className="relative">
               <tr>
-                {/* ESQUINA HORARIO: top-[60px] para empalmar justo debajo de la barra de días. z-40 para estar siempre arriba */}
                 <th className="sticky left-0 top-[60px] z-40 bg-slate-100 border-b border-r border-slate-200 p-1.5 sm:p-3 w-[40px] sm:w-[58px] shadow-[2px_2px_5px_-2px_rgba(0,0,0,0.1)] align-middle">
                   <div className="flex flex-col items-center justify-center gap-1 text-slate-500 font-black text-[9px] sm:text-[10px] uppercase tracking-wider h-full">
                     <div className="flex items-center gap-1"><Clock size={12} /> <span className="hidden sm:inline">HORARIO</span></div>
@@ -142,7 +146,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                   </div>
                 </th>
                 
-                {/* ENCABEZADOS DE CAJA: top-[60px] */}
                 {cajasNormales.map(caja => (
                   <th key={caja.id as string} className="sticky top-[60px] z-30 group border-b border-slate-200 bg-white p-1 sm:p-2 min-w-[56px] sm:min-w-[88px] border-l align-top shadow-[0_2px_5px_-2px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[40px]">
@@ -153,7 +156,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                         {caja.nombre as string}
                       </span>
                       
-                      {/* LÓGICA DE BLOQUEO: Solo renderiza si tiene permiso */}
                       {adminPerms?.cajas !== false && (
                         <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
                           <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
@@ -168,12 +170,10 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
               {horariosUnicos.map((horario) => (
                 <tr key={horario} className="group hover:bg-slate-50/50 transition-colors">
                   
-                  {/* CELDAS DE HORARIOS VERTICALES: left-0 para fijarse a la izquierda. z-20 para pasar por debajo de los encabezados */}
                   <td className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 p-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-center justify-center gap-2 min-h-[50px]">
                       <div className="w-full">{formatHorarioVisual(horario)}</div>
                       
-                      {/* LÓGICA DE BLOQUEO: Solo renderiza si tiene permiso */}
                       {adminPerms?.horarios !== false && (
                         <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <ActionMenu onEdit={() => onEditHorario(horario)} onDelete={() => onDeleteHorario(horario)} direccion="derecha" />
@@ -182,7 +182,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                     </div>
                   </td>
                   
-                  {/* CELDAS DE TURNOS NORMALES */}
                   {cajasNormales.map(caja => {
                     const turnosEnEsteHorario = caja.turnos.filter(t => t.horario === horario);
                     return (
@@ -192,21 +191,15 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                             const participanteNorm = getParticipante(turno.participanteId);
                             return (
                               <div key={turno.id} className="w-full relative group">
-                                {participanteNorm ? (
-                                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-1.5 sm:p-2 relative pr-6 sm:pr-7 shadow-sm overflow-hidden">
-                                    <button onClick={() => onQuitar(caja.id, turno.id, participanteNorm.id)} className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 text-red-400 hover:text-red-600 bg-white rounded-md transition-colors p-0.5 shadow-sm z-10">
-                                      <X size={12} className="sm:w-3.5 sm:h-3.5" />
-                                    </button>
-                                    <div className="flex items-center gap-1 font-bold text-indigo-900 text-[10px] sm:text-sm leading-tight break-words">
-                                      <User size={10} className="shrink-0 sm:w-3 sm:h-3" /> <span className="truncate">{participanteNorm.nombre}</span>
-                                    </div>
-                                    <span className="text-[8px] sm:text-[9px] text-indigo-500 font-bold uppercase block mt-0.5 sm:mt-1">Confirmado</span>
-                                  </div>
-                                ) : (
-                                  <button onClick={() => onAsignar(caja.id, caja.nombre, turno.id, turno.horario)} className="w-full h-8 sm:h-12 bg-white border-2 border-dashed border-indigo-300 rounded-lg text-indigo-600 flex items-center justify-center gap-1 hover:bg-indigo-50 transition-colors shadow-sm overflow-hidden">
-                                    <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="text-[10px] sm:text-xs font-bold">Asignar</span>
-                                  </button>
-                                )}
+                                {/* Componente TurnoCell Corregido */}
+                                <TurnoCell
+                                  cajaId={caja.id as string}
+                                  cajaNombre={caja.nombre as string}
+                                  turno={turno}
+                                  participante={participanteNorm}
+                                  onAsignar={() => onAsignar(caja.id as string, caja.nombre as string, turno.id, turno.horario)}
+                                  onOpenInfo={() => openModal(caja.id as string, turno.id, turno.horario, caja.nombre as string, participanteNorm, turno)}
+                                />
                               </div>
                             )
                           })}
@@ -229,6 +222,31 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
           Crea tu primera caja normal arriba.
         </div>
       )}
+
+      {/* NUEVO MODAL INTEGRADO Y CORREGIDO */}
+      <ModalInfoTurno
+        isOpen={isOpen}
+        onClose={closeModal}
+        turnoData={turnoData}
+        countdown={countdown}
+        cajaEntregada={cajaEntregada}
+        setCajaEntregada={setCajaEntregada}
+        cajaDevuelta={cajaDevuelta}
+        setCajaDevuelta={setCajaDevuelta}
+        onRemove={() => {
+          if (turnoData?.participante) {
+            onQuitar(turnoData.cajaId, turnoData.turnoId, turnoData.participante.id);
+          }
+          closeModal();
+        }}
+        onSave={() => {
+          // Aseguramos que turnoData exista antes de llamar a Firebase
+          if (turnoData && onActualizarEstadoTurno) {
+            onActualizarEstadoTurno(turnoData.cajaId, turnoData.turnoId, cajaEntregada, cajaDevuelta);
+          }
+          closeModal();
+        }}
+      />
     </div>
   );
 };
