@@ -259,9 +259,13 @@ const SupervisorPanel = () => {
       <BaseStructureModal 
         isOpen={structureModal} onClose={() => setStructureModal(false)} 
         isSupervisor={true} existingDays={listaDiasExistentes}
-        onSave={async (estructura) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onSave={async (estructura: any) => {
           const exitoso = await handleSaveGlobalStructure({ 
-            dias: estructura.dias, horarios: estructura.horarios || [], cajas: estructura.cajas || [] 
+            // Extraemos solo el nombreDia para mantener la compatibilidad en Supervisor
+            dias: estructura.dias.map((d: any) => d.nombreDia), 
+            horarios: estructura.horarios || [], 
+            cajas: estructura.cajas || [] 
           });
           if (exitoso) setStructureModal(false);
         }}
