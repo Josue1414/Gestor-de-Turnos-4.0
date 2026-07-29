@@ -37,6 +37,12 @@ export const exportToExcel = (
   let turnosTotales = 0;
   let turnosLibres = 0;
 
+  // ---------------------------------------------------------
+  // Mapeo inicial de participantes para búsquedas rápidas (O(1))
+  // ---------------------------------------------------------
+  const participantesUnicosMap = new Map();
+  participantes.forEach(p => participantesUnicosMap.set(p.id, p));
+
   diasActivos.forEach(dia => {
     const cajas = Array.isArray(dia.cajas) ? dia.cajas : Object.values(dia.cajas || {});
     const cajasEspeciales = Array.isArray(dia.cajasEspeciales) ? dia.cajasEspeciales : Object.values(dia.cajasEspeciales || {});
@@ -57,8 +63,6 @@ export const exportToExcel = (
     });
   });
 
-  const participantesUnicosMap = new Map();
-  participantes.forEach(p => participantesUnicosMap.set(p.id, p));
   const participantesUnicos = Array.from(participantesUnicosMap.values());
 
   let inactivosReales = 0;
@@ -226,7 +230,8 @@ export const exportToExcel = (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const turno = c.turnos.find((t: any) => t.horario === h);
         if (turno && turno.participanteId) {
-          const part = participantesUnicos.find(p => p.id === turno.participanteId);
+          // OPTIMIZACIÓN AQUÍ: Utilizamos el Map previamente creado
+          const part = participantesUnicosMap.get(turno.participanteId);
           row.push({ v: part ? part.nombre : "ID: " + turno.participanteId, s: styles.assignedStyle });
         } else {
           row.push(

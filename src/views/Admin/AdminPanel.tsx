@@ -15,10 +15,11 @@ import VistaTarjetasCajas from '../../components/VistaTarjetasCajas';
 import AdminHeader from '../../components/AdminHeader';
 import type { UsuarioModalData } from '../../components/ModalInfoUsuario';
 import type { CroquisItem } from '../../components/CroquisModal';
-import { calculateAdminStats } from '../../utils/statsCalculator';
 
 import { getLocalBusyUserIds, getSiguienteHorario, validarNuevoHorario } from './AdminPanelFunciones';
 import AdminPanelModals from './AdminPanelModals';
+
+import { useEventStats } from '../../hooks/useEventStats';
 
 interface ParticipanteExtendidoDb extends Participante {
   telefono?: string; 
@@ -209,7 +210,10 @@ const AdminPanel = () => {
   }, [cajasTotalesParaCapitanes, capitanes]);
 
   const permisosEfectivos = isCapitan ? { cajas: false, horarios: false, especiales: false } : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
-  const statsActuales = calculateAdminStats(diasFiltrados, participantesEnriquecidos as any);
+  
+  // Implementación del nuevo hook con los datos ya filtrados por vista
+  const statsActuales = useEventStats(diasFiltrados, participantesEnriquecidos);
+  
   const turnosLibresCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);

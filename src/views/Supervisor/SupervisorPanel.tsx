@@ -1,3 +1,5 @@
+// src/views/Supervisor/SupervisorPanel.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ShieldCheck, LogOut, Plus, Calendar, MapIcon, Download, Lock, Unlock } from 'lucide-react';
@@ -22,6 +24,8 @@ interface EventoExtended {
   admins?: unknown[];
   diasPorAdmin?: Record<string, unknown[]>;
   participantesPorAdmin?: Record<string, unknown[]>;
+  capitanesPorAdmin?: Record<string, unknown[]>;
+  participantesPorCapitan?: Record<string, unknown[]>;
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
   globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean }; 
@@ -33,7 +37,7 @@ const SupervisorPanel = () => {
 
   const [showExitAlert, setShowExitAlert] = useState(false);
   const [globalBlockModal, setGlobalBlockModal] = useState(false); 
-  const [syncTrigger, setSyncTrigger] = useState(0); // Forzar re-render local
+  const [syncTrigger, setSyncTrigger] = useState(0);
 
   useEffect(() => {
     window.history.pushState(null, '', window.location.pathname);
@@ -92,9 +96,8 @@ const SupervisorPanel = () => {
         eventoExtData.admins || [], 
         (eventoExtData.diasPorAdmin || {}) as any, 
         (eventoExtData.participantesPorAdmin || {}) as any,
-        // PASAMOS LOS DATOS DE CAPITANES
-        (eventoExtData as any).capitanesPorAdmin || {}, 
-        (eventoExtData as any).participantesPorCapitan || {} 
+        (eventoExtData.capitanesPorAdmin || {}) as any, 
+        (eventoExtData.participantesPorCapitan || {}) as any 
       );
     }
   };
@@ -103,8 +106,6 @@ const SupervisorPanel = () => {
     if (!eventoId || !evento) return;
     const eventoRef = doc(db, 'eventos', eventoId);
     
-    // SOBREESCRITURA JERÁRQUICA: Obligamos a todos los admins a adoptar la regla global
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedAdmins = (evento as any).admins.map((admin: any) => ({
        ...admin,
        permissions: { ...newPerms } 
@@ -115,10 +116,7 @@ const SupervisorPanel = () => {
         admins: updatedAdmins
     });
 
-    // Actualizamos el estado local para que se vea reflejado al instante
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (evento as any).globalPermissions = newPerms;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (evento as any).admins = updatedAdmins;
     setSyncTrigger(prev => prev + 1);
     setGlobalBlockModal(false);
@@ -154,7 +152,6 @@ const SupervisorPanel = () => {
         </div>
 
         <div className="flex flex-wrap gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          
           <button 
             onClick={() => setGlobalBlockModal(true)} 
             className={`flex-1 lg:flex-none px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm border ${
@@ -194,34 +191,32 @@ const SupervisorPanel = () => {
             
             const adminDias = (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
             const adminParticipantes = (eventoExt?.participantesPorAdmin?.[admin.id] || []) as any[];
-            const statsObj = calculateAdminStats(adminDias, adminParticipantes);
+            
+            // OBTENEMOS CAPITANES Y SUS PARTICIPANTES
+            const adminCapitanes = (eventoExt?.capitanesPorAdmin?.[admin.id] || []) as any[];
+            const adminParticipantesCapitanes = adminCapitanes.flatMap((c: any) => 
+              ((eventoExt?.participantesPorCapitan?.[c.id] || []) as any[]).map((p: any) => ({ ...p, creador: c.nombre }))
+            );
+            
+            // CONSOLIDAMOS PARTICIPANTES DE ADMIN + CAPITANES
+            const allParticipantes = [
+              ...adminParticipantes.map((p: any) => ({ ...p, creador: 'Admin' })), 
+              ...adminParticipantesCapitanes
+            ];
+
+            // CALCULAMOS LAS ESTADÍSTICAS REALES
+            const statsObj = calculateAdminStats(adminDias, allParticipantes);
 
             const handleExport = () => {
               const adminInfo = { name: admin.name, org: admin.org || 'Sin Organización' };
-              
-              // OBTENEMOS CAPITANES DE ESTE ADMIN
-              const adminCapitanes = (eventoExt as any).capitanesPorAdmin?.[admin.id] || [];
-              
-              // CONSOLIDAMOS A SUS PARTICIPANTES + LOS DE SUS CAPITANES PARA QUE SEAN VISIBLES
-              const adminParticipantesCapitanes = adminCapitanes.flatMap((c: any) => 
-                ((eventoExt as any).participantesPorCapitan?.[c.id] || []).map((p: any) => ({ ...p, creador: c.nombre }))
-              );
-              const allParticipantes = [
-                ...adminParticipantes.map((p: any) => ({ ...p, creador: 'Admin' })), 
-                ...adminParticipantesCapitanes
-              ];
-              
-              // RECALCULAMOS LAS ESTADÍSTICAS FINALES
-              const fullStats = calculateAdminStats(adminDias, allParticipantes);
-
               exportToExcel(
                 eventoExt?.nombre || 'Evento', 
                 adminDias, 
                 allParticipantes, 
-                fullStats, 
+                statsObj, 
                 adminInfo,
-                adminCapitanes, // PASAMOS LOS CAPITANES
-                false           // false porque lo está descargando el Supervisor (vista completa de ese Admin)
+                adminCapitanes, 
+                false 
               );
             };
 
@@ -245,7 +240,6 @@ const SupervisorPanel = () => {
 
       <CountdownDeleteModal isOpen={deleteModal.isOpen} onClose={() => setDeleteModal({ isOpen: false, adminId: '', adminName: '' })} onConfirm={() => { handleDeleteAdmin(deleteModal.adminId); setDeleteModal({ isOpen: false, adminId: '', adminName: '' }); }} title={deleteModal.adminName} message="¿Seguro de eliminar este administrador?" />
       
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <AdminSettingsFlow isOpen={settingsFlow.isOpen} onClose={() => setSettingsFlow({ isOpen: false, admin: null })} admin={settingsFlow.admin} eventoId={eventoId || ''} currentUserRole="Supervisor" onSaveProfile={(evId, updated) => handleSaveProfile(evId, updated as any)} onSaveAccess={handleEditAccess} />
       
       <ModalBloqueoGlobal 
@@ -259,10 +253,8 @@ const SupervisorPanel = () => {
       <BaseStructureModal 
         isOpen={structureModal} onClose={() => setStructureModal(false)} 
         isSupervisor={true} existingDays={listaDiasExistentes}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSave={async (estructura: any) => {
           const exitoso = await handleSaveGlobalStructure({ 
-            // Extraemos solo el nombreDia para mantener la compatibilidad en Supervisor
             dias: estructura.dias.map((d: any) => d.nombreDia), 
             horarios: estructura.horarios || [], 
             cajas: estructura.cajas || [] 

@@ -1,21 +1,16 @@
 // src/utils/excelGlobal.ts
 import * as XLSX from 'xlsx-js-style';
 
-// 1. Importamos solo los tipos usando "import type"
 import type { 
   DiaEventoExcel, 
   ParticipanteExcel 
 } from './excelCompartido';
 
-// 2. Importamos las funciones normales
 import { 
   getExcelStyles, 
   getDiasActivos 
 } from './excelCompartido';
 
-// =========================================================================
-// FUNCIÓN 2: EXPORTAR EXCEL GLOBAL (SUPERVISOR / SUPERADMIN)
-// =========================================================================
 export const exportGlobalToExcel = (
   eventoNombre: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,21 +41,63 @@ export const exportGlobalToExcel = (
   const adminPrimeraHojaMap: Record<string, string> = {}; 
   const capitanPrimeraHojaMap: Record<string, string> = {};
 
+  // =========================================================================
+  // PASO A: POBLAR MAPA GLOBAL DE PARTICIPANTES
+  // =========================================================================
+  
+  Object.entries(participantesPorAdmin).forEach(([adminId, lista]) => {
+    const adminObj = admins.find(a => a.id === adminId);
+    lista.forEach(p => {
+      globalParticipantesMap.set(p.id, {
+        ...p,
+        creador: 'Administrador',
+        adminId: adminId,
+        adminName: adminObj ? adminObj.name : 'Administrador'
+      });
+    });
+  });
+
+  Object.entries(participantesPorCapitan).forEach(([capId, lista]) => {
+    let capName = 'Capitán';
+    let adminId = '';
+    let adminName = 'Sin Asignar';
+
+    for (const [aId, caps] of Object.entries(capitanesPorAdmin)) {
+      const capEncontrado = caps.find((c: any) => c.id === capId);
+      if (capEncontrado) {
+        capName = capEncontrado.nombre;
+        adminId = aId;
+        const aInfo = admins.find(a => a.id === aId);
+        if (aInfo) adminName = aInfo.name;
+        break;
+      }
+    }
+
+    lista.forEach(p => {
+      if (!globalParticipantesMap.has(p.id)) {
+        globalParticipantesMap.set(p.id, {
+          ...p,
+          creador: `Capitán: ${capName}`,
+          adminId: adminId,
+          adminName: adminName
+        });
+      }
+    });
+  });
+
+  Object.values(capitanesPorAdmin).forEach(caps => {
+    if (Array.isArray(caps)) gCapitanes += caps.length;
+  });
+
+  // =========================================================================
+  // PASO B: CONSTRUCCIÓN DE HOJAS Y MÉTRICAS
+  // =========================================================================
+
   admins.forEach(admin => {
     const diasRaw = diasPorAdmin[admin.id] || [];
     const diasAdminActivos = getDiasActivos(diasRaw, undefined, admin.diasAsignados);
-
-    const partesAdmin = (participantesPorAdmin[admin.id] || []).map(p => ({ ...p, creador: 'Administrador', adminId: admin.id, adminName: admin.name }));
     const capitanesDelAdmin = capitanesPorAdmin[admin.id] || [];
     
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const partesCapitanes = capitanesDelAdmin.flatMap((cap: any) => 
-      (participantesPorCapitan[cap.id] || []).map((p: any) => ({ ...p, creador: `Capitán: ${cap.nombre}`, adminId: admin.id, adminName: admin.name }))
-    );
-    const partesCrudos = [...partesAdmin, ...partesCapitanes]; 
-    
-    gCapitanes += capitanesDelAdmin.length;
-
     const localCajasNombres = new Set<string>();
     let localTotales = 0;
 
@@ -85,12 +122,6 @@ export const exportGlobalToExcel = (
       });
     });
 
-    partesCrudos.forEach(p => {
-      if (!globalParticipantesMap.has(p.id)) {
-        globalParticipantesMap.set(p.id, p);
-      }
-    });
-
     datosParaIndice.push({
       id: admin.id,
       name: admin.name || 'Sin Asignar',
@@ -101,6 +132,7 @@ export const exportGlobalToExcel = (
       turnosTotal: localTotales
     });
 
+    // Pestañas exclusivas para el Administrador
     diasAdminActivos.forEach((dia, idxDia) => {
       const cajas = Array.isArray(dia.cajas) ? dia.cajas : Object.values(dia.cajas || {});
       const cajasEspeciales = Array.isArray(dia.cajasEspeciales) ? dia.cajasEspeciales : Object.values(dia.cajasEspeciales || {});
@@ -142,6 +174,7 @@ export const exportGlobalToExcel = (
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const turno = c.turnos.find((t: any) => t.horario === h);
           if (turno && turno.participanteId) {
+            // AQUÍ LA CORRECCIÓN: Buscamos en el globalParticipantesMap
             const part = globalParticipantesMap.get(turno.participanteId);
             row.push({ v: part ? part.nombre : "ID: " + turno.participanteId, s: styles.assignedStyle });
           } else {
@@ -175,6 +208,7 @@ export const exportGlobalToExcel = (
       if (idxDia === 0) adminPrimeraHojaMap[admin.id] = sheetNameFinal;
     });
 
+    // Pestañas exclusivas para los Capitanes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     capitanesDelAdmin.forEach((cap: any) => {
       const misCajasIds = cap.cajasAsignadas || [];
@@ -266,6 +300,10 @@ export const exportGlobalToExcel = (
       }
     });
   });
+
+  // =========================================================================
+  // PASO C: GENERACIÓN DEL DIRECTORIO Y RESUMEN
+  // =========================================================================
 
   let gInactivosCalc = 0;
   globalParticipantesMap.forEach((p) => {

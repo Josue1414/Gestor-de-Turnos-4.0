@@ -29,14 +29,22 @@ export interface AdminData {
   necesarios?: number;
   disponibles?: number;
   inactivos?: number;
-  diasAsignados?: string[]; // <-- NUEVA PROPIEDAD
+  diasAsignados?: string[]; 
 }
 
+// LÓGICA CORREGIDA: Se agregaron las interfaces globales faltantes para que el Supervisor y el Excel 
+// detecten a los capitanes y participantes creados por capitanes sin perder los datos.
 interface EventoDocument {
   nombre: string;
   admins: AdminData[];
   diasPorAdmin?: Record<string, Dia[]>;
   participantesPorAdmin?: Record<string, ParticipanteData[]>;
+  // NUEVAS PROPIEDADES AÑADIDAS:
+  capitanesPorAdmin?: Record<string, any[]>; 
+  participantesPorCapitan?: Record<string, ParticipanteData[]>;
+  globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
+  croquisUrl?: string;
+  croquisPorAdmin?: Record<string, string>;
 }
 
 export const useSupervisorLogic = (eventoId: string | undefined) => {
@@ -47,7 +55,10 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   useEffect(() => {
     if (!eventoId) return;
     const unsubscribe = onSnapshot(doc(db, 'eventos', eventoId), (snap) => {
-      if (snap.exists()) setEvento(snap.data() as EventoDocument);
+      if (snap.exists()) {
+        // Al castear a EventoDocument, ahora sí trae capitanes y configuraciones globales
+        setEvento({ id: snap.id, ...snap.data() } as EventoDocument & { id: string });
+      }
       setLoading(false);
     });
     return () => unsubscribe();

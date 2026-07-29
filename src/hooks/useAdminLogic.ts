@@ -70,6 +70,10 @@ export const useAdminLogic = (eventoId: string) => {
   const [modalAsignacion, setModalAsignacion] = useState({ isOpen: false, cajaId: '', cajaNombre: '', turnoId: '', horario: '' });
   const [downloadModal, setDownloadModal] = useState<{isOpen: boolean; type: 'general'|'personal'; targetUserId?: string}>({ isOpen: false, type: 'general' });
   const [loading, setLoading] = useState(true);
+  
+  // NUEVO ESTADO: Bandera para saber si el evento existe
+  const [eventoExiste, setEventoExiste] = useState<boolean>(true); 
+
   const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil | null>(null);
 
   const [createShiftModal, setCreateShiftModal] = useState({ isOpen: false, defaultStart: '08:00', defaultEnd: '09:00' });
@@ -119,6 +123,7 @@ export const useAdminLogic = (eventoId: string) => {
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
+        setEventoExiste(true);
         const data = docSnap.data();
         
         // 1. CARGAR DÍAS (El esqueleto base es el del Admin)
@@ -271,7 +276,12 @@ export const useAdminLogic = (eventoId: string) => {
             });
           }
         }
+      } else {
+        // EL EVENTO FUE BORRADO O NO EXISTE
+        setEventoExiste(false);
       }
+      
+      // Detiene la carga sin importar si existió o no
       setLoading(false);
     });
 
@@ -560,6 +570,7 @@ export const useAdminLogic = (eventoId: string) => {
     clashModal, setClashModal, misDatosAdmin,
     capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
     // EXPORTAMOS LA DATA CLAVE PARA EL FILTRADO VISUAL
-    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta
+    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta,
+    eventoExiste // <--- EXPORTADO AQUÍ
   };
 };
