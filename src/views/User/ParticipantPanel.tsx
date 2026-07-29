@@ -123,6 +123,7 @@ const ParticipantPanel = () => {
               onQuitar={handleQuitarme} 
               onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
               adminPerms={{ cajas: false, horarios: false, especiales: false }}
+              onActualizarEstadoTurno={() => {}} // <--- SOLUCIÓN AQUÍ
             />
           ) : (
             <MatrizTurnosParticipante 
