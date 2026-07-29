@@ -18,6 +18,7 @@ export interface CapitanData {
 
 interface SeccionCapitanesProps {
   capitanes: CapitanData[];
+  participantes?: any[]; // <-- NUEVO: Recibimos todos los participantes para hacer el cruce exacto
   onOpenModal: () => void;
   onDeleteCapitan: (id: string) => void;
   onSimularCapitan: (id: string) => void;
@@ -29,7 +30,7 @@ interface SeccionCapitanesProps {
 }
 
 const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({ 
-  capitanes, onOpenModal, onDeleteCapitan, onSimularCapitan, onEditCapitan, isOpen, dias, diasDisponibles, cajasDisponibles
+  capitanes, participantes = [], onOpenModal, onDeleteCapitan, onSimularCapitan, onEditCapitan, isOpen, dias, diasDisponibles, cajasDisponibles
 }) => {
   const { showToast } = useToast();
   
@@ -46,27 +47,33 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
     setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // LÓGICA CORREGIDA: Contamos usuarios únicos en lugar de turnos ocupados
-  const getCapitanStats = (cajasAsignadasIds: string[], diasAsignadosIds: string[] = []) => {
+  // LÓGICA CORREGIDA: Suma los usuarios creados + usuarios en turnos del capitán
+  const getCapitanStats = (capitan: CapitanData) => {
     const nombresCajas: string[] = [];
     let totalTurnos = 0;
     let turnosDisponibles = 0;
-    const participantesUnicos = new Set<string>(); // Recolector de IDs sin duplicados
+    const participantesDelCapitan = new Set<string>();
 
+    // 1. Añadimos primero a los participantes que este capitán haya registrado
+    participantes.forEach(p => {
+      if (p.creador === capitan.nombre) {
+        participantesDelCapitan.add(p.id);
+      }
+    });
+
+    // 2. Buscamos y añadimos a los participantes que estén dentro de sus turnos (ignorando otros días)
     dias.forEach(dia => {
-      // Si este día no le fue asignado al capitán, lo ignoramos por completo
-      if (!diasAsignadosIds.includes(dia.id)) return;
+      if (!(capitan.diasAsignados || []).includes(dia.id)) return; // Ignorar días que no le tocan
 
       dia.cajas.forEach((caja: any) => {
-        if (cajasAsignadasIds.includes(caja.id)) {
+        if (capitan.cajasAsignadas.includes(caja.id)) {
           if (!nombresCajas.includes(caja.nombre)) {
             nombresCajas.push(caja.nombre);
           }
           totalTurnos += caja.turnos.length;
           caja.turnos.forEach((turno: any) => {
             if (turno.participanteId) {
-              // Agregamos el ID al Set. Si el participante ya estaba, el Set lo ignora automáticamente.
-              participantesUnicos.add(turno.participanteId); 
+              participantesDelCapitan.add(turno.participanteId); 
             } else {
               turnosDisponibles++;
             }
@@ -79,7 +86,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
       nombresCajas, 
       totalTurnos, 
       turnosDisponibles, 
-      cantidadParticipantes: participantesUnicos.size // Devolvemos el total de IDs únicos
+      cantidadParticipantes: participantesDelCapitan.size 
     };
   };
 
@@ -120,9 +127,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
             </div>
           ) : (
             capitanes.map(capitan => {
-              // Obtenemos los stats actualizados con el recuento único
-              const { nombresCajas, totalTurnos, turnosDisponibles, cantidadParticipantes } = getCapitanStats(capitan.cajasAsignadas, capitan.diasAsignados);
-              
+              const { nombresCajas, totalTurnos, turnosDisponibles, cantidadParticipantes } = getCapitanStats(capitan);
               const nombresDias = (capitan.diasAsignados || []).map(id => diasDisponibles.find(d => d.id === id)?.nombreDia).filter(Boolean);
 
               return (

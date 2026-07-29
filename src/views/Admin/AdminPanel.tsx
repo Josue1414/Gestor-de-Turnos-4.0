@@ -67,7 +67,7 @@ const AdminPanel = () => {
     handleCrearCaja, handleCrearCajaEspecial, handleEliminarCaja, handleEliminarHorario,
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
-    capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan, // <-- AGREGADO handleEditarCapitan
+    capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
     isCapitan, cajasAsignadasCapitan
   } = useAdminLogic(eventoId || 'demo'); 
 
@@ -97,6 +97,7 @@ const AdminPanel = () => {
 
         let nombreDisplay = 'Administrador';
         let orgDisplay = '';
+        let diasReales: string[] | undefined = myAdmin?.diasAsignados;
 
         if (isCapitan && capitanIdL) {
             const capitanesDelAdmin = data.capitanesPorAdmin?.[adminIdL] || [];
@@ -104,6 +105,7 @@ const AdminPanel = () => {
             if (miCapitan) {
                 nombreDisplay = `${miCapitan.nombre} (Admin: ${myAdmin?.name || 'General'})`;
                 orgDisplay = miCapitan.organizacion ? (miCapitan.organizationLabel ? `${miCapitan.organizationLabel}: ${miCapitan.organizacion}` : miCapitan.organizacion) : '';
+                diasReales = miCapitan.diasAsignados; // Aquí garantizamos que extraiga sus días específicos
             }
         } else if (myAdmin) {
             nombreDisplay = myAdmin.name || 'Administrador';
@@ -111,19 +113,10 @@ const AdminPanel = () => {
         }
 
         if (myAdmin) {
-          // Extraemos a la fuerza los días asignados: Del capitán si es capitán, o del Admin
-          let diasReales: string[] | undefined = myAdmin.diasAsignados;
-          
-          if (isCapitan && capitanIdL) {
-            const capitanesDelAdmin = data.capitanesPorAdmin?.[adminIdL] || [];
-            const miCapitan = capitanesDelAdmin.find((c: any) => c.id === capitanIdL);
-            diasReales = miCapitan?.diasAsignados;
-          }
-
           setCurrentAdminInfo({
             name: nombreDisplay,
             org: orgDisplay,
-            diasAsignados: diasReales // <-- AHORA ALIMENTA AL CAPITÁN SUS DÍAS
+            diasAsignados: diasReales 
           });
 
           if (myAdmin.permissions) {
@@ -150,7 +143,6 @@ const AdminPanel = () => {
   const diasPermitidos = useMemo(() => {
     if (!currentAdminInfo) return [];
     if (currentAdminInfo.diasAsignados === undefined) return dias;
-    // Soporta búsqueda por ID (Capitanes) o por Nombre (Admin)
     return dias.filter(d => 
       currentAdminInfo.diasAsignados!.includes(d.nombreDia) || 
       currentAdminInfo.diasAsignados!.includes(d.id)
@@ -454,8 +446,9 @@ const AdminPanel = () => {
             isCapitan={isCapitan}
             
             showCapitanes={showSeccionCapitanes} onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)} capitanes={capitanes || []} onOpenCapitanModal={() => setShowCapitanModal(true)} onDeleteCapitan={handleEliminarCapitan} onSimularCapitan={handleSimularCapitan} dias={diasFiltrados}
-            // PASAMOS LAS NUEVAS PROPS A ADMIN HEADER PARA QUE SECCION CAPITANES PUEDA EDITAR
+            
             diasDisponibles={listadoDiasDisponibles} 
+            participantes={participantesEnriquecidos}
             cajasDisponibles={cajasTotalesParaCapitanes} 
             onEditCapitan={handleEditarCapitan}
           />
@@ -514,7 +507,6 @@ const AdminPanel = () => {
         clashModal={clashModal} setClashModal={setClashModal} showCroquis={showCroquis} setShowCroquis={setShowCroquis} croquisData={croquisData}
         showCapitanModal={showCapitanModal} setShowCapitanModal={setShowCapitanModal} 
         
-        // PASAMOS SOLO LAS CAJAS LIBRES AL MODAL DE CREACIÓN DE CAPITANES
         cajasDisponibles={cajasLibresParaCrear} 
         diasDisponibles={listadoDiasDisponibles}
 

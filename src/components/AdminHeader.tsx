@@ -53,6 +53,7 @@ interface AdminHeaderProps {
   showCapitanes?: boolean;
   onToggleCapitanes?: () => void;
   capitanes?: CapitanData[];
+  participantes?: any[];
   onOpenCapitanModal?: () => void;
   onDeleteCapitan?: (id: string) => void;
   onSimularCapitan?: (id: string) => void;
@@ -77,7 +78,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
   onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
   adminPerms, isCapitan, 
-  showCapitanes, onToggleCapitanes, capitanes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
+  showCapitanes, onToggleCapitanes, capitanes, participantes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
   diasDisponibles, cajasDisponibles, onEditCapitan
 }) => {
   const [showStats, setShowStats] = useState(false);
@@ -196,6 +197,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         <div className="mt-2 w-full">
           <SeccionCapitanes 
              capitanes={capitanes}
+             participantes={participantes} // <-- CORREGIDO AQUÍ
              onOpenModal={onOpenCapitanModal}
              onDeleteCapitan={onDeleteCapitan}
              onSimularCapitan={onSimularCapitan}

@@ -130,7 +130,10 @@ export const useAdminLogic = (eventoId: string) => {
           
           const partsEnMisCajas = adminParts.filter((p: any) => {
             const rawDias = data.diasPorAdmin?.[adminIdL] || [];
+            const misDias = miDataCapitan?.diasAsignados || []; // <-- Recoger sus días
+            
             return rawDias.some((dia: any) => 
+              misDias.includes(dia.id) && // <-- FILTRO CLAVE: Solo días del capitán
               dia.cajas.some((caja: any) => 
                 misCajas.includes(caja.id) && caja.turnos.some((t: any) => t.participanteId === p.id)
               )
