@@ -68,7 +68,7 @@ const AdminPanel = () => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
-    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno
+    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -105,7 +105,7 @@ const AdminPanel = () => {
             if (miCapitan) {
                 nombreDisplay = `${miCapitan.nombre} (Admin: ${myAdmin?.name || 'General'})`;
                 orgDisplay = miCapitan.organizacion ? (miCapitan.organizationLabel ? `${miCapitan.organizationLabel}: ${miCapitan.organizacion}` : miCapitan.organizacion) : '';
-                diasReales = miCapitan.diasAsignados; // Aquí garantizamos que extraiga sus días específicos
+                diasReales = miCapitan.diasAsignados;
             }
         } else if (myAdmin) {
             nombreDisplay = myAdmin.name || 'Administrador';
@@ -159,6 +159,28 @@ const AdminPanel = () => {
 
   const diaActualFiltrado = diasFiltrados.find(d => d.id === dias[diaActivo]?.id) || null;
 
+  const alertasAsistencia = useMemo(() => {
+    const alertas: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[] = [];
+    diasFiltrados.forEach(dia => {
+      dia.cajas.forEach(caja => {
+        caja.turnos.forEach(turno => {
+          if ((turno as any).solicitaAsistencia) {
+            const part = participantesEnriquecidos.find(p => p.id === turno.participanteId);
+            alertas.push({
+              dia: dia.nombreDia,
+              cajaId: caja.id,
+              cajaNombre: caja.nombre as string,
+              turnoId: turno.id,
+              horario: turno.horario,
+              participante: part?.nombre || 'Desconocido'
+            });
+          }
+        });
+      });
+    });
+    return alertas;
+  }, [diasFiltrados, participantesEnriquecidos]);
+
   useEffect(() => {
     if (diasFiltrados.length > 0 && dias.length > 0) {
       const currentDia = dias[diaActivo];
@@ -169,9 +191,6 @@ const AdminPanel = () => {
     }
   }, [diasFiltrados, diaActivo, dias, setDiaActivo]);
 
-  // ==========================================
-  // DATOS PARA CAPITANES (CREACIÓN Y EDICIÓN)
-  // ==========================================
   const listadoDiasDisponibles = useMemo(() => {
     return diasPermitidos.map(d => ({ id: d.id, nombreDia: d.nombreDia }));
   }, [diasPermitidos]);
@@ -188,7 +207,6 @@ const AdminPanel = () => {
     const cajasEnUso = capitanes.flatMap((c: any) => c.cajasAsignadas || []);
     return cajasTotalesParaCapitanes.filter(c => !cajasEnUso.includes(c.id));
   }, [cajasTotalesParaCapitanes, capitanes]);
-  // ==========================================
 
   const permisosEfectivos = isCapitan ? { cajas: false, horarios: false, especiales: false } : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
   const statsActuales = calculateAdminStats(diasFiltrados, participantesEnriquecidos as any);
@@ -419,7 +437,7 @@ const AdminPanel = () => {
 
   return (
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
-      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-10 box-border">
+      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[60] box-border">
         <div className="w-full max-w-[1400px] mx-auto">
           <AdminHeader 
             seccionName={seccionName} setSeccionName={setSeccionName} 
@@ -451,6 +469,9 @@ const AdminPanel = () => {
             participantes={participantesEnriquecidos}
             cajasDisponibles={cajasTotalesParaCapitanes} 
             onEditCapitan={handleEditarCapitan}
+            
+            alertasAsistencia={alertasAsistencia}
+            onResolveAlert={resolverAlerta}
           />
         </div>
       </div>
@@ -487,10 +508,41 @@ const AdminPanel = () => {
             </div>
          </div>
 
+         {/* PASAMOS onResolveAlert A LAS VISTAS */}
          {vistaTarjetas ? (
-           <VistaTarjetasCajas diaActual={diaActualFiltrado} onActualizarEstadoTurno={actualizarEstadoTurno} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
+           <VistaTarjetasCajas 
+             diaActual={diaActualFiltrado} 
+             onActualizarEstadoTurno={actualizarEstadoTurno} 
+             onResolveAlert={resolverAlerta} // <-- AQUÍ SE PASA A LAS TARJETAS
+             getParticipante={getParticipante} 
+             onAsignar={abrirModalAsignacion} 
+             onQuitar={quitarParticipante} 
+             onCrearCaja={handleCrearCaja} 
+             onDeleteCaja={handleEliminarCaja} 
+             onDeleteHorario={handleEliminarHorario} 
+             onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} 
+             onEditHorario={(horario) => abrirEditor('horario', horario, horario)} 
+             onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} 
+             onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
+             adminPerms={permisosEfectivos} 
+           />
          ) : (
-           <MatrizTurnos diaActual={diaActualFiltrado} onActualizarEstadoTurno={actualizarEstadoTurno} getParticipante={getParticipante} onAsignar={abrirModalAsignacion} onQuitar={quitarParticipante} onCrearCaja={handleCrearCaja} onDeleteCaja={handleEliminarCaja} onDeleteHorario={handleEliminarHorario} onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} onEditHorario={(horario) => abrirEditor('horario', horario, horario)} onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} adminPerms={permisosEfectivos} />
+           <MatrizTurnos 
+             diaActual={diaActualFiltrado} 
+             onActualizarEstadoTurno={actualizarEstadoTurno} 
+             onResolveAlert={resolverAlerta} // <-- AQUÍ SE PASA A LA MATRIZ
+             getParticipante={getParticipante} 
+             onAsignar={abrirModalAsignacion} 
+             onQuitar={quitarParticipante} 
+             onCrearCaja={handleCrearCaja} 
+             onDeleteCaja={handleEliminarCaja} 
+             onDeleteHorario={handleEliminarHorario} 
+             onEditCaja={(id) => { const caja = diaActual.cajas.find(c => c.id === id); if (caja) abrirEditor('caja', id, caja.nombre as string); }} 
+             onEditHorario={(horario) => abrirEditor('horario', horario, horario)} 
+             onDeleteTurnoEspecial={(cajaId, turnoId) => setDeleteEspecialModal({ isOpen: true, cajaId, turnoId })} 
+             onEditTurnoEspecial={(cajaId: string, turnoId: string) => console.log("Editar:", cajaId, turnoId)} 
+             adminPerms={permisosEfectivos} 
+           />
          )}
       </div>
 

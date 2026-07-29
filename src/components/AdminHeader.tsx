@@ -1,6 +1,6 @@
 // src/components/AdminHeader.tsx
 import React, { useState } from 'react';
-import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield } from 'lucide-react';
+import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
 
@@ -48,21 +48,25 @@ interface AdminHeaderProps {
   onExportExcel?: () => void;
   adminPerms?: AdminPermissions;
   
-  // Props para manejar a los capitanes DENTRO del Header
   isCapitan?: boolean;
   showCapitanes?: boolean;
   onToggleCapitanes?: () => void;
   capitanes?: CapitanData[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   participantes?: any[];
   onOpenCapitanModal?: () => void;
   onDeleteCapitan?: (id: string) => void;
   onSimularCapitan?: (id: string) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dias?: any[];
   
-  // NUEVAS PROPS: Para la edición de capitanes
   diasDisponibles?: DiaDisponible[];
   cajasDisponibles?: CajaDisponible[];
   onEditCapitan?: (id: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => void;
+
+  // NUEVAS PROPS DE ALERTAS
+  alertasAsistencia?: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[];
+  onResolveAlert?: (cajaId: string, turnoId: string) => void;
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -79,11 +83,12 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
   adminPerms, isCapitan, 
   showCapitanes, onToggleCapitanes, capitanes, participantes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
-  diasDisponibles, cajasDisponibles, onEditCapitan
+  diasDisponibles, cajasDisponibles, onEditCapitan,
+  alertasAsistencia = [], onResolveAlert
 }) => {
   const [showStats, setShowStats] = useState(false);
+  const [showAlertMenu, setShowAlertMenu] = useState(false);
 
-  // LOGICA PARA NO PERMITIR EDICIÓN DE TÍTULO
   const isSupervisorOrSuperAdmin = !!sessionStorage.getItem('visor_externo_tipo') || isSuperAdminViewing;
   const canEditTitle = isSupervisorOrSuperAdmin; 
 
@@ -92,6 +97,8 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
       setIsEditingTitle(true);
     }
   };
+
+  const hasAlerts = alertasAsistencia.length > 0;
 
   return (
     <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full">
@@ -127,7 +134,47 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         </div>
 
         <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2 shrink-0">
-          <div className="flex gap-2">
+          <div className="flex gap-2 relative">
+            
+            {/* CAMPANA DE NOTIFICACIONES */}
+            <button 
+              onClick={() => setShowAlertMenu(!showAlertMenu)} 
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${hasAlerts ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+            >
+              <Bell size={14} className={hasAlerts ? "animate-bounce" : ""} /> 
+              {hasAlerts ? `Alertas (${alertasAsistencia.length})` : 'Sin alertas'}
+            </button>
+
+            {/* MENÚ DESPLEGABLE DE ALERTAS */}
+            {showAlertMenu && (
+              <div className="absolute top-full right-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-orange-100 z-[999] overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                <div className="bg-orange-500 p-3 text-white flex justify-between items-center">
+                  <h3 className="font-black text-sm flex items-center gap-2"><Bell size={16} /> Asistencia Solicitada</h3>
+                </div>
+                <div className="max-h-60 overflow-y-auto p-2 space-y-2 bg-slate-50">
+                  {hasAlerts ? (
+                    alertasAsistencia.map((alerta, i) => (
+                      <div key={i} className="bg-white p-3 rounded-xl border border-orange-200 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
+                        <p className="text-xs font-black text-orange-900 ml-1">{alerta.participante}</p>
+                        <p className="text-[10px] font-bold text-orange-700 ml-1 mb-2">
+                          {alerta.dia} • {alerta.horario} • {alerta.cajaNombre}
+                        </p>
+                        <button 
+                          onClick={() => { onResolveAlert?.(alerta.cajaId, alerta.turnoId); if (alertasAsistencia.length === 1) setShowAlertMenu(false); }} 
+                          className="w-full py-2 bg-orange-50 text-orange-600 border border-orange-200 rounded-lg text-[10px] font-black hover:bg-orange-500 hover:text-white transition"
+                        >
+                          Marcar como resuelto
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-xs font-bold text-slate-400 p-4">Nadie ha solicitado ayuda.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {onBack && (
               <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
                 <ArrowLeft size={14} /> Regresar
@@ -160,7 +207,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             </button>
           )}
           
-          {/* BOTÓN: Ver Capitanes */}
           {!isCapitan && onToggleCapitanes && (
              <button onClick={onToggleCapitanes} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold transition shadow-sm ${showCapitanes ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700' : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-300'}`}>
                <Shield size={14} /> {showCapitanes ? 'Cerrar Capitanes' : 'Capitanes'} {capitanes && capitanes.length > 0 ? `(${capitanes.length})` : ''}
@@ -177,7 +223,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           )}
         </div>
 
-        {/* CENTRO: Mini Estadísticas */}
         {stats && (
           <div className={`${showStats ? 'flex' : 'hidden'} sm:flex w-full xl:w-auto justify-center xl:border-l border-slate-100 xl:pl-4`}>
              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full">
@@ -192,12 +237,11 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         )}
       </div>
 
-      {/* ACORDEÓN DE CAPITANES DENTRO DEL HEADER */}
       {showCapitanes && capitanes && onOpenCapitanModal && onDeleteCapitan && onSimularCapitan && (
         <div className="mt-2 w-full">
           <SeccionCapitanes 
              capitanes={capitanes}
-             participantes={participantes} // <-- CORREGIDO AQUÍ
+             participantes={participantes} 
              onOpenModal={onOpenCapitanModal}
              onDeleteCapitan={onDeleteCapitan}
              onSimularCapitan={onSimularCapitan}
@@ -210,7 +254,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         </div>
       )}
 
-      {/* ACORDEÓN DE ACCIONES */}
       {onToggleActions && (
         <div className={`${showActions ? 'block' : 'hidden'} bg-slate-50 p-3 rounded-2xl border border-slate-200 mt-2 w-full animate-in slide-in-from-top-2 duration-200`}>
           <div className="flex flex-wrap items-center gap-2">

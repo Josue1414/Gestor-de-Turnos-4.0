@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// src/hooks/useAdminLogic.ts
+import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { DiaEvento, Participante } from '../types';
@@ -55,6 +56,8 @@ export const useAdminLogic = (eventoId: string) => {
   const [showCroquis, setShowCroquis] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showSpecialModal, setShowSpecialModal] = useState(false);
+
+  const prevAlertasCount = useRef(0);
   
   const [editModal, setEditModal] = useState<{isOpen: boolean; type: 'caja' | 'horario'; title: string; initialValue: string; label: string; targetId?: string}>({
     isOpen: false, type: 'caja', title: '', initialValue: '', label: ''
@@ -85,6 +88,31 @@ export const useAdminLogic = (eventoId: string) => {
     return false;
   };
 
+  // VIGILANTE DE ALERTAS EN TIEMPO REAL
+  useEffect(() => {
+    let currentAlertsCount = 0;
+    dias.forEach((dia) => {
+      dia.cajas.forEach((caja) => {
+        caja.turnos.forEach((turno) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((turno as any).solicitaAsistencia) {
+            currentAlertsCount++;
+          }
+        });
+      });
+    });
+
+    // Si hay MÁS alertas ahora que en el estado anterior, ¡alguien nuevo pidió ayuda!
+    if (currentAlertsCount > prevAlertasCount.current) {
+      if ("vibrate" in navigator) {
+         // Patrón de alerta para el Administrador: 
+         // Vibra 300ms, pausa 100ms, vibra 300ms, pausa 100ms, vibra 300ms
+         navigator.vibrate([300, 100, 300, 100, 300]);
+      }
+    }
+    prevAlertasCount.current = currentAlertsCount;
+  }, [dias]);
+
   useEffect(() => {
     if (!eventoId) return;
     const docRef = doc(db, 'eventos', eventoId);
@@ -108,7 +136,9 @@ export const useAdminLogic = (eventoId: string) => {
                   ...turno,
                   // Rescatamos los valores originales que vienen de Firebase
                   entregada: d.cajas[cIdx]?.turnos[tIdx]?.entregada || false,
-                  devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false
+                  devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false,
+                  // 👇 AQUÍ RESCATAMOS LA NUEVA VARIABLE 👇
+                  solicitaAsistencia: d.cajas[cIdx]?.turnos[tIdx]?.solicitaAsistencia || false
                 }))
               }));
               return diaLimpio;
@@ -498,6 +528,25 @@ export const useAdminLogic = (eventoId: string) => {
     }
   };
 
+  // Función para que el Admin apague la alerta de un participante
+  const resolverAlerta = async (cajaId: string, turnoId: string) => {
+    if (!diaActual || !eventoId) return;
+    
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+      ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
+        ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, solicitaAsistencia: false } : t)
+      } : c)
+    } : d);
+
+    try {
+      await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+      showToast('Alerta marcada como resuelta.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Error al resolver la alerta.', 'error');
+    }
+  };
+
   return {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
     isEditingTitle, setIsEditingTitle, seccionName, setSeccionName, showSpecialModal, setShowSpecialModal,
@@ -511,6 +560,6 @@ export const useAdminLogic = (eventoId: string) => {
     clashModal, setClashModal, misDatosAdmin,
     capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
     // EXPORTAMOS LA DATA CLAVE PARA EL FILTRADO VISUAL
-    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno
+    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta
   };
 };

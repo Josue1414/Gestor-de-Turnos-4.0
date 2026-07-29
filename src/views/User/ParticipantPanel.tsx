@@ -1,5 +1,5 @@
 // src/views/User/ParticipantPanel.tsx
-import { Calendar, Users, ShieldCheck, LogOut, Settings, LayoutList, LayoutGrid } from 'lucide-react';
+import { Calendar, Users, ShieldCheck, LogOut, Settings, LayoutList, LayoutGrid, Bell } from 'lucide-react';
 
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
 import VistaTarjetasCajas from '../../components/VistaTarjetasCajas';
@@ -20,7 +20,7 @@ const ParticipantPanel = () => {
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
     handleAsignarme, handleQuitarme, handleLogout,
-    adminContacto // <-- ¡Lo extraemos del hook!
+    adminContacto, turnoAlertaInfo, handleSolicitarAsistencia
   } = useParticipantLogic();
 
   if (loading) {
@@ -79,6 +79,24 @@ const ParticipantPanel = () => {
                <Settings size={16} className="w-4 h-4" /> Mi Perfil
             </button>
           </div>
+
+          {/* NUEVO BOTÓN DE ASISTENCIA */}
+            {turnoAlertaInfo && (
+              <button
+                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+                className={`p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition shadow-sm border
+                  ${turnoAlertaInfo.solicitaAsistencia
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                    : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                  }`}
+              >
+                <Bell size={16} className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+                </span>
+              </button>
+            )}
+            
         </header>
       </div>
 

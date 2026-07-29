@@ -1,15 +1,15 @@
+// src/components/MatrizTurnos.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useMemo } from 'react';
 import { Clock, Lock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
 import CajasEspeciales from './CajasEspeciales';
-import { useTurnoModal } from '../hooks/useTurnoModal'; 
+import { useTurnoModal } from '../hooks/useTurnoModal';
+import { useTiempoReal } from '../hooks/useTiempoReal';
 import TurnoCell from './TurnoCell';
 import ModalInfoTurno from './ModalInfoTurno';
 
-// NUEVA INTERFAZ: Permisos del administrador
 interface AdminPermissions {
   cajas: boolean;
   horarios: boolean;
@@ -28,9 +28,9 @@ interface MatrizTurnosProps {
   onEditHorario: (horario: string) => void;
   onDeleteTurnoEspecial?: (cajaId: string, turnoId: string) => void;
   onEditTurnoEspecial?: (cajaId: string, turnoId: string) => void;
-  // NUEVA PROP: Para actualizar el estado en Firebase (Opcional por si acaso)
   onActualizarEstadoTurno?: (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => void;
   adminPerms?: AdminPermissions;
+  onResolveAlert?: (cajaId: string, turnoId: string) => void; // <-- NUEVA PROP AQUÍ
 }
 
 interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; nombre?: unknown; }
@@ -38,14 +38,15 @@ interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
   diaActual, getParticipante, onAsignar, onQuitar,
   onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial,
-  onActualizarEstadoTurno, adminPerms
+  onActualizarEstadoTurno, adminPerms, onResolveAlert // <-- LA RECIBIMOS AQUÍ
 }) => {
 
-  // --- INICIALIZAMOS EL NUEVO HOOK ---
   const { 
     isOpen, openModal, closeModal, turnoData, countdown, 
     cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta 
   } = useTurnoModal();
+
+  const horaActual = useTiempoReal();
 
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
@@ -118,7 +119,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
   return (
     <div className="flex-1 w-full max-w-none bg-slate-50 font-sans px-0 py-2 sm:px-0 sm:py-2">
       
-      {/* Eliminamos el adminPerms para quitar el error de TypeScript */}
       <CajasEspeciales 
         cajas={cajasEspeciales as never}
         getParticipante={getParticipante}
@@ -149,10 +149,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                 {cajasNormales.map(caja => (
                   <th key={caja.id as string} className="sticky top-[60px] z-30 group border-b border-slate-200 bg-white p-1 sm:p-2 min-w-[56px] sm:min-w-[88px] border-l align-top shadow-[0_2px_5px_-2px_rgba(0,0,0,0.05)]">
                     <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[40px]">
-                      <span 
-                        className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" 
-                        title={caja.nombre as string}
-                      >
+                      <span className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" title={caja.nombre as string}>
                         {caja.nombre as string}
                       </span>
                       
@@ -191,12 +188,13 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                             const participanteNorm = getParticipante(turno.participanteId);
                             return (
                               <div key={turno.id} className="w-full relative group">
-                                {/* Componente TurnoCell Corregido */}
                                 <TurnoCell
                                   cajaId={caja.id as string}
                                   cajaNombre={caja.nombre as string}
                                   turno={turno}
                                   participante={participanteNorm}
+                                  fechaDia={diaActual.fecha}
+                                  horaActual={horaActual}
                                   onAsignar={() => onAsignar(caja.id as string, caja.nombre as string, turno.id, turno.horario)}
                                   onOpenInfo={() => openModal(caja.id as string, turno.id, turno.horario, caja.nombre as string, participanteNorm, turno)}
                                 />
@@ -223,7 +221,6 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         </div>
       )}
 
-      {/* NUEVO MODAL INTEGRADO Y CORREGIDO */}
       <ModalInfoTurno
         isOpen={isOpen}
         onClose={closeModal}
@@ -240,11 +237,16 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
           closeModal();
         }}
         onSave={() => {
-          // Aseguramos que turnoData exista antes de llamar a Firebase
           if (turnoData && onActualizarEstadoTurno) {
             onActualizarEstadoTurno(turnoData.cajaId, turnoData.turnoId, cajaEntregada, cajaDevuelta);
           }
           closeModal();
+        }}
+        onResolveAlert={() => { // <-- SE PASA AL MODAL AQUÍ
+          if (turnoData && onResolveAlert) {
+            onResolveAlert(turnoData.cajaId, turnoData.turnoId);
+            closeModal();
+          }
         }}
       />
     </div>

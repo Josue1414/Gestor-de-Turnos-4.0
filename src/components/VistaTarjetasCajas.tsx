@@ -1,3 +1,4 @@
+// src/components/VistaTarjetasCajas.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { Clock, Edit2, Trash2, User, UserPlus, Box, Star, Users, CheckCircle2 } from 'lucide-react';
@@ -27,11 +28,13 @@ interface VistaTarjetasCajasProps {
   miUsuarioId?: string;
   isBusy?: (horario: string) => boolean; 
   contactosWhatsApp?: ContactoWA[];
+  onResolveAlert?: (cajaId: string, turnoId: string) => void; // <-- NUEVA PROP AQUÍ
 }
 
 const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
   diaActual, getParticipante, onAsignar, onQuitar, 
-  onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno, contactosWhatsApp
+  onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno, contactosWhatsApp,
+  onResolveAlert // <-- LA RECIBIMOS AQUÍ
 }) => {
 
   const { isOpen, openModal, closeModal, turnoData, countdown, cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta } = useTurnoModal();
@@ -109,7 +112,6 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     const isMiTurno = miUsuarioId && turno.participanteId === miUsuarioId;
                     const estaOcupadoEnOtroLado = miUsuarioId && isBusy && isBusy(turno.horario) && !isMiTurno;
 
-                    // Click para Admin/Capitan/Participante
                     const handleClickCard = () => {
                       if (estaOcupado && !miUsuarioId) {
                         openModal(caja.id, turno.id, turno.horario, caja.nombre, participante, turno);
@@ -136,7 +138,6 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                              <button 
                                onClick={(e) => { 
                                  e.stopPropagation(); 
-                                 // <-- AHORA ABRE EL MODAL EN LUGAR DE QUITAR DIRECTAMENTE
                                  openModal(caja.id, turno.id, turno.horario, caja.nombre, getParticipante(miUsuarioId), turno); 
                                }} 
                                className="w-full sm:w-auto text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 transition-colors shadow-sm relative group overflow-hidden"
@@ -154,7 +155,6 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                                   {participante.nombre}
                                 </span>
                               </div>
-                              {/* Bolitas de estatus */}
                               <div className="flex gap-0.5">
                                 {turno.entregada && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Entregada" />}
                                 {turno.devuelta && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Devuelta" />}
@@ -196,8 +196,8 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
         isOpen={isOpen} onClose={closeModal} turnoData={turnoData} countdown={countdown}
         cajaEntregada={cajaEntregada} setCajaEntregada={setCajaEntregada}
         cajaDevuelta={cajaDevuelta} setCajaDevuelta={setCajaDevuelta}
-        isParticipantView={!!miUsuarioId} // <--- SE INDICA QUE ES LA VISTA DE USUARIO
-        contactosWhatsApp={contactosWhatsApp} // <--- SE LE PASA EL ARREGLO DE CONTACTOS
+        isParticipantView={!!miUsuarioId} 
+        contactosWhatsApp={contactosWhatsApp} 
         onRemove={() => {
           if (turnoData?.participante) onQuitar(turnoData.cajaId, turnoData.turnoId, turnoData.participante.id);
           closeModal();
@@ -207,6 +207,12 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
             onActualizarEstadoTurno(turnoData.cajaId, turnoData.turnoId, cajaEntregada, cajaDevuelta);
           }
           closeModal();
+        }}
+        onResolveAlert={() => { // <-- SE PASA AL MODAL AQUÍ
+          if (turnoData && onResolveAlert) {
+            onResolveAlert(turnoData.cajaId, turnoData.turnoId);
+            closeModal();
+          }
         }}
       />
     </div>

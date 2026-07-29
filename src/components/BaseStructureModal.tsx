@@ -1,35 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Calendar, Clock, Inbox, AlertCircle, LayoutGrid, ArrowRight } from 'lucide-react';
 
+// 1. ACTUALIZAMOS LA INTERFAZ PARA QUE EXPORTE UN OBJETO CON FECHA Y NOMBREDIA
 interface BaseStructureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (estructura: { dias: string[], horarios?: string[], cajas?: string[] }) => void;
+  onSave: (estructura: { dias: { fecha: string; nombreDia: string }[], horarios?: string[], cajas?: string[] }) => void;
   isSupervisor?: boolean;  
   existingDays?: string[]; 
 }
 
 const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose, onSave, isSupervisor = false, existingDays = [] }) => {
-  const [dias, setDias] = useState<string[]>([]);
+  // 2. ACTUALIZAMOS EL ESTADO PARA QUE SEA UN ARREGLO DE OBJETOS
+  const [dias, setDias] = useState<{fecha: string, nombreDia: string}[]>([]);
   const [horarios, setHorarios] = useState<string[]>([]);
   const [cajas, setCajas] = useState<string[]>([]);
 
   const [nuevoDia, setNuevoDia] = useState('');
-  const [nuevaCaja, setNuevaCaja] = useState('Caja 1'); // Empezamos sugiriendo la 1
+  const [nuevaCaja, setNuevaCaja] = useState('Caja 1'); 
   
-  // Controles Nativos de Hora
   const [nuevoInicio, setNuevoInicio] = useState('08:00');
   const [nuevoFin, setNuevoFin] = useState('09:00');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // === MAGIA: Auto-Sugerir la próxima Caja (Caja 1, Caja 2, Caja 3) ===
   useEffect(() => {
     if (cajas.length === 0) {
       setNuevaCaja('Caja 1');
       return;
     }
-    // Buscar el número más alto usado
     let max = 0;
     cajas.forEach(c => {
       const match = c.match(/caja\s+(\d+)/i);
@@ -38,7 +37,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
         if (num > max) max = num;
       }
     });
-    // Buscar huecos (si borraron la caja 2, sugerirla de nuevo)
     for (let i = 1; i <= max; i++) {
       const testName = `Caja ${i}`;
       if (!cajas.includes(testName)) {
@@ -46,7 +44,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
         return;
       }
     }
-    // Si no hay huecos, dar la siguiente al final
     setNuevaCaja(`Caja ${max + 1}`);
   }, [cajas]);
 
@@ -59,10 +56,11 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     const formateado = dateObj.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
     const diaFormateado = formateado.charAt(0).toUpperCase() + formateado.slice(1);
     
-    if (dias.includes(diaFormateado) || existingDays.includes(diaFormateado)) {
+    // 3. VALIDAMOS CONTRA EL NUEVO FORMATO DE OBJETO
+    if (dias.some(d => d.nombreDia === diaFormateado) || existingDays.includes(diaFormateado)) {
       return setErrorMsg('El día ya está en la lista o ya existe en el evento.');
     }
-    setDias([...dias, diaFormateado]);
+    setDias([...dias, { fecha: nuevoDia, nombreDia: diaFormateado }]);
     setNuevoDia('');
   };
 
@@ -73,7 +71,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     
     setHorarios([...horarios, val].sort());
     
-    // MAGIA: Auto-preparar el siguiente bloque de hora (ej: 09:00 -> 10:00)
     setNuevoInicio(nuevoFin);
     const [h, m] = nuevoFin.split(':').map(Number);
     const nextH = (h + 1 < 24 ? h + 1 : 0).toString().padStart(2, '0');
@@ -84,7 +81,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     if (!nuevaCaja.trim()) return setErrorMsg('Ingresa un nombre para la caja.');
     if (cajas.includes(nuevaCaja.trim())) return setErrorMsg('Esta caja ya existe.');
     setCajas([...cajas, nuevaCaja.trim()]);
-    // Nota: El useEffect se encargará de actualizar el input "nuevaCaja" automáticamente
   };
 
   const handleSave = () => {
@@ -105,7 +101,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className={`relative bg-white rounded-3xl shadow-2xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200 ${isSupervisor ? 'max-w-3xl' : 'max-w-5xl'}`}>
 
-        {/* HEADER ESTILO PREMIUM */}
         <div className="bg-slate-900 p-5 flex justify-between items-center border-b border-slate-800 shrink-0">
           <h2 className="text-white font-black flex items-center gap-2 text-lg tracking-wide uppercase">
             <LayoutGrid size={20} className="text-blue-400" />
@@ -116,7 +111,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
           </button>
         </div>
 
-        {/* CONTENIDO PRINCIPAL */}
         <div className={`flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 gap-4 sm:gap-6 ${isSupervisor ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
 
           {/* COLUMNA: DÍAS NUEVOS */}
@@ -132,7 +126,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
             <div className="space-y-2 flex-1 overflow-y-auto pr-1">
               {dias.map((d, i) => (
                 <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-blue-100 text-sm text-blue-800 font-bold shadow-sm">
-                  <span>{d}</span>
+                  <span>{d.nombreDia}</span>
                   <button onClick={() => setDias(dias.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition"><Trash2 size={16}/></button>
                 </div>
               ))}
@@ -140,7 +134,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
             </div>
           </div>
 
-          {/* COLUMNA: DÍAS EXISTENTES (SÓLO SUPERVISOR) */}
+          {/* COLUMNA: DÍAS EXISTENTES */}
           {isSupervisor && (
             <div className="bg-slate-50 border border-slate-100 p-4 sm:p-5 rounded-2xl flex flex-col shadow-sm">
               <h4 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-4 opacity-70">
@@ -156,7 +150,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
             </div>
           )}
 
-          {/* COLUMNAS: CAJAS Y HORARIOS (NO SUPERVISOR) */}
+          {/* COLUMNAS: CAJAS Y HORARIOS */}
           {!isSupervisor && (
             <>
               {/* COLUMNA CAJAS */}
@@ -180,7 +174,7 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
                 </div>
               </div>
 
-              {/* COLUMNA HORARIOS NATIVOS */}
+              {/* COLUMNA HORARIOS */}
               <div className="bg-slate-50 border border-slate-100 p-4 sm:p-5 rounded-2xl flex flex-col shadow-sm">
                 <h4 className="text-sm font-black text-slate-800 flex items-center gap-2 mb-4">
                   <div className="bg-emerald-100 p-1.5 rounded-lg text-emerald-600"><Clock size={18}/></div>
@@ -221,7 +215,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
           )}
         </div>
 
-        {/* FOOTER */}
         <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
           <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition shadow-sm text-sm">
             Cancelar
@@ -231,7 +224,6 @@ const BaseStructureModal: React.FC<BaseStructureModalProps> = ({ isOpen, onClose
           </button>
         </div>
 
-        {/* MODAL DE ALERTAS / VALIDACIONES INTERNO */}
         {errorMsg && (
           <div className="absolute inset-0 z-[300] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-sm w-full text-center border-t-4 border-red-500 animate-in zoom-in-95 duration-200">

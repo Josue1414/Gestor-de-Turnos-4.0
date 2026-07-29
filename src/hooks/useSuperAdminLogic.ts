@@ -73,10 +73,11 @@ export const useSuperAdminLogic = () => {
 
     let diasIniciales: DiaData[] = [];
     if (estructuraGuardada) {
-      diasIniciales = estructuraGuardada.dias.map((nombreDia, index) => ({
+      // AQUÍ: diaObj ahora es el objeto que trae fecha y nombreDia
+      diasIniciales = estructuraGuardada.dias.map((diaObj: any, index: number) => ({
         id: `d_${Date.now()}_${index}`,
-        fecha: '',
-        nombreDia: nombreDia,
+        fecha: diaObj.fecha,         // <-- ¡Ahora sí se guarda la fecha exacta!
+        nombreDia: diaObj.nombreDia, // <-- Guardamos el nombre formateado
         horariosMaestros: estructuraGuardada.horarios,
         cajas: estructuraGuardada.cajas.map((nombreCaja, cIndex) => ({
           id: `c_${Date.now()}_${cIndex}`,

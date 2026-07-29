@@ -41,6 +41,7 @@ export interface Turno {
   participanteId: string | null; // null significa que está libre
   entregada?: boolean; // Para el checkbox 1
   devuelta?: boolean;  // Para el checkbox 2
+  solicitaAsistencia?: boolean;
 }
 
 export interface Caja {

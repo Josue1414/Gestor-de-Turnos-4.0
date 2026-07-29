@@ -385,6 +385,53 @@ export const useParticipantLogic = () => {
     return arr;
   }, [croquisGral, croquisIndiv, adminId]);
 
+ // 1. Encontramos el turno del usuario en el día actual para saber a qué caja mandarle la alerta
+  const turnoAlertaInfo = useMemo(() => {
+    if (!diaActual || !miUsuario) return null;
+    for (const caja of diaActual.cajas) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const turno = caja.turnos.find((t: any) => t.participanteId === miUsuario.id);
+      if (turno) {
+        return { cajaId: caja.id, turnoId: turno.id, solicitaAsistencia: turno.solicitaAsistencia };
+      }
+    }
+    return null;
+  }, [diaActual, miUsuario]);
+
+  // 2. Función para mandar la alerta a Firebase con vibración
+  const handleSolicitarAsistencia = async (estado: boolean) => {
+    if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo) return;
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      const data = docSnap.data();
+      const rawDias = data.diasPorAdmin?.[adminId] || [];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
+        ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
+        } : c)
+      } : d);
+
+      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+
+      // --- MAGIA DE LA VIBRACIÓN ---
+      if ("vibrate" in navigator) {
+        // Si pide ayuda, vibra dos veces rápido (100ms vibra, 50ms pausa, 100ms vibra)
+        // Si la cancela, da un solo toque suave (50ms)
+        navigator.vibrate(estado ? [100, 50, 100] : [50]);
+      }
+
+      showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Error al conectar con el servidor.', 'error');
+    }
+  };
+
   return {
     eventoId, adminId, loading, dias, participantes, eventoNombre,
     diaActivo, setDiaActivo, vistaTarjetas, setVistaTarjetas,
@@ -395,6 +442,6 @@ export const useParticipantLogic = () => {
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
     handleAsignarme, handleQuitarme, handleLogout,
     // EXPORTAMOS EL NUEVO DATO
-    adminContacto 
+    adminContacto,handleSolicitarAsistencia,turnoAlertaInfo
   };
 };

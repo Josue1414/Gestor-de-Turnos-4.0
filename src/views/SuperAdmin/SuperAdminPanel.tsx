@@ -1,3 +1,4 @@
+// src/views/SuperAdmin/SuperAdminPanel.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -249,7 +250,8 @@ const SuperAdminPanel = () => {
       <BaseStructureModal 
         isOpen={baseStructureModalState} 
         onClose={() => setBaseStructureModalState(false)} 
-        onSave={(estructura) => setEstructuraGuardada({
+        // ACTUALIZADO: Forzamos el tipo `any` para evitar el choque temporal de interfaces
+        onSave={(estructura: any) => setEstructuraGuardada({
           dias: estructura.dias,
           horarios: estructura.horarios || [], 
           cajas: estructura.cajas || []        

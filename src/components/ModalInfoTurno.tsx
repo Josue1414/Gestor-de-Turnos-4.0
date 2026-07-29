@@ -1,6 +1,7 @@
+// src/components/ModalInfoTurno.tsx
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Clock, Inbox, MessageCircle, Check, Trash2 } from 'lucide-react';
+import { X, User, Clock, Inbox, MessageCircle, Check, Trash2, Bell } from 'lucide-react';
 
 export interface ContactoWA {
   nombre: string;
@@ -21,15 +22,15 @@ interface ModalInfoTurnoProps {
   onRemove: () => void;
   onSave?: () => void;
   
-  // NUEVAS PROPIEDADES PARA EL PARTICIPANTE
   isParticipantView?: boolean;
   contactosWhatsApp?: ContactoWA[];
+  onResolveAlert?: () => void; // <-- NUEVA PROP
 }
 
 const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
   isOpen, onClose, turnoData, countdown, 
   cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta, 
-  onRemove, onSave, isParticipantView = false, contactosWhatsApp = []
+  onRemove, onSave, isParticipantView = false, contactosWhatsApp = [], onResolveAlert
 }) => {
   if (!isOpen || !turnoData) return null;
 
@@ -38,6 +39,8 @@ const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
   const codigoPais = (p?.codigoPais || p?.countryCode || '+52').replace('+', '');
   const hasPhone = Boolean(numeroTelefono);
   const waLink = hasPhone ? `https://wa.me/${codigoPais}${numeroTelefono}` : '#';
+
+  const isSolicitandoAyuda = turnoData.turno?.solicitaAsistencia;
 
   return createPortal(
     <div 
@@ -67,6 +70,22 @@ const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
         </div>
 
         <div className="p-6 space-y-5">
+
+          {/* BANNER DE ALERTA SUPREMA (SOLO ADMIN) */}
+          {isSolicitandoAyuda && !isParticipantView && (
+            <div className="bg-orange-100 border-2 border-orange-400 p-4 rounded-2xl flex flex-col items-center text-center animate-pulse shadow-inner">
+              <Bell size={28} className="text-orange-500 mb-2" />
+              <h3 className="text-sm font-black text-orange-900 leading-tight">¡Este participante está pidiendo ayuda!</h3>
+              <p className="text-[10px] font-bold text-orange-700 mt-1 mb-4">Por favor atiende su solicitud.</p>
+              <button 
+                onClick={onResolveAlert}
+                className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black shadow-md transition"
+              >
+                Marcar como resuelto
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Horario</span>
@@ -75,7 +94,6 @@ const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
               </span>
             </div>
             
-            {/* Si es Admin, muestra el WhatsApp del participante */}
             {!isParticipantView && (
               <a 
                 href={hasPhone ? waLink : undefined}
@@ -93,7 +111,6 @@ const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
             )}
           </div>
 
-          {/* VISTA PARTICIPANTE: Muestra WhatsApps de Asistencia */}
           {isParticipantView ? (
             <div className="space-y-3">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 ml-1">Contacto de Asistencia</h4>
@@ -128,7 +145,6 @@ const ModalInfoTurno: React.FC<ModalInfoTurnoProps> = ({
               )}
             </div>
           ) : (
-            /* VISTA ADMIN: Muestra Checkboxes */
             <div className="space-y-2">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 ml-1">Control de Caja</h4>
               <button onClick={() => setCajaEntregada && setCajaEntregada(!cajaEntregada)} className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all ${cajaEntregada ? 'border-blue-500 bg-blue-50/50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
