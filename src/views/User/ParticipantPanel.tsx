@@ -192,3 +192,4 @@ const ParticipantPanel = () => {
 };
 
 export default ParticipantPanel;
+// End of src/views/User/ParticipantPanel.tsx
