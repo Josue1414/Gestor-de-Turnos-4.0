@@ -1,5 +1,5 @@
 // src/components/AdminHeader.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
@@ -99,6 +99,15 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   };
 
   const hasAlerts = alertasAsistencia.length > 0;
+
+  useEffect(() => {
+    if (alertasAsistencia && alertasAsistencia.length > 0) {
+      if ("vibrate" in navigator) {
+        // Vibra 200ms, pausa 100ms, vibra 200ms
+        navigator.vibrate([200, 100, 200]); 
+      }
+    }
+  }, [alertasAsistencia.length]);
 
   return (
     <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full">

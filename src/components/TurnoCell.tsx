@@ -57,7 +57,8 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
   } else if (estadoTurno === 'activo') {
     estilosEstado = "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/50 hover:bg-emerald-100 text-emerald-900";
   } else if (estadoTurno === 'atrasado') {
-    estilosEstado = "bg-red-50 border-red-400 ring-2 ring-red-400/50 hover:bg-red-100 text-red-900";
+    // Mantenemos el mismo color azul que el estado normal
+    estilosEstado = "bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 text-indigo-900";
   }
 
   if (participante) {
@@ -78,8 +79,22 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
           <span className={`text-[8px] sm:text-[9px] font-bold uppercase block sm:mt-1 ${pideAsistencia ? 'text-orange-600' : estadoTurno === 'activo' ? 'text-emerald-600' : estadoTurno === 'atrasado' ? 'text-red-600' : 'text-indigo-500'}`}>
             {pideAsistencia ? '¡Requiere Asistencia!' : estadoTurno === 'activo' ? 'En curso' : estadoTurno === 'atrasado' ? 'Retrasado' : 'Ver detalles'}
           </span>
-          {turno.entregada && !pideAsistencia && <span className="w-2 h-2 rounded-full bg-blue-500" title="Entregada" />}
-          {turno.devuelta && !pideAsistencia && <span className="w-2 h-2 rounded-full bg-emerald-500" title="Devuelta" />}
+          
+          {/* Mostramos los puntos azules/verdes solo si NO está atrasado ni pide asistencia */}
+          {estadoTurno !== 'atrasado' && !pideAsistencia && (
+            <>
+              {turno.entregada && <span className="w-2 h-2 rounded-full bg-blue-500" title="Entregada" />}
+              {turno.devuelta && <span className="w-2 h-2 rounded-full bg-emerald-500" title="Devuelta" />}
+            </>
+          )}
+
+          {/* Si está atrasado, mostramos rojo para lo que falte, y su color normal para lo que ya esté listo */}
+          {estadoTurno === 'atrasado' && !pideAsistencia && (
+            <>
+              <span className={`w-2 h-2 rounded-full ${turno.entregada ? 'bg-blue-500' : 'bg-red-500'}`} title={turno.entregada ? "Entregada" : "Falta entregar"} />
+              <span className={`w-2 h-2 rounded-full ${turno.devuelta ? 'bg-emerald-500' : 'bg-red-500'}`} title={turno.devuelta ? "Devuelta" : "Falta devolver"} />
+            </>
+          )}
         </div>
       </div>
     );

@@ -387,16 +387,21 @@ export const useParticipantLogic = () => {
 
  // 1. Encontramos el turno del usuario en el día actual para saber a qué caja mandarle la alerta
   const turnoAlertaInfo = useMemo(() => {
-    if (!diaActual || !miUsuario) return null;
-    for (const caja of diaActual.cajas) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const turno = caja.turnos.find((t: any) => t.participanteId === miUsuario.id);
-      if (turno) {
-        return { cajaId: caja.id, turnoId: turno.id, solicitaAsistencia: turno.solicitaAsistencia };
-      }
-    }
-    return null;
-  }, [diaActual, miUsuario]);
+   if (!dias || !miUsuario) return null;
+   
+   // Buscamos en TODOS los días para que el botón siempre esté disponible
+   for (const dia of dias) {
+     for (const caja of dia.cajas) {
+        const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
+        const turno = turnos.find((t: any) => t.participanteId === miUsuario.id);
+        if (turno) {
+          // Ahora TypeScript ya no se quejará de turno.id ni turno.solicitaAsistencia
+          return { cajaId: caja.id, turnoId: turno.id, solicitaAsistencia: turno.solicitaAsistencia };
+        }
+     }
+   }
+   return null;
+ }, [dias, miUsuario]);
 
   // 2. Función para mandar la alerta a Firebase con vibración
   const handleSolicitarAsistencia = async (estado: boolean) => {

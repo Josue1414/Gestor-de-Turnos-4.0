@@ -30,14 +30,15 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   isOpen, onClose, participantes, onEditParticipante, onDeleteParticipante, currentUserId, currentUserRole = 'Administrador',
   eventoId = 'demo-evento', adminId = 'demo-admin', customInviteLink
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+ 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchTermState, setSearchTermState] = useState('');
   
   const { showToast } = useToast();
 
   const participantesFiltrados = participantes
-    .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim()))
+    .filter(p => p.nombre.toLowerCase().includes(searchTermState.toLowerCase().trim()))
     .sort((a, b) => {
       if (a.id === currentUserId) return -1;
       if (b.id === currentUserId) return 1;
@@ -120,8 +121,8 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
             <input 
               type="text" 
               placeholder="Buscar por nombre..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={searchTermState}
+              onChange={(e) => setSearchTermState(e.target.value)}
               className="w-full bg-slate-700/50 border border-slate-600 rounded-xl py-2 px-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-400 transition"
             />
           </div>
@@ -171,7 +172,8 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      {canEdit && (
+                      {/* Aquí hacemos la validación estricta para que solo Capitanes vean los enlaces */}
+                      {currentUserRole === 'Capitan' && (
                         <>
                           <button 
                             onClick={(e) => handleWhatsApp(p, e)}
@@ -196,7 +198,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             onEditParticipante(p.id); 
-                            onClose(); // <-- SOLUCIÓN: Cierra el cajón para mostrar libremente el modal
+                            onClose(); 
                           }}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
                           title={esMiUsuario ? "Editar mi Perfil" : "Ver/Editar Perfil"}
@@ -210,7 +212,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             onDeleteParticipante(p.id, p.nombre); 
-                            onClose(); // <-- SOLUCIÓN
+                            onClose(); 
                           }}
                           className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
                           title="Eliminar Participante"

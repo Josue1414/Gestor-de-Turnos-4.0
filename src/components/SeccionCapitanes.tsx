@@ -18,7 +18,7 @@ export interface CapitanData {
 
 interface SeccionCapitanesProps {
   capitanes: CapitanData[];
-  participantes?: any[]; // <-- NUEVO: Recibimos todos los participantes para hacer el cruce exacto
+  participantes?: any[]; 
   onOpenModal: () => void;
   onDeleteCapitan: (id: string) => void;
   onSimularCapitan: (id: string) => void;
@@ -47,23 +47,24 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
     setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // LÓGICA CORREGIDA: Suma los usuarios creados + usuarios en turnos del capitán
+  // LÓGICA CORREGIDA: Filtro exacto replicando el directorio del Capitán
   const getCapitanStats = (capitan: CapitanData) => {
     const nombresCajas: string[] = [];
     let totalTurnos = 0;
     let turnosDisponibles = 0;
+    
     const participantesDelCapitan = new Set<string>();
 
-    // 1. Añadimos primero a los participantes que este capitán haya registrado
+    // 1. Sumamos a los que el capitán creó o tienen su ID explícito
     participantes.forEach(p => {
-      if (p.creador === capitan.nombre) {
+      if (p.capitanId === capitan.id || p.creador === capitan.nombre) {
         participantesDelCapitan.add(p.id);
       }
     });
 
-    // 2. Buscamos y añadimos a los participantes que estén dentro de sus turnos (ignorando otros días)
+    // 2. Buscamos y sumamos info de las cajas asignadas
     dias.forEach(dia => {
-      if (!(capitan.diasAsignados || []).includes(dia.id)) return; // Ignorar días que no le tocan
+      if (!(capitan.diasAsignados || []).includes(dia.id)) return; 
 
       dia.cajas.forEach((caja: any) => {
         if (capitan.cajasAsignadas.includes(caja.id)) {
@@ -71,11 +72,17 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
             nombresCajas.push(caja.nombre);
           }
           totalTurnos += caja.turnos.length;
+          
           caja.turnos.forEach((turno: any) => {
-            if (turno.participanteId) {
-              participantesDelCapitan.add(turno.participanteId); 
-            } else {
+            if (!turno.participanteId) {
               turnosDisponibles++;
+            } else {
+              // Si el turno está ocupado, buscamos al participante
+              const part = participantes.find(p => p.id === turno.participanteId);
+              // Lo sumamos SOLO si no pertenece a otro capitán
+              if (part && (!part.capitanId || part.capitanId === capitan.id)) {
+                participantesDelCapitan.add(part.id);
+              }
             }
           });
         }

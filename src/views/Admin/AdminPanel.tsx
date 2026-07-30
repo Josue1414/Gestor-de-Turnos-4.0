@@ -30,6 +30,7 @@ interface ParticipanteExtendidoDb extends Participante {
   ubicaciones?: string[]; 
   fechaNacimiento?: string;
   capitanAsignado?: string;
+  capitanId?: string;
 }
 
 interface AdminInDB {
@@ -162,11 +163,24 @@ const AdminPanel = () => {
 
   const alertasAsistencia = useMemo(() => {
     const alertas: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[] = [];
+    
     diasFiltrados.forEach(dia => {
       dia.cajas.forEach(caja => {
-        caja.turnos.forEach(turno => {
-          if ((turno as any).solicitaAsistencia) {
-            const part = participantesEnriquecidos.find(p => p.id === turno.participanteId);
+        const turnos = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
+        
+        turnos.forEach((turno: any) => {
+          if (turno.solicitaAsistencia) {
+            // Código corregido
+            // Le decimos a TypeScript que p y part son del tipo ParticipanteExtendidoDb
+            const part = participantesEnriquecidos.find((p: any) => p.id === turno.participanteId) as ParticipanteExtendidoDb | undefined;
+
+            // FILTRO DE PERTENENCIA: Si es capitán, validar que el participante sea de su equipo
+            if (isCapitan) {
+              const capitanIdL = localStorage.getItem('current_capitan_id');
+              // Ahora TypeScript sabe que 'part' puede tener un 'capitanId'
+              if (part && part.capitanId !== capitanIdL) return; // Se omite si pertenece a otro
+            }
+            
             alertas.push({
               dia: dia.nombreDia,
               cajaId: caja.id,
@@ -180,7 +194,7 @@ const AdminPanel = () => {
       });
     });
     return alertas;
-  }, [diasFiltrados, participantesEnriquecidos]);
+  }, [diasFiltrados, participantesEnriquecidos, isCapitan]);
 
   useEffect(() => {
     if (diasFiltrados.length > 0 && dias.length > 0) {
