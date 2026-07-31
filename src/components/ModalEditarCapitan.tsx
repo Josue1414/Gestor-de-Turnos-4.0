@@ -22,6 +22,7 @@ const ModalEditarCapitan: React.FC<ModalEditarCapitanProps> = ({
   const [diasSeleccionados, setDiasSeleccionados] = useState<string[]>([]);
   const [errorNombre, setErrorNombre] = useState('');
 
+  // 1. CORRECCIÓN: El useEffect que carga los datos iniciales se queda intacto.
   useEffect(() => {
     if (isOpen && capitan) {
       setNombre(capitan.nombre);
@@ -31,12 +32,12 @@ const ModalEditarCapitan: React.FC<ModalEditarCapitanProps> = ({
     }
   }, [isOpen, capitan]);
 
-  useEffect(() => {
-    setCajasSeleccionadas(prev => prev.filter(cajaId => {
-      const caja = cajasDisponibles.find(c => c.id === cajaId);
-      return caja ? diasSeleccionados.includes(caja.diaId) : false;
-    }));
-  }, [diasSeleccionados, cajasDisponibles]);
+  // Se ELIMINÓ el useEffect conflictivo que borraba los datos al abrir la ventana.
+
+  // 2. Filtramos los días para que solo aparezcan los que SÍ tienen cajas disponibles
+  const diasConCajas = diasDisponibles.filter(dia => 
+    cajasDisponibles.some(caja => caja.diaId === dia.id)
+  );
 
   if (!isOpen || !capitan) return null;
 
@@ -45,7 +46,18 @@ const ModalEditarCapitan: React.FC<ModalEditarCapitanProps> = ({
   };
 
   const toggleDia = (diaId: string) => {
-    setDiasSeleccionados(prev => prev.includes(diaId) ? prev.filter(id => id !== diaId) : [...prev, diaId]);
+    setDiasSeleccionados(prev => {
+      if (prev.includes(diaId)) {
+        // 3. Si se desmarca manualmente el día, borramos sus cajas
+        setCajasSeleccionadas(cajasPrev => cajasPrev.filter(cajaId => {
+          const caja = cajasDisponibles.find(c => c.id === cajaId);
+          return caja ? caja.diaId !== diaId : true;
+        }));
+        return prev.filter(id => id !== diaId);
+      } else {
+        return [...prev, diaId];
+      }
+    });
   };
 
   const handleGuardar = (e: React.FormEvent) => {
@@ -106,7 +118,8 @@ const ModalEditarCapitan: React.FC<ModalEditarCapitanProps> = ({
                 1. Días Asignados
               </label>
               <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                {diasDisponibles.map(dia => (
+                {/* Mapeamos diasConCajas en lugar de diasDisponibles */}
+                {diasConCajas.map(dia => (
                   <label key={dia.id} className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border transition-all ${diasSeleccionados.includes(dia.id) ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200 hover:border-blue-300'}`}>
                     <span className={`text-sm font-bold flex items-center gap-2 ${diasSeleccionados.includes(dia.id) ? 'text-blue-700' : 'text-slate-700'}`}>
                       <Calendar size={16} /> {dia.nombreDia}

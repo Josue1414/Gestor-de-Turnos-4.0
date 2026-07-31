@@ -9,6 +9,8 @@ import type { UsuarioModalData } from '../../components/ModalInfoUsuario';
 import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 
+import { enviarAlertaVercel } from '../../utils/pushNotifications';
+
 export interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
   codigoPais?: string;
@@ -19,8 +21,9 @@ export interface ParticipanteExtendidoDb extends Participante {
   fechaNacimiento?: string;
   capitanId?: string; 
   cajasDelCapitan?: string[]; 
+  diasDelCapitan?: string[]; // <-- 1. NUEVO: Para guardar los días del capitán
   capitanNombre?: string; 
-  capitanTelefono?: string; // <-- NUEVO: Para guardar el teléfono del capitán
+  capitanTelefono?: string; 
 }
 
 export const useParticipantLogic = () => {
@@ -47,10 +50,8 @@ export const useParticipantLogic = () => {
   const [isUsuarioModalOpen, setIsUsuarioModalOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // NUEVO ESTADO: Guardará la info de contacto del Admin
   const [adminContacto, setAdminContacto] = useState({ nombre: 'Administrador', telefono: '' });
 
-  // PROTECCIÓN DE RUTA Y BOTÓN "ATRÁS"
   useEffect(() => {
     const role = localStorage.getItem('user_role');
     if (role !== 'participante') {
@@ -67,7 +68,6 @@ export const useParticipantLogic = () => {
         const data = docSnap.data();
         if (data.nombre) setEventoNombre(data.nombre);
         
-        // --- EXTRAER INFO DEL ADMIN ---
         const adminsList = data.admins || [];
         const currentAdmin = adminsList.find((a: any) => a.id === adminId);
         setAdminContacto({
@@ -88,8 +88,9 @@ export const useParticipantLogic = () => {
                  ...p, 
                  capitanId: cap.id, 
                  capitanNombre: cap.nombre, 
-                 capitanTelefono: cap.telefono || '', // <-- Rescatamos el teléfono del Capitán
-                 cajasDelCapitan: cap.cajasAsignadas || []
+                 capitanTelefono: cap.telefono || '', 
+                 cajasDelCapitan: cap.cajasAsignadas || [],
+                 diasDelCapitan: cap.diasAsignados || [] // <-- 2. Rescatamos los días del capitán
                });
              }
           });
@@ -115,20 +116,30 @@ export const useParticipantLogic = () => {
 
         let diasProcesados: DiaEvento[] = rawDias;
         const viewCapitanId = localStorage.getItem('view_capitan_id');
+        
         let cajasVisibles: string[] | null = null;
+        let diasVisibles: string[] | null = null; // <-- 3. Bandera para los días
         let nombreEquipoActual = '';
 
         if (viewCapitanId) {
            const capVista = capitanes.find((c: any) => c.id === viewCapitanId);
            if (capVista) {
                cajasVisibles = capVista.cajasAsignadas || [];
+               diasVisibles = capVista.diasAsignados || []; // Extraemos
                nombreEquipoActual = capVista.nombre;
            }
         } else if (currentUser?.capitanId) {
            cajasVisibles = currentUser.cajasDelCapitan || [];
+           diasVisibles = currentUser.diasDelCapitan || []; // Extraemos
            nombreEquipoActual = currentUser.capitanNombre || '';
         }
 
+        // 4. LÓGICA DE FILTRADO CORREGIDA: Primero limitamos estrictamente los días
+        if (diasVisibles !== null) {
+           diasProcesados = diasProcesados.filter(d => diasVisibles!.includes(d.id));
+        }
+
+        // Luego limitamos las cajas dentro de esos días permitidos
         if (cajasVisibles) {
            diasProcesados = diasProcesados.map(d => ({
              ...d,
@@ -385,17 +396,14 @@ export const useParticipantLogic = () => {
     return arr;
   }, [croquisGral, croquisIndiv, adminId]);
 
- // 1. Encontramos el turno del usuario en el día actual para saber a qué caja mandarle la alerta
-  const turnoAlertaInfo = useMemo(() => {
+ const turnoAlertaInfo = useMemo(() => {
    if (!dias || !miUsuario) return null;
    
-   // Buscamos en TODOS los días para que el botón siempre esté disponible
    for (const dia of dias) {
      for (const caja of dia.cajas) {
         const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
         const turno = turnos.find((t: any) => t.participanteId === miUsuario.id);
         if (turno) {
-          // Ahora TypeScript ya no se quejará de turno.id ni turno.solicitaAsistencia
           return { cajaId: caja.id, turnoId: turno.id, solicitaAsistencia: turno.solicitaAsistencia };
         }
      }
@@ -403,39 +411,49 @@ export const useParticipantLogic = () => {
    return null;
  }, [dias, miUsuario]);
 
-  // 2. Función para mandar la alerta a Firebase con vibración
   const handleSolicitarAsistencia = async (estado: boolean) => {
-    if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo) return;
-    try {
-      const docRef = doc(db, 'eventos', eventoId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) return;
-      const data = docSnap.data();
-      const rawDias = data.diasPorAdmin?.[adminId] || [];
+  // Agregamos !miUsuario a la validación de retorno temprano
+  if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
+  
+  try {
+    const docRef = doc(db, 'eventos', eventoId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return;
+    const data = docSnap.data();
+    const rawDias = data.diasPorAdmin?.[adminId] || [];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
-        ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
-        } : c)
-      } : d);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
+      ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
+      } : c)
+    } : d);
 
-      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+    await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
 
-      // --- MAGIA DE LA VIBRACIÓN ---
-      if ("vibrate" in navigator) {
-        // Si pide ayuda, vibra dos veces rápido (100ms vibra, 50ms pausa, 100ms vibra)
-        // Si la cancela, da un solo toque suave (50ms)
-        navigator.vibrate(estado ? [100, 50, 100] : [50]);
-      }
-
-      showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
-    } catch (error) {
-      console.error(error);
-      showToast('Error al conectar con el servidor.', 'error');
+    // --- MAGIA DE LA VIBRACIÓN Y PUSH ---
+    if ("vibrate" in navigator) {
+      navigator.vibrate(estado ? [100, 50, 100] : [50]);
     }
-  };
+
+    // SI EL ESTADO ES TRUE (Pidiendo ayuda), BUSCAMOS LA SUSCRIPCIÓN Y ENVIAMOS PUSH
+    if (estado) {
+      const targetId = miUsuario.capitanId || adminId;
+      const subscription = data.suscripcionesPush?.[targetId]; // Leemos la suscripción de Firebase
+      
+      if (subscription) {
+        const cajaObj = diaActual.cajas.find((c: any) => c.id === turnoAlertaInfo.cajaId);
+        await enviarAlertaVercel(subscription, miUsuario.nombre, cajaObj?.nombre || 'Caja');
+      }
+    }
+
+    showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
+  } catch (error) {
+    console.error(error);
+    showToast('Error al conectar con el servidor.', 'error');
+  }
+};
 
   return {
     eventoId, adminId, loading, dias, participantes, eventoNombre,
@@ -446,7 +464,6 @@ export const useParticipantLogic = () => {
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
     handleAsignarme, handleQuitarme, handleLogout,
-    // EXPORTAMOS EL NUEVO DATO
     adminContacto,handleSolicitarAsistencia,turnoAlertaInfo
   };
 };

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// src/utils/statsCalculator.ts
 
 interface Turno { id: string; participanteId: string | null; horario: string; }
 interface Caja { id: string; nombre: string; turnos: Turno[]; }

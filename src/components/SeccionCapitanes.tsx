@@ -47,7 +47,6 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
     setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // LÓGICA CORREGIDA: Filtro exacto replicando el directorio del Capitán
   const getCapitanStats = (capitan: CapitanData) => {
     const nombresCajas: string[] = [];
     let totalTurnos = 0;
@@ -55,14 +54,12 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
     
     const participantesDelCapitan = new Set<string>();
 
-    // 1. Sumamos a los que el capitán creó o tienen su ID explícito
     participantes.forEach(p => {
       if (p.capitanId === capitan.id || p.creador === capitan.nombre) {
         participantesDelCapitan.add(p.id);
       }
     });
 
-    // 2. Buscamos y sumamos info de las cajas asignadas
     dias.forEach(dia => {
       if (!(capitan.diasAsignados || []).includes(dia.id)) return; 
 
@@ -77,9 +74,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
             if (!turno.participanteId) {
               turnosDisponibles++;
             } else {
-              // Si el turno está ocupado, buscamos al participante
               const part = participantes.find(p => p.id === turno.participanteId);
-              // Lo sumamos SOLO si no pertenece a otro capitán
               if (part && (!part.capitanId || part.capitanId === capitan.id)) {
                 participantesDelCapitan.add(part.id);
               }
@@ -105,8 +100,14 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
 
   if (!isOpen) return null;
 
+  // CORRECCIÓN: Filtramos las cajas que ya están ocupadas por OTRO capitán en EL MISMO DÍA
   const cajasParaEdicion = cajasDisponibles.filter(caja => {
-    const perteneceAOtro = capitanes.some(c => c.id !== editModal.capitan?.id && (c.cajasAsignadas || []).includes(caja.id));
+    const perteneceAOtro = capitanes.some(c => {
+       if (c.id === editModal.capitan?.id) return false;
+       const tieneCaja = (c.cajasAsignadas || []).includes(caja.id);
+       const tieneDia = (c.diasAsignados || []).includes(caja.diaId);
+       return tieneCaja && tieneDia;
+    });
     return !perteneceAOtro;
   });
 
@@ -267,7 +268,7 @@ const SeccionCapitanes: React.FC<SeccionCapitanesProps> = ({
         capitan={editModal.capitan}
         capitanesExistentes={capitanes}
         diasDisponibles={diasDisponibles}
-        cajasDisponibles={cajasParaEdicion}
+        cajasDisponibles={cajasParaEdicion} // <-- Pasamos el arreglo filtrado
         onSave={onEditCapitan}
       />
     </>

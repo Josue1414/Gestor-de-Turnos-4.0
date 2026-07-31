@@ -54,12 +54,10 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    setCajasSeleccionadas(prev => prev.filter(cajaId => {
-      const caja = cajasDisponibles.find(c => c.id === cajaId);
-      return caja ? diasSeleccionados.includes(caja.diaId) : false;
-    }));
-  }, [diasSeleccionados, cajasDisponibles]);
+  // 1. CORRECCIÓN: Filtramos los días para que solo aparezcan los que SÍ tienen cajas disponibles
+  const diasConCajas = diasDisponibles.filter(dia => 
+    cajasDisponibles.some(caja => caja.diaId === dia.id)
+  );
 
   if (!isOpen) return null;
 
@@ -68,7 +66,18 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
   };
 
   const toggleDia = (diaId: string) => {
-    setDiasSeleccionados(prev => prev.includes(diaId) ? prev.filter(id => id !== diaId) : [...prev, diaId]);
+    setDiasSeleccionados(prev => {
+      if (prev.includes(diaId)) {
+        // 2. CORRECCIÓN: Si el usuario desmarca un día manualmente, limpiamos sus cajas asociadas aquí mismo
+        setCajasSeleccionadas(cajasPrev => cajasPrev.filter(cajaId => {
+          const caja = cajasDisponibles.find(c => c.id === cajaId);
+          return caja ? caja.diaId !== diaId : true;
+        }));
+        return prev.filter(id => id !== diaId);
+      } else {
+        return [...prev, diaId];
+      }
+    });
   };
 
   const handleGuardar = (e: React.FormEvent) => {
@@ -117,13 +126,13 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1 mb-2 block">
                 1. Días a su cargo
               </label>
-              {diasDisponibles.length === 0 ? (
+              {diasConCajas.length === 0 ? (
                 <p className="text-sm text-red-500 font-bold bg-red-50 p-3 rounded-xl border border-red-100">
-                  No hay días disponibles.
+                  No hay días con cajas disponibles.
                 </p>
               ) : (
                 <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                  {diasDisponibles.map(dia => (
+                  {diasConCajas.map(dia => (
                     <label key={dia.id} className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border transition-all ${diasSeleccionados.includes(dia.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:border-indigo-300'}`}>
                       <span className={`text-sm font-bold flex items-center gap-2 ${diasSeleccionados.includes(dia.id) ? 'text-indigo-700' : 'text-slate-700'}`}>
                         <Calendar size={16} /> {dia.nombreDia}
@@ -168,7 +177,7 @@ const ModalAsignarCapitan: React.FC<ModalAsignarCapitanProps> = ({ isOpen, onClo
                             {cajasDelDia.map(caja => (
                               <label key={caja.id} className={`flex items-center justify-between cursor-pointer p-2.5 rounded-lg border transition-all ${cajasSeleccionadas.includes(caja.id) ? 'bg-indigo-100 border-indigo-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
                                 <span className={`text-sm font-bold flex items-center gap-2 ${cajasSeleccionadas.includes(caja.id) ? 'text-indigo-700' : 'text-slate-600'}`}>
-                                  <Box size={14} /> {caja.nombre.split('(')[0]} {/* Quitar sufijo de nombreDia */}
+                                  <Box size={14} /> {caja.nombre.split('(')[0]}
                                 </span>
                                 <input 
                                   type="checkbox" 

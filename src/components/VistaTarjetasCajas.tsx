@@ -14,6 +14,7 @@ interface ContactoWA {
 interface VistaTarjetasCajasProps {
   diaActual: any;
   getParticipante: (id: string | null) => any;
+  // Volvemos a string (ID) para que coincida
   onAsignar: (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => void;
   onQuitar: (cajaId: string, turnoId: string, participanteId?: string) => void;
   onCrearCaja: () => void;
@@ -28,13 +29,13 @@ interface VistaTarjetasCajasProps {
   miUsuarioId?: string;
   isBusy?: (horario: string) => boolean; 
   contactosWhatsApp?: ContactoWA[];
-  onResolveAlert?: (cajaId: string, turnoId: string) => void; // <-- NUEVA PROP AQUÍ
+  onResolveAlert?: (cajaId: string, turnoId: string) => void; 
 }
 
 const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
   diaActual, getParticipante, onAsignar, onQuitar, 
   onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno, contactosWhatsApp,
-  onResolveAlert // <-- LA RECIBIMOS AQUÍ
+  onResolveAlert 
 }) => {
 
   const { isOpen, openModal, closeModal, turnoData, countdown, cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta } = useTurnoModal();
@@ -168,6 +169,7 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                             <>
                               <span className="text-[10px] font-bold text-slate-400 italic sm:hidden">Libre</span>
                               <button 
+                                // Pasamos el turno.id
                                 onClick={(e) => { e.stopPropagation(); onAsignar(caja.id, caja.nombre, turno.id, turno.horario); }} 
                                 className={`text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center justify-center gap-1 shadow-sm ${miUsuarioId ? 'bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto text-white' : especial ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
                               >
@@ -199,7 +201,10 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
         isParticipantView={!!miUsuarioId} 
         contactosWhatsApp={contactosWhatsApp} 
         onRemove={() => {
-          if (turnoData?.participante) onQuitar(turnoData.cajaId, turnoData.turnoId, turnoData.participante.id);
+          if (turnoData?.participante) {
+            // Pasamos los IDs 
+            onQuitar(turnoData.cajaId, turnoData.turnoId, turnoData.participante.id);
+          }
           closeModal();
         }}
         onSave={() => {
@@ -208,7 +213,7 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
           }
           closeModal();
         }}
-        onResolveAlert={() => { // <-- SE PASA AL MODAL AQUÍ
+        onResolveAlert={() => { 
           if (turnoData && onResolveAlert) {
             onResolveAlert(turnoData.cajaId, turnoData.turnoId);
             closeModal();

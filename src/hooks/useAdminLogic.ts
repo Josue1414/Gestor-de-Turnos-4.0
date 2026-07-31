@@ -1,11 +1,13 @@
 // src/hooks/useAdminLogic.ts
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { DiaEvento, Participante } from '../types';
 import { DiaEventoSchema, ParticipanteSchema } from '../utils/schemas';
 import { rangesOverlap } from '../utils/validations';
 import { useToast } from '../components/ToastProvider';
+
+import { suscribirANotificaciones } from '../utils/pushNotifications';
 
 interface AdminDB {
   id: string;
@@ -56,8 +58,6 @@ export const useAdminLogic = (eventoId: string) => {
   const [showCroquis, setShowCroquis] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [showSpecialModal, setShowSpecialModal] = useState(false);
-
-  const prevAlertasCount = useRef(0);
   
   const [editModal, setEditModal] = useState<{isOpen: boolean; type: 'caja' | 'horario'; title: string; initialValue: string; label: string; targetId?: string}>({
     isOpen: false, type: 'caja', title: '', initialValue: '', label: ''
@@ -92,31 +92,6 @@ export const useAdminLogic = (eventoId: string) => {
     return false;
   };
 
-  // VIGILANTE DE ALERTAS EN TIEMPO REAL
-  useEffect(() => {
-    let currentAlertsCount = 0;
-    dias.forEach((dia) => {
-      dia.cajas.forEach((caja) => {
-        caja.turnos.forEach((turno) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if ((turno as any).solicitaAsistencia) {
-            currentAlertsCount++;
-          }
-        });
-      });
-    });
-
-    // Si hay MÁS alertas ahora que en el estado anterior, ¡alguien nuevo pidió ayuda!
-    if (currentAlertsCount > prevAlertasCount.current) {
-      if ("vibrate" in navigator) {
-         // Patrón de alerta para el Administrador: 
-         // Vibra 300ms, pausa 100ms, vibra 300ms, pausa 100ms, vibra 300ms
-         navigator.vibrate([300, 100, 300, 100, 300]);
-      }
-    }
-    prevAlertasCount.current = currentAlertsCount;
-  }, [dias]);
-
   useEffect(() => {
     if (!eventoId) return;
     const docRef = doc(db, 'eventos', eventoId);
@@ -142,7 +117,6 @@ export const useAdminLogic = (eventoId: string) => {
                   // Rescatamos los valores originales que vienen de Firebase
                   entregada: d.cajas[cIdx]?.turnos[tIdx]?.entregada || false,
                   devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false,
-                  // 👇 AQUÍ RESCATAMOS LA NUEVA VARIABLE 👇
                   solicitaAsistencia: d.cajas[cIdx]?.turnos[tIdx]?.solicitaAsistencia || false
                 }))
               }));
@@ -161,14 +135,10 @@ export const useAdminLogic = (eventoId: string) => {
           setCajasAsignadasCapitan(miDataCapitan?.cajasAsignadas || []);
         }
 
-        // 3. CARGAR PARTICIPANTES (AISLAMIENTO TOTAL)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        
         // 3. CARGAR PARTICIPANTES (AISLAMIENTO TOTAL + CRUCE SIN DUPLICADOS)
         let allParts: any[] = [];
         
         if (isCapitan) {
-          // El Capitán SOLO descarga a sus propios invitados y los que estén en sus cajas
           const misParts = data.participantesPorCapitan?.[capitanIdL] || [];
           const adminParts = data.participantesPorAdmin?.[adminIdL] || [];
           const miDataCapitan = misCapitanes.find((c: any) => c.id === capitanIdL);
@@ -176,32 +146,27 @@ export const useAdminLogic = (eventoId: string) => {
           
           const partsEnMisCajas = adminParts.filter((p: any) => {
             const rawDias = data.diasPorAdmin?.[adminIdL] || [];
-            const misDias = miDataCapitan?.diasAsignados || []; // <-- Recoger sus días
+            const misDias = miDataCapitan?.diasAsignados || []; 
             
             return rawDias.some((dia: any) => 
-              misDias.includes(dia.id) && // <-- FILTRO CLAVE: Solo días del capitán
+              misDias.includes(dia.id) && 
               dia.cajas.some((caja: any) => 
                 misCajas.includes(caja.id) && caja.turnos.some((t: any) => t.participanteId === p.id)
               )
             );
           });
           
-          // Agrupamos para evitar duplicados en la vista del capitán
           const mapCapitan = new Map();
           [...misParts, ...partsEnMisCajas].forEach(p => mapCapitan.set(p.id, p));
           allParts = Array.from(mapCapitan.values());
 
         } else {
-          // ADMIN: Consolida todos los participantes sin duplicar usando un Map
           const allPartsMap = new Map<string, any>();
-
-          // 3.1 Cargar los creados por el Admin
           const misParts = data.participantesPorAdmin?.[adminIdL] || [];
           misParts.forEach((p: any) => {
             allPartsMap.set(p.id, { ...p, creador: 'Admin', capitanesInvolucrados: new Set() });
           });
 
-          // 3.2 Cargar los creados por los Capitanes
           misCapitanes.forEach((cap: any) => {
             const capParts = data.participantesPorCapitan?.[cap.id] || [];
             capParts.forEach((p: any) => {
@@ -211,11 +176,9 @@ export const useAdminLogic = (eventoId: string) => {
             });
           });
 
-          // 3.3 Calcular etiquetas dinámicas según los turnos asignados
           const rawDias = data.diasPorAdmin?.[adminIdL] || [];
           rawDias.forEach((dia: any) => {
             dia.cajas.forEach((caja: any) => {
-              // Verificamos si esta caja le pertenece a algún capitán
               const capitanDuenio = misCapitanes.find((c: any) => c.cajasAsignadas?.includes(caja.id));
               if (capitanDuenio) {
                 caja.turnos.forEach((t: any) => {
@@ -228,7 +191,6 @@ export const useAdminLogic = (eventoId: string) => {
             });
           });
 
-          // Convertir el Map a Array y los Sets a Arrays para el renderizado
           allParts = Array.from(allPartsMap.values()).map(p => ({
             ...p,
             capitanesInvolucrados: Array.from(p.capitanesInvolucrados)
@@ -277,11 +239,8 @@ export const useAdminLogic = (eventoId: string) => {
           }
         }
       } else {
-        // EL EVENTO FUE BORRADO O NO EXISTE
         setEventoExiste(false);
       }
-      
-      // Detiene la carga sin importar si existió o no
       setLoading(false);
     });
 
@@ -289,13 +248,11 @@ export const useAdminLogic = (eventoId: string) => {
   }, [eventoId, adminIdL, isCapitan, capitanIdL]);
 
   const syncEvent = async (nuevosDias: DiaEvento[]) => {
-    // Protección: Solo el Admin puede modificar la estructura (crear/borrar cajas o turnos)
     if (isCapitan) return; 
     await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
   };
 
   const syncParticipantes = async (nuevosParticipantes: Participante[]) => {
-    // Si es Capitán, guarda en su cajón. Si es Admin, guarda en el suyo.
     if (isCapitan) {
       await updateDoc(doc(db, 'eventos', eventoId), { [`participantesPorCapitan.${capitanIdL}`]: nuevosParticipantes });
     } else {
@@ -313,10 +270,8 @@ export const useAdminLogic = (eventoId: string) => {
       dia.cajas.forEach(caja => {
         caja.turnos.forEach(turno => {
           if (turno.participanteId === p.id) {
-            // Evaluamos si el nombre de la caja ya dice "Caja", si no, se lo agregamos
             const nombreCaja = caja.nombre as string;
             const textoCaja = nombreCaja.toLowerCase().includes('caja') ? nombreCaja : `Caja ${nombreCaja}`;
-            
             ubicaciones.push(`${dia.nombreDia.substring(0,3)} ${turno.horario} - ${textoCaja}`);
           }
         });
@@ -429,8 +384,6 @@ export const useAdminLogic = (eventoId: string) => {
   const cerrarModalAsignacion = () => setModalAsignacion({ ...modalAsignacion, isOpen: false });
 
   const asignarUsuarioExistente = (participanteId: string) => {
-    // IMPORTANTE: Aquí la actualización de la matriz (la estructura de turnos) debe hacerla el Capitán
-    // por lo tanto, usamos updateDoc directo si es capitán, o syncEvent si es admin.
     const nuevosDias = dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.map(c => c.id === modalAsignacion.cajaId ? { ...c, turnos: c.turnos.map(t => t.id === modalAsignacion.turnoId ? { ...t, participanteId } : t) } : c) } : d);
     updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
     cerrarModalAsignacion();
@@ -456,11 +409,6 @@ export const useAdminLogic = (eventoId: string) => {
   
   const handleCheckNameDuplicate = (name: string, currentId: string) => participantes.some(p => p.id !== currentId && p.nombre.trim().toLowerCase() === name.trim().toLowerCase());
 
-  // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
-  // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
-  // --- LÓGICA DE CAPITANES (Solo manipulable por Admin) ---
-  
-  // Modificar handleCrearCapitan para que reciba diasAsignados
   const handleCrearCapitan = async (nombre: string, cajasAsignadas: string[], diasAsignados: string[], passwordSeguro: string) => {
     if (!eventoId || !adminIdL) return;
 
@@ -482,7 +430,7 @@ export const useAdminLogic = (eventoId: string) => {
         usuario: `cap-${randomString.toUpperCase()}`,
         password: passwordSeguro,
         cajasAsignadas,
-        diasAsignados, // <-- SE GUARDA LOS DIAS AQUI
+        diasAsignados, 
         linkUnico: `inv-cap-${randomString}`
       };
       const actualizados = [...capitanes, nuevoCapitan];
@@ -491,7 +439,6 @@ export const useAdminLogic = (eventoId: string) => {
     } catch (error) { console.error(error); showToast('Error al crear el capitán.', 'error'); }
   };
 
-  // NUEVA FUNCION PARA EDITAR
   const handleEditarCapitan = async (capitanId: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => {
     if (!eventoId || !adminIdL) return;
     try {
@@ -508,28 +455,25 @@ export const useAdminLogic = (eventoId: string) => {
     if (!eventoId || !adminIdL) return;
     try {
       const docRef = doc(db, 'eventos', eventoId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filtrados = capitanes.filter((c: any) => c.id !== capitanId);
       await updateDoc(docRef, { [`capitanesPorAdmin.${adminIdL}`]: filtrados });
       showToast('Capitán eliminado.', 'success');
     } catch (error) { console.error(error); showToast('Error al eliminar.', 'error'); }
   };
 
-  // AGREGAR ESTO antes del "return {" final del hook
+  // CORRECCIÓN: Actualizamos todos los días, no solo el activo
   const actualizarEstadoTurno = async (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => {
-    if (!diaActual || !eventoId) return;
+    if (!eventoId) return;
     
-    // Mapeamos los días para encontrar el turno específico e inyectarle los booleanos (true o false)
-    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+    const nuevosDias = dias.map((d) => ({
       ...d,
       cajas: d.cajas.map(c => c.id === cajaId ? {
         ...c,
         turnos: c.turnos.map(t => t.id === turnoId ? { ...t, entregada, devuelta } : t)
       } : c)
-    } : d);
+    }));
 
     try {
-      // Guardamos la estructura en Firebase
       await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
       showToast('Estado del turno actualizado', 'success');
     } catch (error) {
@@ -538,15 +482,15 @@ export const useAdminLogic = (eventoId: string) => {
     }
   };
 
-  // Función para que el Admin apague la alerta de un participante
+  // CORRECCIÓN: Buscamos en TODOS los días para poder desmarcar sin importar dónde esté el admin
   const resolverAlerta = async (cajaId: string, turnoId: string) => {
-    if (!diaActual || !eventoId) return;
+    if (!eventoId) return;
     
-    const nuevosDias = dias.map((d, i) => i === diaActivo ? {
+    const nuevosDias = dias.map((d) => ({
       ...d, cajas: d.cajas.map(c => c.id === cajaId ? {
         ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, solicitaAsistencia: false } : t)
       } : c)
-    } : d);
+    }));
 
     try {
       await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
@@ -556,6 +500,24 @@ export const useAdminLogic = (eventoId: string) => {
       showToast('Error al resolver la alerta.', 'error');
     }
   };
+
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+const handleTogglePush = async () => {
+  try {
+    const sub = await suscribirANotificaciones();
+    if (sub) {
+      const docRef = doc(db, 'eventos', eventoId);
+      const targetId = isCapitan ? capitanIdL : adminIdL;
+      // Guardamos la suscripción del dispositivo en Firebase
+      await updateDoc(docRef, { [`suscripcionesPush.${targetId}`]: JSON.parse(JSON.stringify(sub)) });
+      setPushEnabled(true);
+      showToast('Notificaciones Push activadas en este dispositivo', 'success');
+    }
+  } catch (error) {
+    showToast('Error al activar notificaciones', 'error');
+  }
+};
 
   return {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
@@ -569,8 +531,7 @@ export const useAdminLogic = (eventoId: string) => {
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, horarioEditando, setHorarioEditando,
     clashModal, setClashModal, misDatosAdmin,
     capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
-    // EXPORTAMOS LA DATA CLAVE PARA EL FILTRADO VISUAL
     isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta,
-    eventoExiste // <--- EXPORTADO AQUÍ
+    eventoExiste, pushEnabled, handleTogglePush
   };
 };

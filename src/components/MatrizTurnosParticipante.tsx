@@ -15,6 +15,7 @@ interface MatrizTurnosParticipanteProps {
   diaActual: DiaEvento;
   getParticipante: (id: string | null) => Participante | undefined;
   miUsuarioId: string;
+  // Volvemos a string (ID) para que coincida con el Hook
   onAsignarme: (cajaId: string, turnoId: string) => void;
   onQuitarme: (cajaId: string, turnoId: string) => void;
   contactosWhatsApp?: ContactoWA[];
@@ -175,6 +176,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                                       <span className="text-[8px] sm:text-[9px] text-red-500 font-bold block mt-0.5 truncate">En este horario</span>
                                     </div>
                                   ) : (
+                                    // Pasamos turno.id
                                     <button onClick={() => onAsignarme(caja.id, turno.id)} className="w-full h-8 sm:h-12 bg-white border border-dashed border-emerald-400 rounded-lg text-emerald-600 flex items-center justify-center gap-1 hover:bg-emerald-50 transition-colors shadow-sm overflow-hidden">
                                       <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="text-[10px] sm:text-xs font-bold">Asignarme</span>
                                     </button>
@@ -206,7 +208,10 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
         isParticipantView={true}
         contactosWhatsApp={contactosWhatsApp}
         onRemove={() => {
-          if (turnoData?.participante) onQuitarme(turnoData.cajaId, turnoData.turnoId);
+          if (turnoData?.participante) {
+            // Pasamos los IDs directamente
+            onQuitarme(turnoData.cajaId, turnoData.turnoId);
+          }
           closeModal();
         }}
       />

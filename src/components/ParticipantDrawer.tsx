@@ -1,6 +1,6 @@
 // src/components/ParticipantDrawer.tsx
 import React, { useState } from 'react';
-import { X, Users, Settings, Share2, CheckCircle, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
+import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
 import type { Participante } from '../types';
 import { useToast } from './ToastProvider';
 
@@ -31,7 +31,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
   eventoId = 'demo-evento', adminId = 'demo-admin', customInviteLink
 }) => {
  
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTermState, setSearchTermState] = useState('');
   
@@ -59,14 +58,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
       textArea.select();
       try { document.execCommand('copy'); } catch (error) { console.error(error); } finally { textArea.remove(); }
     }
-  };
-
-  const handleCopyLink = (participanteId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participanteId}`;
-    copiarSeguro(url);
-    setCopiedId(participanteId);
-    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleWhatsApp = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
@@ -172,7 +163,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      {/* Aquí hacemos la validación estricta para que solo Capitanes vean los enlaces */}
                       {currentUserRole === 'Capitan' && (
                         <>
                           <button 
@@ -181,14 +171,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                             title={tieneTelefono ? "Enviar link por WhatsApp" : "No tiene teléfono registrado"}
                           >
                             <MessageCircle size={16} />
-                          </button>
-
-                          <button 
-                            onClick={(e) => handleCopyLink(p.id, e)}
-                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center w-8 h-8 ${copiedId === p.id ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-500 hover:bg-slate-200'}`}
-                            title="Copiar Link"
-                          >
-                            {copiedId === p.id ? <CheckCircle size={16} /> : <Share2 size={16} />}
                           </button>
                         </>
                       )}

@@ -45,8 +45,10 @@ interface AdminHeaderProps {
   isSuperAdminViewing?: boolean;
   adminInfo?: AdminInfo | null;
   stats?: StatsData;
+  cajasDiaActivo?: number; // <-- NUEVO: Recibe el número de cajas del día actual
   onExportExcel?: () => void;
   adminPerms?: AdminPermissions;
+
   
   isCapitan?: boolean;
   showCapitanes?: boolean;
@@ -64,9 +66,11 @@ interface AdminHeaderProps {
   cajasDisponibles?: CajaDisponible[];
   onEditCapitan?: (id: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => void;
 
-  // NUEVAS PROPS DE ALERTAS
   alertasAsistencia?: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[];
   onResolveAlert?: (cajaId: string, turnoId: string) => void;
+
+  pushEnabled?: boolean;           // <-- AÑADIR
+  onTogglePush?: () => void;
 }
 
 const MiniStatCard = ({ label, value, color }: { label: string, value: number, color: string }) => (
@@ -80,11 +84,11 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   seccionName, setSeccionName, isEditingTitle, setIsEditingTitle,
   onOpenProfile, onSave, onShowCroquis, onShowDirectorio, participantesCount, onToggleActions, showActions,
   onCrearCajaEspecial, onCrearCaja, onCrearHorario, onDownloadTabla,
-  onBack, onLogout, isSuperAdminViewing, adminInfo, stats, onExportExcel,
+  onBack, onLogout, isSuperAdminViewing, adminInfo, stats, cajasDiaActivo, onExportExcel,
   adminPerms, isCapitan, 
   showCapitanes, onToggleCapitanes, capitanes, participantes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
   diasDisponibles, cajasDisponibles, onEditCapitan,
-  alertasAsistencia = [], onResolveAlert
+  alertasAsistencia = [], onResolveAlert, pushEnabled, onTogglePush
 }) => {
   const [showStats, setShowStats] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
@@ -103,7 +107,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   useEffect(() => {
     if (alertasAsistencia && alertasAsistencia.length > 0) {
       if ("vibrate" in navigator) {
-        // Vibra 200ms, pausa 100ms, vibra 200ms
         navigator.vibrate([200, 100, 200]); 
       }
     }
@@ -144,8 +147,18 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
 
         <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2 shrink-0">
           <div className="flex gap-2 relative">
+
+            {/* NUEVO BOTÓN PARA ACTIVAR PUSH */}
+              {onTogglePush && (
+                <button 
+                  onClick={onTogglePush} 
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${pushEnabled ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                  title="Recibir notificaciones cuando la app esté minimizada"
+                >
+                  <Bell size={14} /> {pushEnabled ? 'Push Activo' : 'Activar Push'}
+                </button>
+              )}
             
-            {/* CAMPANA DE NOTIFICACIONES */}
             <button 
               onClick={() => setShowAlertMenu(!showAlertMenu)} 
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${hasAlerts ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
@@ -154,7 +167,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               {hasAlerts ? `Alertas (${alertasAsistencia.length})` : 'Sin alertas'}
             </button>
 
-            {/* MENÚ DESPLEGABLE DE ALERTAS */}
             {showAlertMenu && (
               <div className="absolute top-full right-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-orange-100 z-[999] overflow-hidden animate-in slide-in-from-top-2 duration-200">
                 <div className="bg-orange-500 p-3 text-white flex justify-between items-center">
@@ -235,7 +247,9 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         {stats && (
           <div className={`${showStats ? 'flex' : 'hidden'} sm:flex w-full xl:w-auto justify-center xl:border-l border-slate-100 xl:pl-4`}>
              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full">
-               <MiniStatCard label="Cajas" value={stats.cajas} color="bg-blue-50 text-blue-700 border-blue-100" />
+               <MiniStatCard label="Cajas (Gral)" value={stats.cajas} color="bg-blue-50 text-blue-700 border-blue-100" />
+               {/* NUEVA PASTILLA PARA LAS CAJAS DEL DÍA */}
+               <MiniStatCard label="Cajas (De hoy)" value={cajasDiaActivo || 0} color="bg-cyan-50 text-cyan-700 border-cyan-100" />
                <MiniStatCard label="Horarios" value={stats.horarios} color="bg-indigo-50 text-indigo-700 border-indigo-100" />
                <MiniStatCard label="Turnos" value={stats.totales} color="bg-purple-50 text-purple-700 border-purple-100" />
                <MiniStatCard label="Libres" value={stats.disponibles} color="bg-emerald-50 text-emerald-700 border-emerald-100" />

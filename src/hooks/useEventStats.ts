@@ -13,28 +13,25 @@ export const useEventStats = (diasFiltrados: DiaEvento[], participantes: Partici
 
     diasFiltrados.forEach((dia) => {
       dia.cajas.forEach((caja) => {
-        // Contamos cajas únicas por su ID
-        cajasUnicas.add(caja.id);
+        // 1. CORRECCIÓN: Contamos cajas únicas por su NOMBRE, igual que en statsCalculator
+        const nombreNormalizado = (caja.nombre || '').trim().toLowerCase();
+        if (nombreNormalizado) cajasUnicas.add(nombreNormalizado);
+        
         turnosTotales += caja.turnos.length;
 
         caja.turnos.forEach((turno) => {
-          // Contamos horarios únicos (ej. "08:00 - 09:00")
           horariosUnicos.add(turno.horario);
           
           if (!turno.participanteId) {
             turnosDisponibles++;
           } else {
-            // Registramos el ID de quien ya tiene turno para calcular inactivos
             participantesAsignados.add(turno.participanteId);
           }
         });
       });
     });
 
-    // La lista de participantes filtrada es la fuente real de la cantidad de usuarios
     const totalParticipantes = participantes.length;
-    
-    // Inactivos = Total de tu lista menos los que encontramos asignados en algún turno
     const inactivos = totalParticipantes - participantesAsignados.size;
 
     return {

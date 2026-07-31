@@ -1,6 +1,6 @@
 // src/views/Admin/AdminPanel.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Calendar, ShieldCheck, LayoutGrid, LayoutList } from 'lucide-react'; 
 import { useNavigate, useParams } from 'react-router-dom';
 import type { DiaEvento, Participante } from '../../types';
@@ -70,7 +70,7 @@ const AdminPanel = () => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
-    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta
+    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta, pushEnabled, handleTogglePush
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -170,17 +170,11 @@ const AdminPanel = () => {
         
         turnos.forEach((turno: any) => {
           if (turno.solicitaAsistencia) {
-            // Código corregido
-            // Le decimos a TypeScript que p y part son del tipo ParticipanteExtendidoDb
             const part = participantesEnriquecidos.find((p: any) => p.id === turno.participanteId) as ParticipanteExtendidoDb | undefined;
-
-            // FILTRO DE PERTENENCIA: Si es capitán, validar que el participante sea de su equipo
             if (isCapitan) {
               const capitanIdL = localStorage.getItem('current_capitan_id');
-              // Ahora TypeScript sabe que 'part' puede tener un 'capitanId'
-              if (part && part.capitanId !== capitanIdL) return; // Se omite si pertenece a otro
+              if (part && part.capitanId !== capitanIdL) return; 
             }
-            
             alertas.push({
               dia: dia.nombreDia,
               cajaId: caja.id,
@@ -195,6 +189,16 @@ const AdminPanel = () => {
     });
     return alertas;
   }, [diasFiltrados, participantesEnriquecidos, isCapitan]);
+
+  const prevAlertasCount = useRef(0);
+  useEffect(() => {
+    if (alertasAsistencia.length > prevAlertasCount.current) {
+      if ("vibrate" in navigator) {
+        navigator.vibrate([300, 100, 300, 100, 300]);
+      }
+    }
+    prevAlertasCount.current = alertasAsistencia.length;
+  }, [alertasAsistencia.length]);
 
   useEffect(() => {
     if (diasFiltrados.length > 0 && dias.length > 0) {
@@ -217,15 +221,23 @@ const AdminPanel = () => {
     );
   }, [diasPermitidos]);
 
+  // CORRECCIÓN MAGISTRAL: Una caja está libre si ningún capitán la tiene asignada EN ESE MISMO DÍA.
+  // Esto elimina el bug de que desaparecieran cajas idénticas en días diferentes.
   const cajasLibresParaCrear = useMemo(() => {
     if (!capitanes) return cajasTotalesParaCapitanes;
-    const cajasEnUso = capitanes.flatMap((c: any) => c.cajasAsignadas || []);
-    return cajasTotalesParaCapitanes.filter(c => !cajasEnUso.includes(c.id));
+    
+    return cajasTotalesParaCapitanes.filter(cajaInfo => {
+      const estaOcupada = capitanes.some((cap: any) => {
+        const tieneCaja = (cap.cajasAsignadas || []).includes(cajaInfo.id);
+        const tieneDia = (cap.diasAsignados || []).includes(cajaInfo.diaId);
+        return tieneCaja && tieneDia;
+      });
+      return !estaOcupada;
+    });
   }, [cajasTotalesParaCapitanes, capitanes]);
 
   const permisosEfectivos = isCapitan ? { cajas: false, horarios: false, especiales: false } : isExternalViewer ? { cajas: true, horarios: true, especiales: true } : adminPerms;
   
-  // Implementación del nuevo hook con los datos ya filtrados por vista
   const statsActuales = useEventStats(diasFiltrados, participantesEnriquecidos);
   
   const turnosLibresCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
@@ -455,7 +467,8 @@ const AdminPanel = () => {
 
   return (
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
-      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[60] box-border">
+      {/* CORRECCIÓN Z-INDEX: Reducido a z-40 para que los toast queden arriba */}
+      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[40] box-border">
         <div className="w-full max-w-[1400px] mx-auto">
           <AdminHeader 
             seccionName={seccionName} setSeccionName={setSeccionName} 
@@ -478,29 +491,35 @@ const AdminPanel = () => {
               }
             } : undefined} 
             onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
-            isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel} stats={statsActuales} adminPerms={permisosEfectivos}
+            isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel} 
+            stats={statsActuales} 
+            cajasDiaActivo={diaActualFiltrado.cajas.length} // <-- Pasamos el conteo diario aquí
+            adminPerms={permisosEfectivos}
             isCapitan={isCapitan}
-            
             showCapitanes={showSeccionCapitanes} onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)} capitanes={capitanes || []} onOpenCapitanModal={() => setShowCapitanModal(true)} onDeleteCapitan={handleEliminarCapitan} onSimularCapitan={handleSimularCapitan} dias={diasFiltrados}
             
             diasDisponibles={listadoDiasDisponibles} 
             participantes={participantesEnriquecidos}
             cajasDisponibles={cajasTotalesParaCapitanes} 
             onEditCapitan={handleEditarCapitan}
-            
             alertasAsistencia={alertasAsistencia}
             onResolveAlert={resolverAlerta}
+
+            pushEnabled={pushEnabled}
+            onTogglePush={handleTogglePush}
           />
         </div>
       </div>
 
-      <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
+      {/* CORRECCIÓN Z-INDEX: Reducido a z-40 */}
+      <div className="sticky top-0 left-0 z-[40] w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full">
           {diasFiltrados.map((dia) => {
             const originalIndex = dias.findIndex(d => d.id === dia.id);
             return (
               <button key={dia.id} onClick={() => setDiaActivo(originalIndex)} className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === originalIndex ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}>
-                <Calendar size={14} /> {dia.nombreDia}
+                {/* CORRECCIÓN VISUAL: Añadimos la cantidad de cajas al botón */}
+                <Calendar size={14} /> {dia.nombreDia}. Cajas ({dia.cajas.length})
               </button>
             )
           })}
@@ -526,12 +545,11 @@ const AdminPanel = () => {
             </div>
          </div>
 
-         {/* PASAMOS onResolveAlert A LAS VISTAS */}
          {vistaTarjetas ? (
            <VistaTarjetasCajas 
              diaActual={diaActualFiltrado} 
              onActualizarEstadoTurno={actualizarEstadoTurno} 
-             onResolveAlert={resolverAlerta} // <-- AQUÍ SE PASA A LAS TARJETAS
+             onResolveAlert={resolverAlerta} 
              getParticipante={getParticipante} 
              onAsignar={abrirModalAsignacion} 
              onQuitar={quitarParticipante} 
@@ -548,7 +566,7 @@ const AdminPanel = () => {
            <MatrizTurnos 
              diaActual={diaActualFiltrado} 
              onActualizarEstadoTurno={actualizarEstadoTurno} 
-             onResolveAlert={resolverAlerta} // <-- AQUÍ SE PASA A LA MATRIZ
+             onResolveAlert={resolverAlerta} 
              getParticipante={getParticipante} 
              onAsignar={abrirModalAsignacion} 
              onQuitar={quitarParticipante} 

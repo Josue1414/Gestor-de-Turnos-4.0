@@ -34,6 +34,21 @@ const ParticipantPanel = () => {
 
   if (!miUsuario || !eventoId || !adminId) return null;
 
+  // --- SOLUCIÓN DE TYPESCRIPT A PRUEBA DE ERRORES ---
+  // Estas funciones aceptan tanto un string (el ID) como un objeto (el Turno)
+  // y se aseguran de pasarle a tu Hook estrictamente un string.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safeHandleAsignarme = (cajaId: string, turnoOrId: any) => {
+    const tId = typeof turnoOrId === 'string' ? turnoOrId : turnoOrId?.id;
+    if (tId) handleAsignarme(cajaId, tId);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safeHandleQuitarme = (cajaId: string, turnoOrId: any) => {
+    const tId = typeof turnoOrId === 'string' ? turnoOrId : turnoOrId?.id;
+    if (tId) handleQuitarme(cajaId, tId);
+  };
+
   return (
     <div className="h-[100dvh] w-full bg-slate-100 font-sans flex flex-col overflow-auto relative">
       
@@ -80,33 +95,42 @@ const ParticipantPanel = () => {
             </button>
           </div>
 
-          {/* NUEVO BOTÓN DE ASISTENCIA */}
-            {turnoAlertaInfo && (
-              <button
-                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
-                className={`p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition shadow-sm border
-                  ${turnoAlertaInfo.solicitaAsistencia
-                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
-                    : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-                  }`}
-              >
-                <Bell size={16} className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
-                </span>
-              </button>
-            )}
+          {/* BOTÓN DE ASISTENCIA RESPONSIVO */}
+          {turnoAlertaInfo && (
+            <button
+              onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+              className={`w-full sm:w-auto mt-2 sm:mt-0 p-4 sm:p-2 rounded-xl text-base sm:text-[11px] font-black sm:font-bold flex items-center justify-center gap-2 sm:gap-1.5 transition shadow-sm border
+                ${turnoAlertaInfo.solicitaAsistencia
+                  ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                  : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                }`}
+            >
+              <Bell size={20} className="w-5 h-5 sm:w-4 sm:h-4" />
+              <span>
+                {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+              </span>
+            </button>
+          )}
             
         </header>
       </div>
 
       <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full px-1">
-          {dias.map((dia, idx) => (
-            <button key={dia.id} onClick={() => setDiaActivo(idx)} className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}>
-              <Calendar size={14} /> {dia.nombreDia}
-            </button>
-          ))}
+          {/* Mostramos todos los días que nos da useParticipantLogic (ya vienen filtrados por el Capitán) */}
+          {dias.length > 0 ? (
+            dias.map((dia, idx) => (
+              <button 
+                key={dia.id} 
+                onClick={() => setDiaActivo(idx)} 
+                className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === idx ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}
+              >
+                <Calendar size={14} /> {dia.nombreDia}
+              </button>
+            ))
+          ) : (
+            <span className="text-slate-400 text-sm font-bold px-2">No hay días disponibles para tu equipo</span>
+          )}
         </div>
       </div>
 
@@ -131,10 +155,8 @@ const ParticipantPanel = () => {
 
         {diaActual ? (() => {
           
-          // CONSTRUIMOS EL ARREGLO DE WHATSAPP DINÁMICO
           const numerosDeAsistencia = [];
           
-          // Solo si tiene Capitán lo agregamos
           if (miUsuario.capitanNombre) {
             numerosDeAsistencia.push({ 
               nombre: miUsuario.capitanNombre, 
@@ -143,7 +165,6 @@ const ParticipantPanel = () => {
             });
           }
           
-          // Agregamos siempre al Administrador
           numerosDeAsistencia.push({ 
             nombre: adminContacto.nombre, 
             telefono: adminContacto.telefono || '', 
@@ -156,8 +177,9 @@ const ParticipantPanel = () => {
               getParticipante={(id) => participantes.find(p => p.id === id)}
               miUsuarioId={miUsuario.id} 
               isBusy={isBusy}
-              onAsignar={(c, _cn, t, _h) => handleAsignarme(c, t)} 
-              onQuitar={handleQuitarme} 
+              // Pasamos las funciones "seguras" que extraen el ID
+              onAsignar={(c, _cn, t, _h) => safeHandleAsignarme(c, t)} 
+              onQuitar={(c, t, _pid) => safeHandleQuitarme(c, t)} 
               onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
               adminPerms={{ cajas: false, horarios: false, especiales: false }}
               onActualizarEstadoTurno={() => {}} 
@@ -168,8 +190,9 @@ const ParticipantPanel = () => {
               diaActual={diaActual} 
               getParticipante={(id) => participantes.find(p => p.id === id)} 
               miUsuarioId={miUsuario.id} 
-              onAsignarme={handleAsignarme} 
-              onQuitarme={handleQuitarme} 
+              // Pasamos las funciones "seguras"
+              onAsignarme={safeHandleAsignarme} 
+              onQuitarme={safeHandleQuitarme} 
               contactosWhatsApp={numerosDeAsistencia}
             />
           )
