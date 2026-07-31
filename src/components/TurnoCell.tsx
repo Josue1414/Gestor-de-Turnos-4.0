@@ -41,7 +41,8 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
       const minFin = obtenerMinutos(finStr || inicioStr);
 
       const isActivo = minActual >= minInicio && minActual <= minFin;
-      const isAtrasado = minActual > minFin && !turno.devuelta;
+      // NUEVA CONDICIÓN: Sigue atrasado a menos que ambas (entregada Y devuelta) sean true
+      const isAtrasado = minActual > minFin && !(turno.entregada && turno.devuelta);
 
       if (isActivo) estadoTurno = 'activo';
       else if (isAtrasado) estadoTurno = 'atrasado';
@@ -77,7 +78,7 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
         
         <div className="flex items-center gap-1 mt-1">
           <span className={`text-[8px] sm:text-[9px] font-bold uppercase block sm:mt-1 ${pideAsistencia ? 'text-orange-600' : estadoTurno === 'activo' ? 'text-emerald-600' : estadoTurno === 'atrasado' ? 'text-red-600' : 'text-indigo-500'}`}>
-            {pideAsistencia ? '¡Requiere Asistencia!' : estadoTurno === 'activo' ? 'En curso' : estadoTurno === 'atrasado' ? 'Retrasado' : 'Ver detalles'}
+            {pideAsistencia ? '¡Requiere Asistencia!' : estadoTurno === 'activo' ? 'En curso' : estadoTurno === 'atrasado' ? 'Falta' : 'Ver detalles'}
           </span>
           
           {/* Mostramos los puntos azules/verdes solo si NO está atrasado ni pide asistencia */}

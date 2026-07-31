@@ -192,23 +192,21 @@ const SupervisorPanel = () => {
             const adminDias = (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
             const adminParticipantes = (eventoExt?.participantesPorAdmin?.[admin.id] || []) as any[];
             
-            // OBTENEMOS CAPITANES Y SUS PARTICIPANTES
             const adminCapitanes = (eventoExt?.capitanesPorAdmin?.[admin.id] || []) as any[];
             const adminParticipantesCapitanes = adminCapitanes.flatMap((c: any) => 
               ((eventoExt?.participantesPorCapitan?.[c.id] || []) as any[]).map((p: any) => ({ ...p, creador: c.nombre }))
             );
             
-            // CONSOLIDAMOS PARTICIPANTES DE ADMIN + CAPITANES
             const allParticipantes = [
               ...adminParticipantes.map((p: any) => ({ ...p, creador: 'Admin' })), 
               ...adminParticipantesCapitanes
             ];
 
-            // CALCULAMOS LAS ESTADÍSTICAS REALES
             const statsObj = calculateAdminStats(adminDias, allParticipantes);
 
             const handleExport = () => {
-              const adminInfo = { name: admin.name, org: admin.org || 'Sin Organización' };
+              // 3. CORRECCIÓN: Exportamos los datos usando "organization"
+              const adminInfo = { name: admin.name, org: (admin as any).organization || 'Sin Organización' };
               exportToExcel(
                 eventoExt?.nombre || 'Evento', 
                 adminDias, 

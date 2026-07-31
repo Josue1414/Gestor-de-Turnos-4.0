@@ -1,3 +1,4 @@
+// src/components/AdminFiche.tsx
 import React, { useState } from 'react';
 import { Settings, Trash2, Key, Eye, Download, ChevronDown, ChevronUp, MapIcon } from 'lucide-react';
 import type { AdminData } from '../hooks/useSuperAdminLogic';
@@ -36,7 +37,8 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
 
           <div className="min-w-0 flex-1">
             <h4 className="font-black text-slate-800 leading-tight text-base truncate">{data.name}</h4>
-            <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{data.org || 'Sin Organización'}</p>
+            {/* 4. CORRECCIÓN: Leemos data.organization (y permitimos el tipado extendido) */}
+            <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{(data as any).organization || 'Sin Organización'}</p>
             <div className="flex flex-wrap gap-1 mt-2 text-[10px] text-slate-500">
               <span className="bg-white/90 border border-slate-200 rounded-full px-2 py-1">Cajas {stats.cajas}</span>
               <span className="bg-white/90 border border-slate-200 rounded-full px-2 py-1">Horarios {stats.horarios}</span>
@@ -96,7 +98,6 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
             <StatBadge label="Turnos" value={stats.totales} colorClass="text-indigo-600" />
             <StatBadge label="Disp." value={stats.disponibles} colorClass="text-emerald-500" />
             <StatBadge label="Participantes" value={stats.participantes} colorClass="text-slate-700" />
-            {/* LÓGICA DE INACTIVOS APLICADA AQUÍ */}
             <StatBadge label="Inactivos" value={stats.inactivos || 0} colorClass="text-red-500" />
           </div>
 

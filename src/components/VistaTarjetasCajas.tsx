@@ -13,6 +13,7 @@ interface ContactoWA {
 
 interface VistaTarjetasCajasProps {
   diaActual: any;
+  capitanes?: any[]; 
   getParticipante: (id: string | null) => any;
   onAsignar: (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => void;
   onQuitar: (cajaId: string, turnoId: string, participanteId?: string) => void;
@@ -32,7 +33,7 @@ interface VistaTarjetasCajasProps {
 }
 
 const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
-  diaActual, getParticipante, onAsignar, onQuitar, 
+  diaActual, capitanes, getParticipante, onAsignar, onQuitar, 
   onDeleteCaja, onEditCaja, onDeleteTurnoEspecial, adminPerms, miUsuarioId, isBusy, onActualizarEstadoTurno, contactosWhatsApp,
   onResolveAlert 
 }) => {
@@ -61,20 +62,34 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
           const turnosOcupados = caja.turnos.filter((t: any) => t.participanteId).length;
           const turnosLibres = totalTurnos - turnosOcupados;
           
+          // Buscar si la caja está asignada a algún capitán para este día
+          const capitanDeCaja = capitanes?.find((cap: any) => 
+            (cap.cajasAsignadas || []).includes(caja.id) && 
+            (cap.diasAsignados || []).includes(diaActual.id)
+          );
+
           return (
             <div key={caja.id} className={`flex flex-col rounded-2xl shadow-sm border overflow-hidden transition-all duration-300 ${especial ? 'border-amber-300 bg-gradient-to-b from-amber-50 to-white' : 'border-slate-200 bg-white'}`}>
               
-              <div className={`p-3 flex items-center justify-between border-b ${especial ? 'bg-amber-100/50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${especial ? 'bg-amber-500 text-white' : 'bg-blue-100 text-blue-600'}`}>
+              <div className={`p-3 flex items-start justify-between border-b ${especial ? 'bg-amber-100/50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex items-start gap-2">
+                  <div className={`p-1.5 mt-0.5 rounded-lg ${especial ? 'bg-amber-500 text-white' : 'bg-blue-100 text-blue-600'}`}>
                     {especial ? <Star size={14} /> : <Box size={14} />}
                   </div>
-                  <h3 className={`font-black text-sm uppercase tracking-tight ${especial ? 'text-amber-900' : 'text-slate-800'}`}>
-                    {caja.nombre}
-                  </h3>
+                  <div className="flex flex-col">
+                    <h3 className={`font-black text-sm uppercase tracking-tight ${especial ? 'text-amber-900' : 'text-slate-800'}`}>
+                      {caja.nombre}
+                    </h3>
+                    {/* ETIQUETA DEL CAPITÁN */}
+                    {capitanDeCaja && (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded w-fit mt-0.5 uppercase tracking-wider ${especial ? 'bg-amber-200 text-amber-800' : 'bg-indigo-100 text-indigo-700'}`}>
+                        Capitan: {capitanDeCaja.nombre}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {adminPerms.cajas && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {!especial && (
                       <button onClick={() => onEditCaja(caja.id)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition" title="Editar Nombre">
                         <Edit2 size={14} />

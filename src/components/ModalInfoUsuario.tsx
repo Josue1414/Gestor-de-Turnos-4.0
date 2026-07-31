@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Phone, StickyNote, X, Download, Calendar, Briefcase, Clock, MessageCircle } from 'lucide-react';
+
+const MESES = [
+  { valor: '01', nombre: 'Enero' }, { valor: '02', nombre: 'Febrero' },
+  { valor: '03', nombre: 'Marzo' }, { valor: '04', nombre: 'Abril' },
+  { valor: '05', nombre: 'Mayo' }, { valor: '06', nombre: 'Junio' },
+  { valor: '07', nombre: 'Julio' }, { valor: '08', nombre: 'Agosto' },
+  { valor: '09', nombre: 'Septiembre' }, { valor: '10', nombre: 'Octubre' },
+  { valor: '11', nombre: 'Noviembre' }, { valor: '12', nombre: 'Diciembre' },
+];
 
 export interface UsuarioModalData {
   id: string; 
@@ -50,7 +59,47 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
   });
   const [errorName, setErrorName] = useState('');
 
-  // HABILITADO TAMBIÉN PARA CAPITANES
+  // Estados para la fecha de nacimiento en formato lista
+  const [anioNacimiento, setAnioNacimiento] = useState('');
+  const [mesNacimiento, setMesNacimiento] = useState('');
+  const [diaNacimiento, setDiaNacimiento] = useState('');
+
+  // Pre-cargar la fecha de nacimiento en los selectores
+  useEffect(() => {
+    if (data.birthDate) {
+      const [y, m, d] = data.birthDate.split('-');
+      if (y && m && d) {
+        setAnioNacimiento(y);
+        setMesNacimiento(m);
+        setDiaNacimiento(d);
+      }
+    }
+  }, [data.birthDate]);
+
+  const listaAnios = useMemo(() => {
+    const anioMaximo = new Date().getFullYear() - 18;
+    const anios: number[] = [];
+    for (let a = anioMaximo; a >= 1900; a--) {
+      anios.push(a);
+    }
+    return anios;
+  }, []);
+
+  const cantidadDiasEnMes = useMemo(() => {
+    if (!anioNacimiento || !mesNacimiento) return 31;
+    const a = parseInt(anioNacimiento, 10);
+    const m = parseInt(mesNacimiento, 10);
+    return new Date(a, m, 0).getDate();
+  }, [anioNacimiento, mesNacimiento]);
+
+  const listaDias = useMemo(() => {
+    const dias: string[] = [];
+    for (let d = 1; d <= cantidadDiasEnMes; d++) {
+      dias.push(d.toString().padStart(2, '0'));
+    }
+    return dias;
+  }, [cantidadDiasEnMes]);
+
   const isEditable = isViewingSelf || (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin' || currentUserRole === 'Capitan');
   const isAdmin = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
 
@@ -60,8 +109,15 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
       setErrorName('Ya existe alguien con este nombre. Agrega un apellido.');
       return;
     }
+
+    if (formData.role === 'Participante' && (!anioNacimiento || !mesNacimiento || !diaNacimiento)) {
+      setErrorName('La fecha de nacimiento debe estar completa.');
+      return;
+    }
+
     onSave({
       ...formData,
+      birthDate: formData.role === 'Participante' ? `${anioNacimiento}-${mesNacimiento}-${diaNacimiento}` : formData.birthDate,
       phone: formData.phone || '',
       countryCode: formData.countryCode || '+52',
       notes: formData.notes || '',
@@ -69,9 +125,8 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
     });
   };
 
-  // Función para manejar solo 10 números
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const numericValue = e.target.value.replace(/\D/g, ''); // Elimina todo lo que no sea número
+    const numericValue = e.target.value.replace(/\D/g, ''); 
     if (numericValue.length <= 10) {
       setFormData({ ...formData, phone: numericValue });
     }
@@ -117,7 +172,6 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
                 />
               </div>
             ) : (
-              /* ESTA ES LA NUEVA VISTA DE WHATSAPP OPACA/ACTIVA */
               <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl shadow-sm">
                 <span className="font-bold text-slate-800 ml-2">
                   {formData.phone ? `${formData.countryCode} ${formData.phone}` : 'No registrado'}
@@ -140,14 +194,44 @@ const ModalContent: React.FC<Omit<ModalInfoUsuarioProps, 'isOpen' | 'data'> & { 
             )}
           </FieldItem>
 
-          {/* SOLO SE MUESTRA SI ES UN PARTICIPANTE */}
           {formData.role === 'Participante' && (
             <FieldItem icon={<Calendar size={18} />} label="Fecha de Nacimiento (Clave)">
               {isEditable ? (
-                <input 
-                  type="date" value={formData.birthDate} onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 font-medium text-slate-700"
-                />
+                <div className="flex gap-2 mt-1">
+                  <div className="w-1/3">
+                    <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Año</span>
+                    <select 
+                      value={anioNacimiento} 
+                      onChange={(e) => setAnioNacimiento(e.target.value)} 
+                      className="w-full bg-white border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-2 outline-none focus:border-blue-400 cursor-pointer shadow-sm"
+                    >
+                      <option value="">Año</option>
+                      {listaAnios.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-1/3">
+                    <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Mes</span>
+                    <select 
+                      value={mesNacimiento} 
+                      onChange={(e) => setMesNacimiento(e.target.value)} 
+                      className="w-full bg-white border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-2 outline-none focus:border-blue-400 cursor-pointer shadow-sm"
+                    >
+                      <option value="">Mes</option>
+                      {MESES.map(m => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-1/3">
+                    <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Día</span>
+                    <select 
+                      value={diaNacimiento} 
+                      onChange={(e) => setDiaNacimiento(e.target.value)} 
+                      className="w-full bg-white border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-2 outline-none focus:border-blue-400 cursor-pointer shadow-sm"
+                    >
+                      <option value="">Día</option>
+                      {listaDias.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
               ) : (
                 <span className="font-bold text-slate-800">{formData.birthDate || 'No registrada'}</span>
               )}

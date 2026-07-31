@@ -1,3 +1,4 @@
+// src/components/AdminSettingsFlow.tsx
 import React, { useState, useEffect } from 'react';
 import { X, User, Key, ChevronRight, Lock, CalendarDays } from 'lucide-react';
 import ModalInfoUsuario from './ModalInfoUsuario';
@@ -240,7 +241,7 @@ const AdminSettingsFlow: React.FC<AdminSettingsFlowProps> = ({
         </div>
       )}
 
-      {/* MODAL PERFIL */}
+      {/* MODAL PERFIL - LÓGICA CORREGIDA PARA EVITAR ERROR DE TIPADO STRICTO */}
       {view === 'profile' && (
         <ModalInfoUsuario
           isOpen={true}
@@ -250,24 +251,34 @@ const AdminSettingsFlow: React.FC<AdminSettingsFlowProps> = ({
             name: admin.name,
             role: 'Administrador',
             phone: admin.phone || '',
-            supportArea: admin.area || '',
+            countryCode: (admin as any).countryCode || '+52',
+            supportArea: (admin as any).supportArea || (admin as any).area || '',
             notes: admin.notes || '',
-            organization: admin.org || '',
-            organizationLabel: admin.orgLabel || 'Empresa/Congregación',
+            organization: (admin as any).organization || (admin as any).org || '',
+            organizationLabel: (admin as any).organizationLabel || (admin as any).orgLabel || 'Empresa/Congregación',
           }}
           isViewingSelf={false}
           currentUserRole={currentUserRole === "Supervisor" ? "SuperAdmin" : currentUserRole}
           onSave={async (datosActualizados) => {
-            const adminActualizado: AdminData = {
+            // Utilizamos 'any' para poder inyectar las propiedades nuevas sin que TypeScript 
+            // rechace el literal de objeto por no existir en la versión actual de AdminData
+            const adminActualizado: any = {
                 ...admin,
                 name: datosActualizados.name,
                 phone: datosActualizados.phone || '',
-                area: datosActualizados.supportArea || '',
+                countryCode: datosActualizados.countryCode || '+52',
+                supportArea: datosActualizados.supportArea || '',
                 notes: datosActualizados.notes || '',
-                org: datosActualizados.organization || '',
-                orgLabel: datosActualizados.organizationLabel || 'Empresa/Congregación'
+                organization: datosActualizados.organization || '',
+                organizationLabel: datosActualizados.organizationLabel || 'Empresa/Congregación'
             };
-            await onSaveProfile(eventoId, adminActualizado);
+            
+            // Limpiamos las variables antiguas para que no viajen a la BD
+            delete adminActualizado.area;
+            delete adminActualizado.org;
+            delete adminActualizado.orgLabel;
+
+            await onSaveProfile(eventoId, adminActualizado as AdminData);
             setView('menu'); 
           }}
           checkNameExists={() => false}

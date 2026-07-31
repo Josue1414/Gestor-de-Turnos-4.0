@@ -23,9 +23,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed right-4 top-4 z-50 flex flex-col gap-3">
+      {/* Contenedor principal ajustado a z-[9999] y pointer-events-none */}
+      <div className="fixed right-4 top-4 z-[9999] flex flex-col gap-3 pointer-events-none">
+        {/* Se añade pointer-events-auto a cada notificación individual */}
         {toasts.map((t) => (
-          <div key={t.id} className={`max-w-xs w-full rounded-lg px-4 py-3 shadow-lg text-sm font-bold text-white ${t.type === 'error' ? 'bg-red-500' : t.type === 'success' ? 'bg-green-600' : 'bg-slate-800'}`}>
+          <div key={t.id} className={`max-w-xs w-full rounded-lg px-4 py-3 shadow-lg text-sm font-bold text-white pointer-events-auto ${t.type === 'error' ? 'bg-red-500' : t.type === 'success' ? 'bg-green-600' : 'bg-slate-800'}`}>
             {t.message}
           </div>
         ))}

@@ -1,8 +1,4 @@
-/**
- * ============================================================================
- * HOOK: useSupervisorLogic
- * ============================================================================
- */
+// src/hooks/useSupervisorLogic.ts
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, getDoc, collection, getDocs, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -12,17 +8,19 @@ import { useToast } from '../components/ToastProvider';
 interface Turno { id: string; participanteId: string | null; horario: string; }
 interface Caja { id: string; nombre: string; turnos: Turno[]; }
 interface Dia { id: string; nombreDia: string; fecha?: string; cajas: Caja[]; }
-interface ParticipanteData { id: string; nombre: string; estado?: string; }
+interface ParticipanteData { id: string; nombre: string; estado?: string; organizationLabel?: string; }
 
+// 1. CORRECCIÓN: Nombres estandarizados con la base de datos del Admin
 export interface AdminData { 
   id: string; 
   name: string; 
   password?: string;
-  area?: string;
-  org?: string;
+  supportArea?: string; 
+  organization?: string; 
   phone?: string;
+  countryCode?: string; 
   notes?: string;
-  orgLabel?: string;
+  organizationLabel?: string; 
   cajas?: number;
   horarios?: number;
   turnosTotales?: number;
@@ -30,16 +28,18 @@ export interface AdminData {
   disponibles?: number;
   inactivos?: number;
   diasAsignados?: string[]; 
+  
+  // Mantenemos las propiedades antiguas como opcionales por seguridad temporal
+  area?: string;
+  org?: string;
+  orgLabel?: string;
 }
 
-// LÓGICA CORREGIDA: Se agregaron las interfaces globales faltantes para que el Supervisor y el Excel 
-// detecten a los capitanes y participantes creados por capitanes sin perder los datos.
 interface EventoDocument {
   nombre: string;
   admins: AdminData[];
   diasPorAdmin?: Record<string, Dia[]>;
   participantesPorAdmin?: Record<string, ParticipanteData[]>;
-  // NUEVAS PROPIEDADES AÑADIDAS:
   capitanesPorAdmin?: Record<string, any[]>; 
   participantesPorCapitan?: Record<string, ParticipanteData[]>;
   globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
@@ -56,7 +56,6 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
     if (!eventoId) return;
     const unsubscribe = onSnapshot(doc(db, 'eventos', eventoId), (snap) => {
       if (snap.exists()) {
-        // Al castear a EventoDocument, ahora sí trae capitanes y configuraciones globales
         setEvento({ id: snap.id, ...snap.data() } as EventoDocument & { id: string });
       }
       setLoading(false);
@@ -143,9 +142,11 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       id: newAdminId,
       name: `Admin ${adminNum}`,
       password: newPassword,
-      area: 'Sin asignar',
-      org: 'Sin asignar',
-      orgLabel: 'Empresa'
+      supportArea: 'Sin asignar', // Estandarizado
+      organization: 'Sin asignar', // Estandarizado
+      organizationLabel: 'Empresa', // Estandarizado
+      countryCode: '+52',
+      phone: ''
     };
 
     try {
@@ -182,7 +183,17 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       const data = snap.data() as EventoDocument;
       const nuevosAdmins = data.admins.map((a: AdminData) => a.id === updatedAdmin.id ? updatedAdmin : a);
       
-      await updateDoc(docRef, { admins: nuevosAdmins });
+      // 2. CORRECCIÓN: Actualizar también la etiqueta de organización en los participantes
+      const participantesDelAdmin = data.participantesPorAdmin?.[updatedAdmin.id] || [];
+      const participantesActualizados = participantesDelAdmin.map(p => ({
+          ...p,
+          organizationLabel: updatedAdmin.organizationLabel || 'Congregación'
+      }));
+
+      await updateDoc(docRef, { 
+        admins: nuevosAdmins,
+        [`participantesPorAdmin.${updatedAdmin.id}`]: participantesActualizados
+      });
     } catch (error) {
       console.error(error);
       showToast("Error al guardar ajustes del perfil.", 'error');

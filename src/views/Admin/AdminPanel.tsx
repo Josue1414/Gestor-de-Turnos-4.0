@@ -462,7 +462,6 @@ const AdminPanel = () => {
 
   return (
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
-      {/* CORRECCIÓN Z-INDEX: Elevamos a z-[60] para que las alertas floten por encima de los días */}
       <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[60] box-border">
         <div className="w-full max-w-[1400px] mx-auto">
           <AdminHeader 
@@ -520,8 +519,9 @@ const AdminPanel = () => {
 
       <div className={`px-2 sm:px-6 pb-10 flex flex-col z-0 overflow-visible bg-transparent rounded-none sm:rounded-2xl border-none sm:border border-transparent mb-0 sm:mb-4 ${vistaTarjetas ? 'w-full' : 'min-w-max'}`}>
          
-         <div className="w-full max-w-[1400px] mx-auto mt-2 mb-4 flex justify-start">
-            <div className="bg-slate-200/70 p-1 rounded-xl flex items-center">
+         {/* BOTONES STICKY: Se quedan pegados al lado izquierdo al hacer scroll horizontal */}
+         <div className="sticky left-2 sm:left-6 z-10 w-max mt-2 mb-4 flex justify-start">
+            <div className="bg-slate-200/90 backdrop-blur-md p-1.5 rounded-xl flex items-center shadow-sm border border-slate-300/50">
               <button 
                 onClick={() => setVistaTarjetas(false)} 
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!vistaTarjetas ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -540,6 +540,7 @@ const AdminPanel = () => {
          {vistaTarjetas ? (
            <VistaTarjetasCajas 
              diaActual={diaActualFiltrado} 
+             capitanes={capitanes || []}
              onActualizarEstadoTurno={actualizarEstadoTurno} 
              onResolveAlert={resolverAlerta} 
              getParticipante={getParticipante} 
@@ -557,6 +558,7 @@ const AdminPanel = () => {
          ) : (
            <MatrizTurnos 
              diaActual={diaActualFiltrado} 
+             
              onActualizarEstadoTurno={actualizarEstadoTurno} 
              onResolveAlert={resolverAlerta} 
              getParticipante={getParticipante} 
