@@ -70,7 +70,8 @@ const AdminPanel = () => {
     abrirEditor, handleSaveEdit, handleAbrirMiPerfil, handleAbrirPerfilParticipante,
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
-    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta, pushEnabled, handleTogglePush
+    isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta,
+    pushEnabled, handleTogglePush
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -171,10 +172,6 @@ const AdminPanel = () => {
         turnos.forEach((turno: any) => {
           if (turno.solicitaAsistencia) {
             const part = participantesEnriquecidos.find((p: any) => p.id === turno.participanteId) as ParticipanteExtendidoDb | undefined;
-            if (isCapitan) {
-              const capitanIdL = localStorage.getItem('current_capitan_id');
-              if (part && part.capitanId !== capitanIdL) return; 
-            }
             alertas.push({
               dia: dia.nombreDia,
               cajaId: caja.id,
@@ -188,7 +185,7 @@ const AdminPanel = () => {
       });
     });
     return alertas;
-  }, [diasFiltrados, participantesEnriquecidos, isCapitan]);
+  }, [diasFiltrados, participantesEnriquecidos]);
 
   const prevAlertasCount = useRef(0);
   useEffect(() => {
@@ -221,8 +218,6 @@ const AdminPanel = () => {
     );
   }, [diasPermitidos]);
 
-  // CORRECCIÓN MAGISTRAL: Una caja está libre si ningún capitán la tiene asignada EN ESE MISMO DÍA.
-  // Esto elimina el bug de que desaparecieran cajas idénticas en días diferentes.
   const cajasLibresParaCrear = useMemo(() => {
     if (!capitanes) return cajasTotalesParaCapitanes;
     
@@ -467,8 +462,8 @@ const AdminPanel = () => {
 
   return (
     <div className="h-[100dvh] w-full overflow-auto bg-slate-100 font-sans flex flex-col relative">
-      {/* CORRECCIÓN Z-INDEX: Reducido a z-40 para que los toast queden arriba */}
-      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[40] box-border">
+      {/* CORRECCIÓN Z-INDEX: Elevamos a z-[60] para que las alertas floten por encima de los días */}
+      <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 shrink-0 z-[60] box-border">
         <div className="w-full max-w-[1400px] mx-auto">
           <AdminHeader 
             seccionName={seccionName} setSeccionName={setSeccionName} 
@@ -493,7 +488,7 @@ const AdminPanel = () => {
             onDownloadTabla={() => setDownloadModal({ isOpen: true, type: 'general' })}
             isSuperAdminViewing={isExternalViewer} adminInfo={currentAdminInfo} onExportExcel={handleExportExcel} 
             stats={statsActuales} 
-            cajasDiaActivo={diaActualFiltrado.cajas.length} // <-- Pasamos el conteo diario aquí
+            cajasDiaActivo={diaActualFiltrado.cajas.length} 
             adminPerms={permisosEfectivos}
             isCapitan={isCapitan}
             showCapitanes={showSeccionCapitanes} onToggleCapitanes={() => setShowSeccionCapitanes(!showSeccionCapitanes)} capitanes={capitanes || []} onOpenCapitanModal={() => setShowCapitanModal(true)} onDeleteCapitan={handleEliminarCapitan} onSimularCapitan={handleSimularCapitan} dias={diasFiltrados}
@@ -504,22 +499,19 @@ const AdminPanel = () => {
             onEditCapitan={handleEditarCapitan}
             alertasAsistencia={alertasAsistencia}
             onResolveAlert={resolverAlerta}
-
             pushEnabled={pushEnabled}
             onTogglePush={handleTogglePush}
           />
         </div>
       </div>
 
-      {/* CORRECCIÓN Z-INDEX: Reducido a z-40 */}
       <div className="sticky top-0 left-0 z-[40] w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-2">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full">
           {diasFiltrados.map((dia) => {
             const originalIndex = dias.findIndex(d => d.id === dia.id);
             return (
               <button key={dia.id} onClick={() => setDiaActivo(originalIndex)} className={`px-3 py-2 rounded-xl font-bold transition whitespace-nowrap flex items-center gap-1 ${diaActivo === originalIndex ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 text-[10px]'}`}>
-                {/* CORRECCIÓN VISUAL: Añadimos la cantidad de cajas al botón */}
-                <Calendar size={14} /> {dia.nombreDia}. Cajas ({dia.cajas.length})
+                <Calendar size={14} /> {dia.nombreDia} ({dia.cajas.length})
               </button>
             )
           })}

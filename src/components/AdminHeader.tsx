@@ -1,5 +1,5 @@
 // src/components/AdminHeader.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapIcon, ArrowLeft, LogOut, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
@@ -45,10 +45,9 @@ interface AdminHeaderProps {
   isSuperAdminViewing?: boolean;
   adminInfo?: AdminInfo | null;
   stats?: StatsData;
-  cajasDiaActivo?: number; // <-- NUEVO: Recibe el número de cajas del día actual
+  cajasDiaActivo?: number;
   onExportExcel?: () => void;
   adminPerms?: AdminPermissions;
-
   
   isCapitan?: boolean;
   showCapitanes?: boolean;
@@ -68,8 +67,7 @@ interface AdminHeaderProps {
 
   alertasAsistencia?: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[];
   onResolveAlert?: (cajaId: string, turnoId: string) => void;
-
-  pushEnabled?: boolean;           // <-- AÑADIR
+  pushEnabled?: boolean;
   onTogglePush?: () => void;
 }
 
@@ -88,10 +86,13 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   adminPerms, isCapitan, 
   showCapitanes, onToggleCapitanes, capitanes, participantes, onOpenCapitanModal, onDeleteCapitan, onSimularCapitan, dias,
   diasDisponibles, cajasDisponibles, onEditCapitan,
-  alertasAsistencia = [], onResolveAlert, pushEnabled, onTogglePush
+  alertasAsistencia = [], onResolveAlert,
+  pushEnabled, onTogglePush
 }) => {
   const [showStats, setShowStats] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
+  
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isSupervisorOrSuperAdmin = !!sessionStorage.getItem('visor_externo_tipo') || isSuperAdminViewing;
   const canEditTitle = isSupervisorOrSuperAdmin; 
@@ -105,6 +106,16 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   const hasAlerts = alertasAsistencia.length > 0;
 
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowAlertMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     if (alertasAsistencia && alertasAsistencia.length > 0) {
       if ("vibrate" in navigator) {
         navigator.vibrate([200, 100, 200]); 
@@ -113,26 +124,52 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   }, [alertasAsistencia.length]);
 
   return (
-    <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full">
-      <div className="flex items-start justify-between gap-4 w-full">
-        <div className="min-w-0 flex-1">
-          {isEditingTitle && canEditTitle ? (
-            <input 
-              type="text" value={seccionName} onChange={(e) => setSeccionName(e.target.value)} 
-              onBlur={onSave} autoFocus
-              className="text-xl sm:text-2xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 outline-none w-full shadow-inner"
-            />
-          ) : (
-            <h1 
-              className={`text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2 ${canEditTitle ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
-              onClick={handleTitleClick}
-              title={canEditTitle ? "Clic para editar el nombre del evento" : ""}
-            >
-              {seccionName || 'Sin Título'}
-            </h1>
-          )}
+    <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full relative z-[100]">
+      
+      {/* CONTENEDOR PRINCIPAL: Organización Responsiva */}
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4 w-full">
+        
+        {/* --- LADO IZQUIERDO --- */}
+        <div className="w-full sm:w-auto flex-1 min-w-0 flex flex-col">
+          
+          {/* Fila 1 (Móvil): Título y Ajustes */}
+          <div className="flex justify-between items-start w-full">
+            <div className="min-w-0 flex-1">
+              {isEditingTitle && canEditTitle ? (
+                <input 
+                  type="text" value={seccionName} onChange={(e) => setSeccionName(e.target.value)} 
+                  onBlur={onSave} autoFocus
+                  className="text-xl sm:text-2xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 outline-none w-full shadow-inner"
+                />
+              ) : (
+                <h1 
+                  className={`text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2 ${canEditTitle ? 'cursor-pointer hover:text-blue-600 transition' : ''}`}
+                  onClick={handleTitleClick}
+                  title={canEditTitle ? "Clic para editar el nombre del evento" : ""}
+                >
+                  {seccionName || 'Sin Título'}
+                </h1>
+              )}
+            </div>
+
+            {/* BOTONES AJUSTES/REGRESAR (Solo visibles aquí en móvil, alineados a la derecha de la fila 1) */}
+            <div className="flex sm:hidden gap-2 shrink-0 ml-2 mt-1">
+               {onBack && (
+                 <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
+                   <ArrowLeft size={14} />
+                 </button>
+               )}
+               {onOpenProfile && (
+                 <button onClick={onOpenProfile} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-[11px] hover:bg-slate-200 transition shadow-sm border border-slate-200">
+                   <Settings size={14} /> Ajustes
+                 </button>
+               )}
+            </div>
+          </div>
+
+          {/* Fila 2 (Móvil): Pastilla de Info Admin/Capitán */}
           {adminInfo && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mt-2 sm:mt-1 flex flex-wrap items-center gap-2">
               <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isCapitan ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                 {isCapitan ? 'Capitán:' : 'Admin:'} <span className={isCapitan ? 'text-amber-900' : 'text-slate-700'}>{adminInfo.name}</span>
               </span>
@@ -145,20 +182,21 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2 shrink-0">
-          <div className="flex gap-2 relative">
+        {/* --- LADO DERECHO --- */}
+        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 sm:gap-2 shrink-0 w-full sm:w-auto">
+          
+          {/* Fila 3 (Móvil): Botones PUSH y ALERTAS */}
+          <div className="flex gap-2 relative w-full sm:w-auto justify-end" ref={menuRef}>
+            {onTogglePush && (
+              <button 
+                onClick={onTogglePush} 
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${pushEnabled ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                title="Recibir notificaciones cuando la app esté minimizada"
+              >
+                <Bell size={14} /> {pushEnabled ? 'Push Activo' : 'Activar Push'}
+              </button>
+            )}
 
-            {/* NUEVO BOTÓN PARA ACTIVAR PUSH */}
-              {onTogglePush && (
-                <button 
-                  onClick={onTogglePush} 
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${pushEnabled ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
-                  title="Recibir notificaciones cuando la app esté minimizada"
-                >
-                  <Bell size={14} /> {pushEnabled ? 'Push Activo' : 'Activar Push'}
-                </button>
-              )}
-            
             <button 
               onClick={() => setShowAlertMenu(!showAlertMenu)} 
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${hasAlerts ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
@@ -167,6 +205,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               {hasAlerts ? `Alertas (${alertasAsistencia.length})` : 'Sin alertas'}
             </button>
 
+            {/* MENÚ DESPLEGABLE DE ALERTAS */}
             {showAlertMenu && (
               <div className="absolute top-full right-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-orange-100 z-[999] overflow-hidden animate-in slide-in-from-top-2 duration-200">
                 <div className="bg-orange-500 p-3 text-white flex justify-between items-center">
@@ -195,26 +234,34 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
                 </div>
               </div>
             )}
-
-            {onBack && (
-              <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
-                <ArrowLeft size={14} /> Regresar
-              </button>
-            )}
-            {onOpenProfile && (
-              <button onClick={onOpenProfile} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-[11px] hover:bg-slate-200 transition shadow-sm border border-slate-200">
-                <Settings size={14} /> Ajustes
-              </button>
-            )}
           </div>
+
+          {/* BOTONES AJUSTES/REGRESAR (Visibles aquí SOLO EN ESCRITORIO) */}
+          <div className="hidden sm:flex gap-2 shrink-0">
+             {onBack && (
+               <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
+                 <ArrowLeft size={14} /> Regresar
+               </button>
+             )}
+             {onOpenProfile && (
+               <button onClick={onOpenProfile} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-[11px] hover:bg-slate-200 transition shadow-sm border border-slate-200">
+                 <Settings size={14} /> Ajustes
+               </button>
+             )}
+          </div>
+
+          {/* Fila 4 (Móvil): Botón de Salir alineado a la derecha */}
           {onLogout && (
-            <button onClick={onLogout} className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 font-bold rounded-xl text-[11px] hover:bg-red-100 transition shadow-sm border border-red-100">
-              <LogOut size={14} /> Salir
-            </button>
+            <div className="flex justify-end w-full sm:w-auto mt-1 sm:mt-0">
+              <button onClick={onLogout} className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 font-bold rounded-xl text-[11px] hover:bg-red-100 transition shadow-sm border border-red-100">
+                <LogOut size={14} /> Salir
+              </button>
+            </div>
           )}
         </div>
       </div>
 
+      {/* RESTO DEL HEADER (Métricas, Controles, etc.) */}
       <div className="flex flex-wrap items-center justify-between gap-3 w-full border-t border-slate-100 pt-3">
         <div className="flex flex-wrap gap-2">
           {onShowCroquis && (
@@ -248,8 +295,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           <div className={`${showStats ? 'flex' : 'hidden'} sm:flex w-full xl:w-auto justify-center xl:border-l border-slate-100 xl:pl-4`}>
              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center w-full">
                <MiniStatCard label="Cajas (Gral)" value={stats.cajas} color="bg-blue-50 text-blue-700 border-blue-100" />
-               {/* NUEVA PASTILLA PARA LAS CAJAS DEL DÍA */}
-               <MiniStatCard label="Cajas (De hoy)" value={cajasDiaActivo || 0} color="bg-cyan-50 text-cyan-700 border-cyan-100" />
+               <MiniStatCard label="Cajas (Hoy)" value={cajasDiaActivo || 0} color="bg-cyan-50 text-cyan-700 border-cyan-100" />
                <MiniStatCard label="Horarios" value={stats.horarios} color="bg-indigo-50 text-indigo-700 border-indigo-100" />
                <MiniStatCard label="Turnos" value={stats.totales} color="bg-purple-50 text-purple-700 border-purple-100" />
                <MiniStatCard label="Libres" value={stats.disponibles} color="bg-emerald-50 text-emerald-700 border-emerald-100" />

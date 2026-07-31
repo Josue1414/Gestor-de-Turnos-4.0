@@ -35,8 +35,6 @@ const ParticipantPanel = () => {
   if (!miUsuario || !eventoId || !adminId) return null;
 
   // --- SOLUCIÓN DE TYPESCRIPT A PRUEBA DE ERRORES ---
-  // Estas funciones aceptan tanto un string (el ID) como un objeto (el Turno)
-  // y se aseguran de pasarle a tu Hook estrictamente un string.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const safeHandleAsignarme = (cajaId: string, turnoOrId: any) => {
     const tId = typeof turnoOrId === 'string' ? turnoOrId : turnoOrId?.id;
@@ -53,71 +51,96 @@ const ParticipantPanel = () => {
     <div className="h-[100dvh] w-full bg-slate-100 font-sans flex flex-col overflow-auto relative">
       
       <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 pb-2 shrink-0 z-10 box-border">
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 w-full max-w-[1400px] mx-auto gap-4">
+        
+        {/* --- ENCABEZADO PRINCIPAL REESTRUCTURADO --- */}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-3xl shadow-sm border border-slate-200 w-full max-w-[1400px] mx-auto gap-4">
           
-          <div className="flex items-center gap-3 w-full sm:w-auto border-b border-slate-100 pb-3 sm:border-none sm:pb-0">
+          {/* SECCIÓN 1: Info del Usuario y Botón Salir */}
+          <div className="flex items-start gap-3 w-full sm:w-auto">
             <button 
               onClick={() => setShowLogoutConfirm(true)} 
-              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 p-2 sm:px-3 rounded-xl text-[11px] font-bold shadow-sm transition flex items-center justify-center gap-1.5 shrink-0"
+              className="bg-red-50 text-red-600 border border-red-100 hover:bg-red-200 p-2 sm:px-3 rounded-xl text-[11px] font-bold shadow-sm transition flex items-center justify-center shrink-0 mt-1 sm:mt-0"
               title="Cerrar Sesión"
             >
-              <LogOut size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Salir</span>
+              <LogOut size={18} className="w-5 h-5 sm:w-4 sm:h-4" /> 
+              <span className="hidden sm:inline ml-1.5">Salir</span>
             </button>
 
-            <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+            <div className="h-8 w-px bg-slate-200 hidden sm:block self-center"></div>
 
-            <div className="min-w-0 flex flex-col items-start">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight mb-1 truncate">
+            <div className="min-w-0 flex flex-col items-start gap-1">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none truncate">
                 Hola, <span className="text-blue-600">{miUsuario.nombre}</span>
               </h1>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 mt-0.5">
-                <p className="text-sm sm:text-base font-black text-slate-800 truncate">{eventoNombre}</p>
-                {miUsuario.capitanNombre && (
-                  <span className="inline-flex items-center text-[11px] sm:text-sm font-black bg-amber-100 text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg w-fit uppercase tracking-wider shadow-sm">
-                    Equipo de {miUsuario.capitanNombre}
-                  </span>
-                )}
-              </div>
+              <p className="text-sm sm:text-base font-black text-slate-800 truncate leading-none">{eventoNombre}</p>
+              {miUsuario.capitanNombre && (
+                <span className="inline-flex items-center text-[10px] sm:text-xs font-black bg-amber-100 text-amber-700 border border-amber-300 px-2 py-0.5 rounded-lg w-fit uppercase tracking-wider shadow-sm mt-0.5">
+                  Equipo de {miUsuario.capitanNombre}
+                </span>
+              )}
             </div>
           </div>
-          
+
+          {/* SECCIÓN 2 (SOLO MÓVIL): Botón Pedir Ayuda */}
+          {turnoAlertaInfo && (
+            <div className="w-full sm:hidden mt-1">
+              <button
+                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+                className={`w-full p-3.5 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition shadow-sm border
+                  ${turnoAlertaInfo.solicitaAsistencia
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                    : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                  }`}
+              >
+                <Bell size={18} className="w-5 h-5" />
+                <span>
+                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* SECCIÓN 3 (SOLO MÓVIL): Línea separadora */}
+          <div className="w-full h-px bg-slate-200 sm:hidden my-1"></div>
+
+          {/* SECCIÓN 4: Botones de Acción (Abajo en móvil, Derecha en PC) */}
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
             <button onClick={() => setShowCroquis(true)} className="bg-slate-50 border border-slate-200 text-slate-700 p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm hover:bg-slate-100">
-              📍 <span className="hidden sm:inline">Croquis</span>
+              📍 <span>Croquis</span>
             </button>
             
             <button onClick={() => setShowDirectorio(true)} className="bg-blue-50 border border-blue-200 text-blue-700 p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-blue-100 transition shadow-sm">
-              <Users size={16} className="w-4 h-4" /> <span className="hidden sm:inline">Directorio ({participantesDirectorio.length})</span>
+              <Users size={16} className="w-4 h-4" /> <span>Participantes ({participantesDirectorio.length})</span>
             </button>
 
             <button onClick={() => setIsUsuarioModalOpen(true)} className="bg-indigo-50 text-indigo-700 p-2 sm:px-3 border border-indigo-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-indigo-100 transition shadow-sm">
-               <Settings size={16} className="w-4 h-4" /> Mi Perfil
+               <Settings size={16} className="w-4 h-4" /> <span>Mi Perfil</span>
             </button>
-          </div>
 
-          {/* BOTÓN DE ASISTENCIA RESPONSIVO */}
-          {turnoAlertaInfo && (
-            <button
-              onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
-              className={`w-full sm:w-auto mt-2 sm:mt-0 p-4 sm:p-2 rounded-xl text-base sm:text-[11px] font-black sm:font-bold flex items-center justify-center gap-2 sm:gap-1.5 transition shadow-sm border
-                ${turnoAlertaInfo.solicitaAsistencia
-                  ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
-                  : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-                }`}
-            >
-              <Bell size={20} className="w-5 h-5 sm:w-4 sm:h-4" />
-              <span>
-                {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
-              </span>
-            </button>
-          )}
+            {/* SECCIÓN 5 (SOLO ESCRITORIO): Botón Pedir Ayuda */}
+            {turnoAlertaInfo && (
+              <button
+                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+                className={`hidden sm:flex p-2 px-3 rounded-xl text-[11px] font-bold items-center justify-center gap-1.5 transition shadow-sm border
+                  ${turnoAlertaInfo.solicitaAsistencia
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                    : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                  }`}
+              >
+                <Bell size={16} className="w-4 h-4" />
+                <span>
+                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+                </span>
+              </button>
+            )}
+          </div>
             
         </header>
       </div>
 
-      <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border">
+      <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-1 sm:mt-0">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full px-1">
-          {/* Mostramos todos los días que nos da useParticipantLogic (ya vienen filtrados por el Capitán) */}
+          {/* Mapeamos diasAsignados y usamos originalIndex para mantener la sincronía del estado */}
           {dias.length > 0 ? (
             dias.map((dia, idx) => (
               <button 
@@ -177,7 +200,6 @@ const ParticipantPanel = () => {
               getParticipante={(id) => participantes.find(p => p.id === id)}
               miUsuarioId={miUsuario.id} 
               isBusy={isBusy}
-              // Pasamos las funciones "seguras" que extraen el ID
               onAsignar={(c, _cn, t, _h) => safeHandleAsignarme(c, t)} 
               onQuitar={(c, t, _pid) => safeHandleQuitarme(c, t)} 
               onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
@@ -190,7 +212,6 @@ const ParticipantPanel = () => {
               diaActual={diaActual} 
               getParticipante={(id) => participantes.find(p => p.id === id)} 
               miUsuarioId={miUsuario.id} 
-              // Pasamos las funciones "seguras"
               onAsignarme={safeHandleAsignarme} 
               onQuitarme={safeHandleQuitarme} 
               contactosWhatsApp={numerosDeAsistencia}
