@@ -1,6 +1,6 @@
 // src/components/ParticipantDrawer.tsx
 import React, { useState } from 'react';
-import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
+import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown, Link2 } from 'lucide-react';
 import type { Participante } from '../types';
 import { useToast } from './ToastProvider';
 
@@ -87,6 +87,20 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
     showToast(mensajeToast, 'success');
   };
 
+  // NUEVO: Función para copiar el link único de un participante específico
+  const handleCopyUniqueLink = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const baseGeneral = `${window.location.origin}/invite/${eventoId}/${adminId}/${participante.id}`;
+    const baseEquipo = `${window.location.origin}/invite-team/${eventoId}/${adminId}/${customInviteLink}/${participante.id}`;
+    
+    // Si somos Capitán usamos el baseEquipo, si somos Admin usamos baseGeneral
+    const url = customInviteLink ? baseEquipo : baseGeneral;
+    const mensaje = `¡Hola ${participante.nombre}! 👋\n\nAquí tienes tu link de acceso directo y único para elegir tus turnos:\n${url}\n\nPor favor, no compartas este link con nadie más.`;
+    
+    copiarSeguro(mensaje);
+    showToast('¡Link único copiado al portapapeles!', 'success');
+  };
+
   const toggleTurnos = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedId(expandedId === id ? null : id);
@@ -121,7 +135,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
           {canEdit && (
             <div className="flex flex-col gap-2 mt-2">
               <button onClick={handleCopyInviteLink} className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
-                <UserPlus size={16} /> Copiar Link de Invitación
+                <UserPlus size={16} /> Copiar Link Público de Invitación
               </button>
             </div>
           )}
@@ -168,11 +182,22 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                           <button 
                             onClick={(e) => handleWhatsApp(p, e)}
                             className={`p-1.5 rounded-lg transition-all flex items-center justify-center w-8 h-8 ${tieneTelefono ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`}
-                            title={tieneTelefono ? "Enviar link por WhatsApp" : "No tiene teléfono registrado"}
+                            title={tieneTelefono ? "Enviar link general por WhatsApp" : "No tiene teléfono registrado"}
                           >
                             <MessageCircle size={16} />
                           </button>
                         </>
+                      )}
+
+                      {/* NUEVO BOTÓN: Copiar link único de este participante */}
+                      {canEdit && (
+                        <button 
+                          onClick={(e) => handleCopyUniqueLink(p, e)}
+                          className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
+                          title="Copiar Link Único de este Participante"
+                        >
+                          <Link2 size={16} />
+                        </button>
                       )}
 
                       {(canEdit || esMiUsuario) && (

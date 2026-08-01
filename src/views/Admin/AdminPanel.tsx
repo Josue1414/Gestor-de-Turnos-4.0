@@ -560,7 +560,7 @@ const AdminPanel = () => {
          ) : (
            <MatrizTurnos 
              diaActual={diaActualFiltrado} 
-             
+             capitanes={capitanes || []}
              onActualizarEstadoTurno={actualizarEstadoTurno} 
              onResolveAlert={resolverAlerta} 
              getParticipante={getParticipante} 

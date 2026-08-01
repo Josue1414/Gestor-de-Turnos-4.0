@@ -18,6 +18,7 @@ interface AdminPermissions {
 
 interface MatrizTurnosProps {
   diaActual: DiaEvento;
+  capitanes?: any[]; // <-- RECIBIMOS LA LISTA DE CAPITANES
   getParticipante: (id: string | null) => Participante | undefined;
   onAsignar: (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => void;
   onQuitar: (cajaId: string, turnoId: string, participanteId: string) => void;
@@ -30,15 +31,15 @@ interface MatrizTurnosProps {
   onEditTurnoEspecial?: (cajaId: string, turnoId: string) => void;
   onActualizarEstadoTurno?: (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => void;
   adminPerms?: AdminPermissions;
-  onResolveAlert?: (cajaId: string, turnoId: string) => void; // <-- NUEVA PROP AQUÍ
+  onResolveAlert?: (cajaId: string, turnoId: string) => void; 
 }
 
 interface CajaCheck { isEspecial?: unknown; especial?: unknown; tipo?: unknown; nombre?: unknown; }
 
 const MatrizTurnos: React.FC<MatrizTurnosProps> = ({ 
-  diaActual, getParticipante, onAsignar, onQuitar,
+  diaActual, capitanes, getParticipante, onAsignar, onQuitar,
   onDeleteCaja, onDeleteHorario, onEditCaja, onEditHorario, onDeleteTurnoEspecial, onEditTurnoEspecial,
-  onActualizarEstadoTurno, adminPerms, onResolveAlert // <-- LA RECIBIMOS AQUÍ
+  onActualizarEstadoTurno, adminPerms, onResolveAlert 
 }) => {
 
   const { 
@@ -146,21 +147,36 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
                   </div>
                 </th>
                 
-                {cajasNormales.map(caja => (
-                  <th key={caja.id as string} className="sticky top-[60px] z-30 group border-b border-slate-200 bg-white p-1 sm:p-2 min-w-[56px] sm:min-w-[88px] border-l align-top shadow-[0_2px_5px_-2px_rgba(0,0,0,0.05)]">
-                    <div className="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[40px]">
-                      <span className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" title={caja.nombre as string}>
-                        {caja.nombre as string}
-                      </span>
-                      
-                      {adminPerms?.cajas !== false && (
-                        <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
-                          <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
-                        </div>
-                      )}
-                    </div>
-                  </th>
-                ))}
+                {cajasNormales.map(caja => {
+                  // BUSCAMOS SI LA CAJA TIENE UN CAPITÁN ASIGNADO
+                  const capitanDeCaja = capitanes?.find((cap: any) => 
+                    (cap.cajasAsignadas || []).includes(caja.id) && 
+                    (cap.diasAsignados || []).includes(diaActual.id)
+                  );
+
+                  return (
+                    <th key={caja.id as string} className="sticky top-[60px] z-30 group border-b border-slate-200 bg-white p-1 sm:p-2 min-w-[56px] sm:min-w-[88px] border-l align-top shadow-[0_2px_5px_-2px_rgba(0,0,0,0.05)]">
+                      <div className="flex flex-col items-center justify-center gap-1 min-h-[40px]">
+                        <span className="font-black text-slate-700 text-[10px] sm:text-sm uppercase tracking-wide leading-tight text-center break-words line-clamp-2 px-1" title={caja.nombre as string}>
+                          {caja.nombre as string}
+                        </span>
+                        
+                        {/* PASTILLA DEL CAPITÁN */}
+                        {capitanDeCaja && (
+                          <span className="text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 text-center truncate max-w-[90%]" title={`Equipo: ${capitanDeCaja.nombre}`}>
+                            {capitanDeCaja.nombre}
+                          </span>
+                        )}
+                        
+                        {adminPerms?.cajas !== false && (
+                          <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity mt-1">
+                            <ActionMenu onEdit={() => onEditCaja(caja.id as string)} onDelete={() => onDeleteCaja(caja.id as string)} direccion="abajo" />
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -242,7 +258,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
           }
           closeModal();
         }}
-        onResolveAlert={() => { // <-- SE PASA AL MODAL AQUÍ
+        onResolveAlert={() => {
           if (turnoData && onResolveAlert) {
             onResolveAlert(turnoData.cajaId, turnoData.turnoId);
             closeModal();

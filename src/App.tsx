@@ -66,9 +66,12 @@ function App() {
           <Route path="/admin/:id" element={<AdminPanel />} />
           <Route path="/p/:eventoId/:adminId/:participanteId" element={<ParticipantPanel />} />
           
-          {/* RUTAS SEPARADAS */}
+          {/* RUTAS SEPARADAS (CON SOPORTE PARA LINK ÚNICO DE PARTICIPANTE) */}
           <Route path="/invite/:eventoId/:adminId" element={<InviteScreen />} />
+          <Route path="/invite/:eventoId/:adminId/:participanteId" element={<InviteScreen />} />
+          
           <Route path="/invite-team/:eventoId/:adminId/:capitanLink" element={<CapitanInviteScreen />} />
+          <Route path="/invite-team/:eventoId/:adminId/:capitanLink/:participanteId" element={<CapitanInviteScreen />} />
           
         </Routes>
       </ToastProvider>

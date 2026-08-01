@@ -1,7 +1,7 @@
 // src/views/User/CapitanInviteScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { User } from 'lucide-react';
+import { User, Lock } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ParticipanteSchema } from '../../utils/schemas';
@@ -16,6 +16,7 @@ interface ParticipanteEnDB {
 
 interface EventoDB {
   participantesPorCapitan?: Record<string, ParticipanteEnDB[]>;
+  participantesPorAdmin?: Record<string, ParticipanteEnDB[]>; // Agregado para búsqueda global
   capitanesPorAdmin?: Record<string, any[]>;
   nombre?: string;
 }
@@ -36,13 +37,13 @@ const MESES = [
 ];
 
 const CapitanInviteScreen = () => {
-  const { eventoId, adminId, capitanLink } = useParams<{ eventoId: string; adminId: string; capitanLink: string }>();
+  const { eventoId, adminId, capitanLink, participanteId } = useParams<{ eventoId: string; adminId: string; capitanLink: string; participanteId?: string }>();
   const navigate = useNavigate(); 
   const location = useLocation();
   
   const [nombre, setNombre] = useState('');
+  const [isPreFilled, setIsPreFilled] = useState(false); 
   
-  // Estados para la selección por listas desplegables
   const [anioNacimiento, setAnioNacimiento] = useState('');
   const [mesNacimiento, setMesNacimiento] = useState('');
   const [diaNacimiento, setDiaNacimiento] = useState('');
@@ -54,7 +55,6 @@ const CapitanInviteScreen = () => {
   const [capitanNombre, setCapitanNombre] = useState('');
   const [capitanId, setCapitanId] = useState('');
 
-  // Generar lista de años (desde el año que cumple 18 años hoy hasta 1900)
   const listaAnios = useMemo(() => {
     const anioMaximo = new Date().getFullYear() - 18;
     const anios: number[] = [];
@@ -64,7 +64,6 @@ const CapitanInviteScreen = () => {
     return anios;
   }, []);
 
-  // Calcular la cantidad exacta de días que tiene el mes y año seleccionados
   const cantidadDiasEnMes = useMemo(() => {
     if (!anioNacimiento || !mesNacimiento) return 31;
     const a = parseInt(anioNacimiento, 10);
@@ -72,7 +71,6 @@ const CapitanInviteScreen = () => {
     return new Date(a, m, 0).getDate();
   }, [anioNacimiento, mesNacimiento]);
 
-  // Lista de días válidos para el mes activo
   const listaDias = useMemo(() => {
     const dias: string[] = [];
     for (let d = 1; d <= cantidadDiasEnMes; d++) {
@@ -97,9 +95,29 @@ const CapitanInviteScreen = () => {
           
           const capitanes = data.capitanesPorAdmin?.[adminId] || [];
           const capitanEncontrado = capitanes.find((c: any) => c.linkUnico === capitanLink);
+          
           if (capitanEncontrado) {
             setCapitanNombre(capitanEncontrado.nombre);
             setCapitanId(capitanEncontrado.id);
+
+            // BÚSQUEDA GLOBAL: Si viene un ID, lo buscamos en el Capitán, y si no, en el Admin
+            if (participanteId) {
+              const capitanParts = data.participantesPorCapitan?.[capitanEncontrado.id] || [];
+              let p = capitanParts.find((part: any) => part.id === participanteId);
+              
+              if (!p) {
+                const adminParts = data.participantesPorAdmin?.[adminId] || [];
+                p = adminParts.find((part: any) => part.id === participanteId);
+              }
+
+              if (p && p.nombre) {
+                setNombre(p.nombre);
+                setIsPreFilled(true);
+              } else {
+                setError("El enlace único es inválido o el participante ya no existe.");
+              }
+            }
+
           } else {
             setError("Enlace de capitán inválido o eliminado.");
           }
@@ -107,7 +125,7 @@ const CapitanInviteScreen = () => {
       } catch (err) { console.error(err); }
     };
     fetchEventoInfo();
-  }, [eventoId, adminId, capitanLink]);
+  }, [eventoId, adminId, capitanLink, participanteId]);
 
   if (!eventoId || !adminId || !capitanLink) {
     return (
@@ -130,7 +148,6 @@ const CapitanInviteScreen = () => {
     const m = parseInt(mesNacimiento, 10);
     const d = parseInt(diaNacimiento, 10);
 
-    // Validación de mayoría de edad (18 años cumplidos)
     const fechaNac = new Date(a, m - 1, d);
     const hoy = new Date();
     let edad = hoy.getFullYear() - fechaNac.getFullYear();
@@ -159,31 +176,71 @@ const CapitanInviteScreen = () => {
       }
 
       const eventoData = docSnap.data() as EventoDB;
-      const participantesDelTarget: ParticipanteEnDB[] = eventoData.participantesPorCapitan?.[capitanId] || [];
+      const capitanParts: ParticipanteEnDB[] = eventoData.participantesPorCapitan?.[capitanId] || [];
+      const adminParts: ParticipanteEnDB[] = eventoData.participantesPorAdmin?.[adminId] || [];
 
-      const nombreBuscado = nombre.trim().toLowerCase();
-      const participanteExistente = participantesDelTarget.find(
-        (p) => p.nombre?.trim().toLowerCase() === nombreBuscado
-      );
+      let participanteExistente;
+      let vieneDeAdmin = false;
+      let wasInCapitanParts = false;
+
+      // LÓGICA DE VINCULACIÓN AL EQUIPO
+      if (participanteId && isPreFilled) {
+        participanteExistente = capitanParts.find(p => p.id === participanteId);
+        if (participanteExistente) {
+          wasInCapitanParts = true;
+        } else {
+          participanteExistente = adminParts.find(p => p.id === participanteId);
+          vieneDeAdmin = !!participanteExistente;
+        }
+
+        if (!participanteExistente) {
+          setError("Participante no encontrado en la base de datos.");
+          setLoading(false);
+          return;
+        }
+      } else {
+        const nombreBuscado = nombre.trim().toLowerCase();
+        participanteExistente = capitanParts.find(p => p.nombre?.trim().toLowerCase() === nombreBuscado);
+        if (participanteExistente) {
+          wasInCapitanParts = true;
+        } else {
+          participanteExistente = adminParts.find(p => p.nombre?.trim().toLowerCase() === nombreBuscado);
+          vieneDeAdmin = !!participanteExistente;
+        }
+      }
 
       let miId = '';
+      const updates: Record<string, any> = {};
 
       if (participanteExistente) {
+        miId = participanteExistente.id;
+
         if (participanteExistente.fechaNacimiento) {
           if (participanteExistente.fechaNacimiento !== fechaFinal) {
             setError("La fecha de nacimiento no coincide.");
             setLoading(false);
             return;
           }
-          miId = participanteExistente.id;
+          // Si nació en Admin pero NO está en este Capitán, lo vinculamos a su equipo
+          if (vieneDeAdmin && !wasInCapitanParts) {
+            updates[`participantesPorCapitan.${capitanId}`] = [...capitanParts, participanteExistente];
+          }
         } else {
-          miId = participanteExistente.id;
-          const actualizados = participantesDelTarget.map((p) => 
-            p.id === miId ? { ...p, fechaNacimiento: fechaFinal } : p
-          );
-          await updateDoc(docRef, { [`participantesPorCapitan.${capitanId}`]: actualizados });
+          // Si no tenía fecha, se la guardamos
+          const updatedParticipant = { ...participanteExistente, fechaNacimiento: fechaFinal };
+
+          if (wasInCapitanParts) {
+            updates[`participantesPorCapitan.${capitanId}`] = capitanParts.map(p => p.id === miId ? updatedParticipant : p);
+            if (adminParts.some(p => p.id === miId)) {
+              updates[`participantesPorAdmin.${adminId}`] = adminParts.map(p => p.id === miId ? updatedParticipant : p);
+            }
+          } else if (vieneDeAdmin) {
+            updates[`participantesPorAdmin.${adminId}`] = adminParts.map(p => p.id === miId ? updatedParticipant : p);
+            updates[`participantesPorCapitan.${capitanId}`] = [...capitanParts, updatedParticipant];
+          }
         }
       } else {
+        // Crear nuevo participante si no existía en ningún lado
         miId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         const nuevoParticipante: ParticipanteEnDB = {
           id: miId,
@@ -200,13 +257,17 @@ const CapitanInviteScreen = () => {
           return;
         }
 
-        const actualizados = [...participantesDelTarget, validation.data];
-        await updateDoc(docRef, { [`participantesPorCapitan.${capitanId}`]: actualizados });
+        updates[`participantesPorCapitan.${capitanId}`] = [...capitanParts, validation.data];
       }
 
+      // Guardar cualquier actualización necesaria en Firebase
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(docRef, updates);
+      }
+
+      // Confinar al participante a la vista de este capitán
       localStorage.setItem('user_role', 'participante');
       localStorage.setItem('current_admin_id', adminId);
-      
       localStorage.setItem('view_capitan_id', capitanId);
       localStorage.setItem('saved_capitan_link', capitanLink);
       
@@ -254,16 +315,34 @@ const CapitanInviteScreen = () => {
                 <div>
                   <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Nombre y Apellido</label>
                   <div className="relative mt-1">
-                    <input type="text" placeholder="Ej. Rut Hernández" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm font-bold rounded-xl p-3 sm:p-3.5 pl-10 sm:pl-11 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm" required />
-                    <User size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Ej. Rut Hernández" 
+                      value={nombre} 
+                      onChange={(e) => setNombre(e.target.value)} 
+                      readOnly={isPreFilled}
+                      className={`w-full text-sm font-bold rounded-xl p-3 sm:p-3.5 pl-10 sm:pl-11 transition shadow-sm border ${
+                        isPreFilled 
+                          ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed focus:outline-none' 
+                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white'
+                      }`} 
+                      required 
+                    />
+                    {isPreFilled ? (
+                      <Lock size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-amber-500" />
+                    ) : (
+                      <User size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-slate-400" />
+                    )}
                   </div>
+                  {isPreFilled && (
+                    <p className="text-[9px] font-bold text-amber-600 mt-1 ml-1 uppercase">✓ Identidad Verificada</p>
+                  )}
                 </div>
                 
                 <div>
                   <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Fecha de Nacimiento</label>
                   <div className="flex gap-2 mt-1">
                     
-                    {/* 1. SELECCIÓN DE AÑO */}
                     <div className="w-1/3">
                       <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Año</span>
                       <select 
@@ -279,7 +358,6 @@ const CapitanInviteScreen = () => {
                       </select>
                     </div>
 
-                    {/* 2. SELECCIÓN DE MES */}
                     <div className="w-1/3">
                       <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Mes</span>
                       <select 
@@ -295,7 +373,6 @@ const CapitanInviteScreen = () => {
                       </select>
                     </div>
 
-                    {/* 3. SELECCIÓN DE DÍA */}
                     <div className="w-1/3">
                       <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Día</span>
                       <select 
