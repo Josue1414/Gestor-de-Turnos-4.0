@@ -35,15 +35,13 @@ const MESES = [
 ];
 
 const InviteScreen = () => {
-  // AHORA RECIBIMOS EL participanteId (OPCIONAL) DESDE LA URL
   const { eventoId, adminId, participanteId } = useParams<{ eventoId: string; adminId: string; participanteId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   
   const [nombre, setNombre] = useState('');
-  const [isPreFilled, setIsPreFilled] = useState(false); // Para bloquear el nombre si viene por link único
+  const [isPreFilled, setIsPreFilled] = useState(false); 
   
-  // Estados para fecha de nacimiento
   const [anioNacimiento, setAnioNacimiento] = useState('');
   const [mesNacimiento, setMesNacimiento] = useState('');
   const [diaNacimiento, setDiaNacimiento] = useState('');
@@ -90,7 +88,6 @@ const InviteScreen = () => {
           const data = docSnap.data() as EventoDB;
           setEventoNombre(data.nombre || 'Evento');
 
-          // SI VIENE participanteId POR URL, LO BUSCAMOS EN LA LISTA DEL ADMIN
           if (participanteId) {
             const participantesDelTarget = data.participantesPorAdmin?.[adminId] || [];
             const p = participantesDelTarget.find((part: any) => part.id === participanteId);
@@ -125,7 +122,6 @@ const InviteScreen = () => {
     setLoading(true);
     setError('');
 
-    // Validación de edad
     const a = parseInt(anioNacimiento, 10);
     const m = parseInt(mesNacimiento, 10);
     const d = parseInt(diaNacimiento, 10);
@@ -162,7 +158,6 @@ const InviteScreen = () => {
 
       let participanteExistente;
 
-      // SI VIENE POR LINK ÚNICO, BUSCAMOS POR ID EXACTO
       if (participanteId && isPreFilled) {
         participanteExistente = participantesDelTarget.find(p => p.id === participanteId);
         if (!participanteExistente) {
@@ -350,6 +345,21 @@ const InviteScreen = () => {
               {loading ? 'Conectando...' : 'Entrar a la Tabla'}
             </button>
           </form>
+
+          <div className="mt-5 text-center">
+            <button 
+              type="button"
+              onClick={() => {
+                // AQUÍ ESTÁ EL CAMBIO: Guardamos la ruta antes de salir
+                sessionStorage.setItem('return_to_invite', location.pathname);
+                localStorage.removeItem('last_invite_url');
+                navigate('/', { replace: true });
+              }} 
+              className="text-[10px] font-bold text-slate-400 hover:text-blue-500 transition-colors uppercase tracking-wider"
+            >
+              ¿Acceso Administrativo?
+            </button>
+          </div>
           
         </div>
       </div>

@@ -1,3 +1,4 @@
+// src/views/Login/LoginScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Key, User, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -34,22 +35,23 @@ const LoginScreen = () => {
   const [mostrarPassword, setMostrarPassword] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
 
+  // LEEMOS SI EXISTE UNA RUTA DE INVITACIÓN A LA CUAL REGRESAR
+  const returnToInviteUrl = sessionStorage.getItem('return_to_invite');
+
   const SUPERADMIN_USER = import.meta.env.VITE_SUPERADMIN_USER;
   const SUPERADMIN_PASSWORD = import.meta.env.VITE_SUPERADMIN_PASSWORD;
 
-  // 1. LÓGICA DE RECUPERACIÓN AUTOMÁTICA PWA (Celulares)
   useEffect(() => {
     const role = localStorage.getItem('user_role');
     const eventoId = localStorage.getItem('current_evento_id');
     const pUrl = localStorage.getItem('saved_participant_url');
-    const lastInviteUrl = localStorage.getItem('last_invite_url'); // <-- Añadido
+    const lastInviteUrl = localStorage.getItem('last_invite_url');
 
     if (role === 'superadmin') navigate('/super-admin', { replace: true });
     else if (role === 'supervisor' && eventoId) navigate(`/supervisor/${eventoId}`, { replace: true });
     else if (role === 'admin' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
     else if (role === 'capitan' && eventoId) navigate(`/admin/${eventoId}`, { replace: true });
     else if (role === 'participante' && pUrl) navigate(pUrl, { replace: true });
-    // Si no tiene rol activo, pero tiene una invitación guardada, lo rebotamos allí
     else if (!role && lastInviteUrl) navigate(lastInviteUrl, { replace: true });
   }, [navigate]);
 
@@ -62,7 +64,7 @@ const LoginScreen = () => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('current_admin_id');
     localStorage.removeItem('current_capitan_id'); 
-    localStorage.removeItem('current_evento_id'); // Limpiamos el evento
+    localStorage.removeItem('current_evento_id'); 
     sessionStorage.removeItem('visor_externo_tipo');
 
     if (!cod || !pass) {
@@ -71,6 +73,7 @@ const LoginScreen = () => {
     }
 
     if (cod === SUPERADMIN_USER && pass === SUPERADMIN_PASSWORD) {
+      sessionStorage.removeItem('return_to_invite'); // Limpiamos al entrar
       localStorage.setItem('user_role', 'superadmin');
       navigate('/super-admin');
       return;
@@ -121,15 +124,18 @@ const LoginScreen = () => {
       });
 
       if (supervisorFound) {
+        sessionStorage.removeItem('return_to_invite'); // Limpiamos al entrar
         localStorage.setItem('user_role', 'supervisor');
         localStorage.setItem('current_evento_id', eventoIdFound);
         navigate(`/supervisor/${eventoIdFound}`);
       } else if (adminFound) {
+        sessionStorage.removeItem('return_to_invite'); // Limpiamos al entrar
         localStorage.setItem('user_role', 'admin');
         localStorage.setItem('current_admin_id', adminIdFound);
         localStorage.setItem('current_evento_id', eventoIdFound);
         navigate(`/admin/${eventoIdFound}`); 
       } else if (capitanFound) {
+        sessionStorage.removeItem('return_to_invite'); // Limpiamos al entrar
         localStorage.setItem('user_role', 'capitan');
         localStorage.setItem('current_admin_id', adminIdFound); 
         localStorage.setItem('current_capitan_id', capitanIdFound); 
@@ -200,6 +206,23 @@ const LoginScreen = () => {
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Entrar al Sistema <ArrowRight size={18} /></>}
             </button>
           </form>
+
+          {/* NUEVO BOTÓN DE REGRESO */}
+          {returnToInviteUrl && (
+            <div className="mt-6 text-center border-t border-slate-100 pt-4">
+              <button 
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem('return_to_invite');
+                  navigate(returnToInviteUrl, { replace: true });
+                }}
+                className="text-xs font-bold text-slate-400 hover:text-blue-600 transition flex items-center justify-center gap-1.5 w-full uppercase tracking-wider"
+              >
+                ← Regresar a la invitación
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

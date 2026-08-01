@@ -16,7 +16,7 @@ interface ParticipanteEnDB {
 
 interface EventoDB {
   participantesPorCapitan?: Record<string, ParticipanteEnDB[]>;
-  participantesPorAdmin?: Record<string, ParticipanteEnDB[]>; // Agregado para búsqueda global
+  participantesPorAdmin?: Record<string, ParticipanteEnDB[]>; 
   capitanesPorAdmin?: Record<string, any[]>;
   nombre?: string;
 }
@@ -100,7 +100,6 @@ const CapitanInviteScreen = () => {
             setCapitanNombre(capitanEncontrado.nombre);
             setCapitanId(capitanEncontrado.id);
 
-            // BÚSQUEDA GLOBAL: Si viene un ID, lo buscamos en el Capitán, y si no, en el Admin
             if (participanteId) {
               const capitanParts = data.participantesPorCapitan?.[capitanEncontrado.id] || [];
               let p = capitanParts.find((part: any) => part.id === participanteId);
@@ -183,7 +182,6 @@ const CapitanInviteScreen = () => {
       let vieneDeAdmin = false;
       let wasInCapitanParts = false;
 
-      // LÓGICA DE VINCULACIÓN AL EQUIPO
       if (participanteId && isPreFilled) {
         participanteExistente = capitanParts.find(p => p.id === participanteId);
         if (participanteExistente) {
@@ -221,12 +219,10 @@ const CapitanInviteScreen = () => {
             setLoading(false);
             return;
           }
-          // Si nació en Admin pero NO está en este Capitán, lo vinculamos a su equipo
           if (vieneDeAdmin && !wasInCapitanParts) {
             updates[`participantesPorCapitan.${capitanId}`] = [...capitanParts, participanteExistente];
           }
         } else {
-          // Si no tenía fecha, se la guardamos
           const updatedParticipant = { ...participanteExistente, fechaNacimiento: fechaFinal };
 
           if (wasInCapitanParts) {
@@ -240,7 +236,6 @@ const CapitanInviteScreen = () => {
           }
         }
       } else {
-        // Crear nuevo participante si no existía en ningún lado
         miId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         const nuevoParticipante: ParticipanteEnDB = {
           id: miId,
@@ -260,12 +255,10 @@ const CapitanInviteScreen = () => {
         updates[`participantesPorCapitan.${capitanId}`] = [...capitanParts, validation.data];
       }
 
-      // Guardar cualquier actualización necesaria en Firebase
       if (Object.keys(updates).length > 0) {
         await updateDoc(docRef, updates);
       }
 
-      // Confinar al participante a la vista de este capitán
       localStorage.setItem('user_role', 'participante');
       localStorage.setItem('current_admin_id', adminId);
       localStorage.setItem('view_capitan_id', capitanId);
@@ -310,92 +303,109 @@ const CapitanInviteScreen = () => {
           )}
 
           {capitanId ? (
-            <form onSubmit={handleEntrar}>
-              <div className="text-left space-y-4 mb-6 sm:mb-8">
-                <div>
-                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Nombre y Apellido</label>
-                  <div className="relative mt-1">
-                    <input 
-                      type="text" 
-                      placeholder="Ej. Rut Hernández" 
-                      value={nombre} 
-                      onChange={(e) => setNombre(e.target.value)} 
-                      readOnly={isPreFilled}
-                      className={`w-full text-sm font-bold rounded-xl p-3 sm:p-3.5 pl-10 sm:pl-11 transition shadow-sm border ${
-                        isPreFilled 
-                          ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed focus:outline-none' 
-                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white'
-                      }`} 
-                      required 
-                    />
-                    {isPreFilled ? (
-                      <Lock size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-amber-500" />
-                    ) : (
-                      <User size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-slate-400" />
+            <>
+              <form onSubmit={handleEntrar}>
+                <div className="text-left space-y-4 mb-6 sm:mb-8">
+                  <div>
+                    <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Nombre y Apellido</label>
+                    <div className="relative mt-1">
+                      <input 
+                        type="text" 
+                        placeholder="Ej. Rut Hernández" 
+                        value={nombre} 
+                        onChange={(e) => setNombre(e.target.value)} 
+                        readOnly={isPreFilled}
+                        className={`w-full text-sm font-bold rounded-xl p-3 sm:p-3.5 pl-10 sm:pl-11 transition shadow-sm border ${
+                          isPreFilled 
+                            ? 'bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed focus:outline-none' 
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white'
+                        }`} 
+                        required 
+                      />
+                      {isPreFilled ? (
+                        <Lock size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-amber-500" />
+                      ) : (
+                        <User size={16} className="absolute left-3.5 sm:left-4 top-[12px] sm:top-[14px] text-slate-400" />
+                      )}
+                    </div>
+                    {isPreFilled && (
+                      <p className="text-[9px] font-bold text-amber-600 mt-1 ml-1 uppercase">✓ Identidad Verificada</p>
                     )}
                   </div>
-                  {isPreFilled && (
-                    <p className="text-[9px] font-bold text-amber-600 mt-1 ml-1 uppercase">✓ Identidad Verificada</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Fecha de Nacimiento</label>
-                  <div className="flex gap-2 mt-1">
-                    
-                    <div className="w-1/3">
-                      <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Año</span>
-                      <select 
-                        value={anioNacimiento} 
-                        onChange={(e) => setAnioNacimiento(e.target.value)} 
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
-                        required
-                      >
-                        <option value="">Año</option>
-                        {listaAnios.map(a => (
-                          <option key={a} value={a}>{a}</option>
-                        ))}
-                      </select>
-                    </div>
+                  
+                  <div>
+                    <label className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wide ml-1">Fecha de Nacimiento</label>
+                    <div className="flex gap-2 mt-1">
+                      
+                      <div className="w-1/3">
+                        <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Año</span>
+                        <select 
+                          value={anioNacimiento} 
+                          onChange={(e) => setAnioNacimiento(e.target.value)} 
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
+                          required
+                        >
+                          <option value="">Año</option>
+                          {listaAnios.map(a => (
+                            <option key={a} value={a}>{a}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                    <div className="w-1/3">
-                      <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Mes</span>
-                      <select 
-                        value={mesNacimiento} 
-                        onChange={(e) => setMesNacimiento(e.target.value)} 
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
-                        required
-                      >
-                        <option value="">Mes</option>
-                        {MESES.map(m => (
-                          <option key={m.valor} value={m.valor}>{m.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="w-1/3">
+                        <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Mes</span>
+                        <select 
+                          value={mesNacimiento} 
+                          onChange={(e) => setMesNacimiento(e.target.value)} 
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
+                          required
+                        >
+                          <option value="">Mes</option>
+                          {MESES.map(m => (
+                            <option key={m.valor} value={m.valor}>{m.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                    <div className="w-1/3">
-                      <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Día</span>
-                      <select 
-                        value={diaNacimiento} 
-                        onChange={(e) => setDiaNacimiento(e.target.value)} 
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
-                        required
-                      >
-                        <option value="">Día</option>
-                        {listaDias.map(d => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="w-1/3">
+                        <span className="text-[9px] font-bold text-slate-400 block text-center mb-1 uppercase">Día</span>
+                        <select 
+                          value={diaNacimiento} 
+                          onChange={(e) => setDiaNacimiento(e.target.value)} 
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-center text-xs font-bold rounded-xl p-3 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm cursor-pointer"
+                          required
+                        >
+                          <option value="">Día</option>
+                          {listaDias.map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
 
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <button type="submit" disabled={loading || !nombre.trim() || !diaNacimiento || !mesNacimiento || !anioNacimiento} className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black text-sm p-3.5 sm:p-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-wide disabled:shadow-none">
-                {loading ? 'Conectando...' : 'Entrar al Equipo'}
-              </button>
-            </form>
+                <button type="submit" disabled={loading || !nombre.trim() || !diaNacimiento || !mesNacimiento || !anioNacimiento} className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 disabled:text-slate-500 text-white font-black text-sm p-3.5 sm:p-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2 uppercase tracking-wide disabled:shadow-none">
+                  {loading ? 'Conectando...' : 'Entrar al Equipo'}
+                </button>
+              </form>
+
+              <div className="mt-5 text-center">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    // AQUÍ ESTÁ EL CAMBIO: Guardamos la ruta antes de salir
+                    sessionStorage.setItem('return_to_invite', location.pathname);
+                    localStorage.removeItem('last_invite_url');
+                    navigate('/', { replace: true });
+                  }} 
+                  className="text-[10px] font-bold text-slate-400 hover:text-amber-500 transition-colors uppercase tracking-wider"
+                >
+                  ¿Acceso Administrativo?
+                </button>
+              </div>
+            </>
           ) : (
             <p className="text-center text-slate-500 font-bold">Verificando enlace...</p>
           )}
