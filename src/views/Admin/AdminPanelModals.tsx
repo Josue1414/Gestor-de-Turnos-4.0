@@ -14,7 +14,7 @@ import ModalAsignarCapitan from '../../components/ModalAsignarCapitan';
 
 const AdminPanelModals = (props: any) => {
   const {
-    modalAsignacion, cerrarModalAsignacion, participantesEnriquecidos, localBusyUserIds, asignarUsuarioExistente, crearYAsignarUsuario,
+    modalAsignacion, cerrarModalAsignacion, participantesEnriquecidos, participantesParaAsignacion, localBusyUserIds, asignarUsuarioExistente, crearYAsignarUsuario,
     showDirectorio, setShowDirectorio, handleAbrirPerfilParticipante, setDeletePartModal, eventoId, turnosLibresCount, turnosOcupadosCount,
     editModal, setEditModal, handleSaveEdit,
     showSpecialModal, setShowSpecialModal, handleCrearCajaEspecial,
@@ -25,13 +25,22 @@ const AdminPanelModals = (props: any) => {
     createShiftModal, setCreateShiftModal, handleValidarCrearHorario,
     clashModal, setClashModal,
     showCroquis, setShowCroquis, croquisData,
-    showCapitanModal, setShowCapitanModal, cajasDisponibles, diasDisponibles, handleCrearCapitan, // <-- Incluimos diasDisponibles
+    showCapitanModal, setShowCapitanModal, cajasDisponibles, diasDisponibles, handleCrearCapitan, 
     customInviteLink,
   } = props;
 
   return (
     <>
-      <AssignUserModal isOpen={modalAsignacion.isOpen} onClose={cerrarModalAsignacion} horario={modalAsignacion.horario} cajaNombre={modalAsignacion.cajaNombre} participantes={participantesEnriquecidos} busyUserIds={localBusyUserIds} onAssign={asignarUsuarioExistente} onCreateAndAssign={crearYAsignarUsuario} />
+      <AssignUserModal 
+        isOpen={modalAsignacion.isOpen} 
+        onClose={cerrarModalAsignacion} 
+        horario={modalAsignacion.horario} 
+        cajaNombre={modalAsignacion.cajaNombre} 
+        participantes={participantesParaAsignacion || participantesEnriquecidos} 
+        busyUserIds={localBusyUserIds} 
+        onAssign={asignarUsuarioExistente} 
+        onCreateAndAssign={crearYAsignarUsuario} 
+      />
       
       <ParticipantDrawer customInviteLink={customInviteLink} isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesEnriquecidos} currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'} onEditParticipante={handleAbrirPerfilParticipante} onDeleteParticipante={(id, nombre) => setDeletePartModal({ isOpen: true, id, nombre })} eventoId={eventoId} adminId={localStorage.getItem('current_admin_id') || 'demo'} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount} />
       

@@ -237,7 +237,31 @@ const AdminPanel = () => {
   
   const turnosLibresCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => !t.participanteId).length, 0) : 0;
   const turnosOcupadosCount = diaActualFiltrado ? diaActualFiltrado.cajas.reduce((acc, caja) => acc + caja.turnos.filter((t) => Boolean(t.participanteId)).length, 0) : 0;
+  
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
+
+  // NUEVO: FILTRO INTELIGENTE PARA LA LISTA DE ASIGNACIÓN
+  const participantesParaAsignacion = useMemo(() => {
+    if (!modalAsignacion.isOpen || !modalAsignacion.cajaId) return participantesEnriquecidos;
+    
+    // Buscamos si la caja a la que se le dio clic pertenece a un capitán
+    const capitanDeCaja = capitanes?.find((cap: any) => 
+      (cap.cajasAsignadas || []).includes(modalAsignacion.cajaId) && 
+      (cap.diasAsignados || []).includes(diaActualFiltrado?.id)
+    );
+
+    return participantesEnriquecidos.filter((p: any) => {
+      const isCreadoPorAdmin = !p.creador || p.creador === 'Admin';
+      
+      if (capitanDeCaja) {
+        // Caja de Capitán: permite creados por el Admin y por ESTE mismo Capitán
+        return isCreadoPorAdmin || p.creador === capitanDeCaja.nombre;
+      } else {
+        // Caja General: SOLO permite creados por el Admin
+        return isCreadoPorAdmin;
+      }
+    });
+  }, [participantesEnriquecidos, modalAsignacion, capitanes, diaActualFiltrado]);
   
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
     const validacion = validarNuevoHorario(inicio, fin, diaActual, horarioEditando || undefined);
@@ -274,13 +298,11 @@ const AdminPanel = () => {
 
       // 2. Limpiar al participante de la lista de Capitanes
       if (isCapitan && capitanIdL) {
-        // Si el que borra es un Capitán
         const capParts: Participante[] = data.participantesPorCapitan?.[capitanIdL] || [];
         if (capParts.some(p => p.id === targetId)) {
           updatePayload[`participantesPorCapitan.${capitanIdL}`] = capParts.filter(p => p.id !== targetId);
         }
       } else {
-        // Si el que borra es el Admin, buscamos si el usuario pertenece a algún Capitán para eliminarlo
         const misCapitanes = data.capitanesPorAdmin?.[adminIdL] || [];
         misCapitanes.forEach((cap: any) => {
           const capParts = data.participantesPorCapitan?.[cap.id] || [];
@@ -304,7 +326,6 @@ const AdminPanel = () => {
       }));
       updatePayload[`diasPorAdmin.${adminIdL}`] = diasLimpios;
 
-      // 4. Enviamos todas las actualizaciones al mismo tiempo a la base de datos
       await updateDoc(docRef, updatePayload);
     } catch (error) { 
       console.error("Error al eliminar al participante:", error); 
@@ -608,7 +629,9 @@ const AdminPanel = () => {
       </div>
 
       <AdminPanelModals 
-        modalAsignacion={modalAsignacion} cerrarModalAsignacion={cerrarModalAsignacion} participantesEnriquecidos={participantesEnriquecidos} localBusyUserIds={localBusyUserIds} asignarUsuarioExistente={asignarUsuarioExistente} crearYAsignarUsuario={crearYAsignarUsuario}
+        modalAsignacion={modalAsignacion} cerrarModalAsignacion={cerrarModalAsignacion} participantesEnriquecidos={participantesEnriquecidos}
+        participantesParaAsignacion={participantesParaAsignacion} 
+        localBusyUserIds={localBusyUserIds} asignarUsuarioExistente={asignarUsuarioExistente} crearYAsignarUsuario={crearYAsignarUsuario}
         showDirectorio={showDirectorio} setShowDirectorio={setShowDirectorio} handleAbrirPerfilParticipante={handleAbrirPerfilParticipante} setDeletePartModal={setDeletePartModal} eventoId={eventoId} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount}
         editModal={editModal} setEditModal={setEditModal} handleSaveEdit={handleSaveEdit}
         showSpecialModal={showSpecialModal} setShowSpecialModal={setShowSpecialModal} handleCrearCajaEspecial={handleCrearCajaEspecial}
