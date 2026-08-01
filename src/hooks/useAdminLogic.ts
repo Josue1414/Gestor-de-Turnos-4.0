@@ -1,7 +1,7 @@
 // src/hooks/useAdminLogic.ts
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
 import type { DiaEvento, Participante } from '../types';
 import { DiaEventoSchema, ParticipanteSchema } from '../utils/schemas';
 import { rangesOverlap } from '../utils/validations';
@@ -245,14 +245,6 @@ export const useAdminLogic = (eventoId: string) => {
     await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
   };
 
-  const syncParticipantes = async (nuevosParticipantes: Participante[]) => {
-    if (isCapitan) {
-      await updateDoc(doc(db, 'eventos', eventoId), { [`participantesPorCapitan.${capitanIdL}`]: nuevosParticipantes });
-    } else {
-      await updateDoc(doc(db, 'eventos', eventoId), { [`participantesPorAdmin.${adminIdL}`]: nuevosParticipantes });
-    }
-  };
-
   const diaActual = dias[diaActivo];
 
   const getParticipante = (id: string | null) => participantes.find(p => p.id === id);
@@ -333,7 +325,6 @@ export const useAdminLogic = (eventoId: string) => {
         ...d, cajas: d.cajas.map(c => {
           if (isCajaEspecial(c)) return c;
           
-          // SOLUCIÓN AL FANTASMA: Revisamos si el horario editado realmente existe en esta caja.
           const existeViejo = c.turnos.some((t: any) => t.horario === horarioEditando);
           
           const turnosActualizados = (horarioEditando && existeViejo)
@@ -346,7 +337,7 @@ export const useAdminLogic = (eventoId: string) => {
     });
 
     syncEvent(nuevosDias);
-    setHorarioEditando(null); // Aseguramos que se limpie el estado
+    setHorarioEditando(null);
     setCreateShiftModal({ ...createShiftModal, isOpen: false });
     setClashModal({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
     return true;
@@ -388,10 +379,35 @@ export const useAdminLogic = (eventoId: string) => {
     cerrarModalAsignacion();
   };
 
-  const crearYAsignarUsuario = (nombre: string) => {
+  const crearYAsignarUsuario = async (nombre: string) => {
     const nuevoId = `part_${Date.now()}`;
-    syncParticipantes([...participantes, { id: nuevoId, nombre, estado: 'Libre', linkUnico: `inv-${nuevoId}` }]);
-    asignarUsuarioExistente(nuevoId);
+    const nuevoParticipante = { id: nuevoId, nombre, estado: 'Libre', linkUnico: `inv-${nuevoId}` };
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        if (isCapitan) {
+          const currentParts = data.participantesPorCapitan?.[capitanIdL] || [];
+          await updateDoc(docRef, { 
+            [`participantesPorCapitan.${capitanIdL}`]: [...currentParts, nuevoParticipante] 
+          });
+        } else {
+          const currentParts = data.participantesPorAdmin?.[adminIdL] || [];
+          await updateDoc(docRef, { 
+            [`participantesPorAdmin.${adminIdL}`]: [...currentParts, nuevoParticipante] 
+          });
+        }
+      }
+      
+      asignarUsuarioExistente(nuevoId);
+    } catch (error) {
+      console.error("Error al crear y aislar al participante:", error);
+      showToast('Error al crear el usuario', 'error');
+    }
   };
 
   const quitarParticipante = (cajaId: string, turnoId: string) => {

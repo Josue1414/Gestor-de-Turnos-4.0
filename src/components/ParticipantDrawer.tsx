@@ -1,6 +1,6 @@
 // src/components/ParticipantDrawer.tsx
 import React, { useState } from 'react';
-import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown, Link2 } from 'lucide-react';
+import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
 import type { Participante } from '../types';
 import { useToast } from './ToastProvider';
 
@@ -44,6 +44,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
       return a.nombre.localeCompare(b.nombre);
     });
 
+  // Permisos generales para acciones como copiar enlace de invitación
   const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin' || currentUserRole === 'Capitan';
 
   const copiarSeguro = (texto: string) => {
@@ -87,20 +88,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
     showToast(mensajeToast, 'success');
   };
 
-  // NUEVO: Función para copiar el link único de un participante específico
-  const handleCopyUniqueLink = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const baseGeneral = `${window.location.origin}/invite/${eventoId}/${adminId}/${participante.id}`;
-    const baseEquipo = `${window.location.origin}/invite-team/${eventoId}/${adminId}/${customInviteLink}/${participante.id}`;
-    
-    // Si somos Capitán usamos el baseEquipo, si somos Admin usamos baseGeneral
-    const url = customInviteLink ? baseEquipo : baseGeneral;
-    const mensaje = `¡Hola ${participante.nombre}! 👋\n\nAquí tienes tu link de acceso directo y único para elegir tus turnos:\n${url}\n\nPor favor, no compartas este link con nadie más.`;
-    
-    copiarSeguro(mensaje);
-    showToast('¡Link único copiado al portapapeles!', 'success');
-  };
-
   const toggleTurnos = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedId(expandedId === id ? null : id);
@@ -135,7 +122,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
           {canEdit && (
             <div className="flex flex-col gap-2 mt-2">
               <button onClick={handleCopyInviteLink} className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
-                <UserPlus size={16} /> Copiar Link Público de Invitación
+                <UserPlus size={16} /> Copiar Link de Invitación
               </button>
             </div>
           )}
@@ -147,6 +134,11 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
               const esMiUsuario = p.id === currentUserId;
               const tieneTelefono = Boolean(p.telefono && p.telefono.trim().length > 7);
               const isExpanded = expandedId === p.id;
+
+              // Lógica estricta de permisos por usuario
+              const esAdminOSuper = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
+              const esCapitanYEsSuCreador = currentUserRole === 'Capitan' && p.creador !== 'Admin';
+              const tienePermisosCompletos = esAdminOSuper || esCapitanYEsSuCreador;
               
               return (
                 <div key={p.id} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${esMiUsuario ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'}`}>
@@ -159,19 +151,27 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         {esMiUsuario && <span className="text-xs text-blue-500 font-black shrink-0">(Tú)</span>}
                       </div>
 
+                      {/* --- LÓGICA CORREGIDA DE PASTILLAS --- */}
                       {currentUserRole !== 'Participante' && (
                         <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
-                          {p.creador === 'Admin' && (
-                            <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                              Creado por Admin
+                          {(!p.creador || p.creador === 'Admin') ? (
+                            <>
+                              {/* 1. Si es creado por el Administrador */}
+                              <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                                Creado por Admin
+                              </span>
+                              {currentUserRole === 'Administrador' && p.capitanesInvolucrados && p.capitanesInvolucrados.map((capNombre, idx) => (
+                                <span key={idx} className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                                  Capitán: {capNombre}
+                                </span>
+                              ))}
+                            </>
+                          ) : (
+                            /* 2. Si es creado por un Capitán (Ignora lo anterior y muestra solo esto) */
+                            <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                              Capitán: {p.creador}
                             </span>
                           )}
-
-                          {currentUserRole === 'Administrador' && p.capitanesInvolucrados && p.capitanesInvolucrados.map((capNombre, idx) => (
-                            <span key={idx} className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                              Capitán: {capNombre}
-                            </span>
-                          ))}
                         </div>
                       )}
                     </div>
@@ -182,25 +182,14 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                           <button 
                             onClick={(e) => handleWhatsApp(p, e)}
                             className={`p-1.5 rounded-lg transition-all flex items-center justify-center w-8 h-8 ${tieneTelefono ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`}
-                            title={tieneTelefono ? "Enviar link general por WhatsApp" : "No tiene teléfono registrado"}
+                            title={tieneTelefono ? "Enviar link por WhatsApp" : "No tiene teléfono registrado"}
                           >
                             <MessageCircle size={16} />
                           </button>
                         </>
                       )}
 
-                      {/* NUEVO BOTÓN: Copiar link único de este participante */}
-                      {canEdit && (
-                        <button 
-                          onClick={(e) => handleCopyUniqueLink(p, e)}
-                          className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition w-8 h-8 flex items-center justify-center"
-                          title="Copiar Link Único de este Participante"
-                        >
-                          <Link2 size={16} />
-                        </button>
-                      )}
-
-                      {(canEdit || esMiUsuario) && (
+                      {(tienePermisosCompletos || esMiUsuario) && (
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
@@ -214,7 +203,7 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         </button>
                       )}
 
-                      {canEdit && (
+                      {tienePermisosCompletos && (
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 

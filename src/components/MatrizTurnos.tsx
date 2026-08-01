@@ -233,7 +233,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         </div>
       ) : (
         <div className="text-center p-10 text-slate-400 font-bold border-2 border-dashed border-slate-200 rounded-3xl mt-4 bg-white">
-          Crea tu primera caja normal arriba.
+          Sin cajas asignadas.
         </div>
       )}
 

@@ -240,7 +240,6 @@ const AdminPanel = () => {
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
   
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
-    // AHORA PASAMOS EL HORARIO EDITANDO A LA FUNCIÓN DE VALIDACIÓN
     const validacion = validarNuevoHorario(inicio, fin, diaActual, horarioEditando || undefined);
     
     if (validacion.error) { alert(validacion.error); return; }
@@ -259,11 +258,39 @@ const AdminPanel = () => {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return;
+      
       const data = docSnap.data();
       const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
-      const participantesDelAdmin: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
-      const participantesFiltrados = participantesDelAdmin.filter((p) => p.id !== deletePartModal.id);
-      
+      const capitanIdL = localStorage.getItem('current_capitan_id');
+      const targetId = deletePartModal.id;
+
+      const updatePayload: Record<string, any> = {};
+
+      // 1. Limpiar al participante de la lista del Admin
+      const adminParts: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
+      if (adminParts.some(p => p.id === targetId)) {
+        updatePayload[`participantesPorAdmin.${adminIdL}`] = adminParts.filter((p) => p.id !== targetId);
+      }
+
+      // 2. Limpiar al participante de la lista de Capitanes
+      if (isCapitan && capitanIdL) {
+        // Si el que borra es un Capitán
+        const capParts: Participante[] = data.participantesPorCapitan?.[capitanIdL] || [];
+        if (capParts.some(p => p.id === targetId)) {
+          updatePayload[`participantesPorCapitan.${capitanIdL}`] = capParts.filter(p => p.id !== targetId);
+        }
+      } else {
+        // Si el que borra es el Admin, buscamos si el usuario pertenece a algún Capitán para eliminarlo
+        const misCapitanes = data.capitanesPorAdmin?.[adminIdL] || [];
+        misCapitanes.forEach((cap: any) => {
+          const capParts = data.participantesPorCapitan?.[cap.id] || [];
+          if (capParts.some((p: any) => p.id === targetId)) {
+            updatePayload[`participantesPorCapitan.${cap.id}`] = capParts.filter((p: any) => p.id !== targetId);
+          }
+        });
+      }
+
+      // 3. Liberar sus turnos en las cajas (Limpieza visual)
       const diasDelAdmin: DiaEvento[] = data.diasPorAdmin?.[adminIdL] || [];
       const diasLimpios = diasDelAdmin.map((dia) => ({
         ...dia, 
@@ -271,13 +298,17 @@ const AdminPanel = () => {
           ...caja, 
           turnos: caja.turnos.map((turno) => ({
             ...turno, 
-            participanteId: turno.participanteId === deletePartModal.id ? null : turno.participanteId
+            participanteId: turno.participanteId === targetId ? null : turno.participanteId
           }))
         }))
       }));
+      updatePayload[`diasPorAdmin.${adminIdL}`] = diasLimpios;
 
-      await updateDoc(docRef, { [`participantesPorAdmin.${adminIdL}`]: participantesFiltrados, [`diasPorAdmin.${adminIdL}`]: diasLimpios });
-    } catch (error) { console.error(error); }
+      // 4. Enviamos todas las actualizaciones al mismo tiempo a la base de datos
+      await updateDoc(docRef, updatePayload);
+    } catch (error) { 
+      console.error("Error al eliminar al participante:", error); 
+    }
   };
 
   const handleDeleteTurnoEspecial = async (cajaId: string, turnoId: string) => {
@@ -378,15 +409,6 @@ const AdminPanel = () => {
     return { id: usuarioActivo.id, name: a.name || usuarioActivo.name, role: usuarioActivo.role as any, phone: a.phone || '', countryCode: a.countryCode || '+52', supportArea: a.supportArea || '', notes: a.notes || '', organization: a.organization || '', organizationLabel: a.organizationLabel || 'Congregación', ubicaciones: [] };
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('user_role');
-    localStorage.removeItem('current_admin_id');
-    localStorage.removeItem('current_capitan_id');
-    localStorage.removeItem('simulando_capitan');
-    sessionStorage.removeItem('visor_externo_tipo');
-    navigate('/');
-  };
-
   const handleSimularCapitan = (capitanId: string) => {
     localStorage.setItem('user_role', 'capitan');
     localStorage.setItem('current_capitan_id', capitanId);
@@ -437,6 +459,15 @@ const AdminPanel = () => {
   const currentCapitan = isCapitan ? capitanes.find((c: any) => c.id === localStorage.getItem('current_capitan_id')) : null;
   const customInviteLink = currentCapitan ? currentCapitan.linkUnico : undefined;
 
+  const handleLogout = () => {
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('current_admin_id');
+    localStorage.removeItem('current_capitan_id');
+    localStorage.removeItem('simulando_capitan');
+    sessionStorage.removeItem('visor_externo_tipo');
+    navigate('/');
+  };
+
   if (loading || !currentAdminInfo) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -473,7 +504,6 @@ const AdminPanel = () => {
             onSave={isCapitan ? undefined : (handleSaveEventName as any)} 
             onShowCroquis={() => setShowCroquis(true)} 
             onBack={isExternalViewer || localStorage.getItem('simulando_capitan') === 'true' ? handleBack : undefined} 
-            onLogout={!isExternalViewer && localStorage.getItem('simulando_capitan') !== 'true' ? handleLogout : undefined} 
             onShowDirectorio={() => setShowDirectorio(true)} 
             participantesCount={participantesEnriquecidos.length} 
             onToggleActions={() => setShowActions(prev => !prev)} 
@@ -521,7 +551,6 @@ const AdminPanel = () => {
 
       <div className={`px-2 sm:px-6 pb-10 flex flex-col z-0 overflow-visible bg-transparent rounded-none sm:rounded-2xl border-none sm:border border-transparent mb-0 sm:mb-4 ${vistaTarjetas ? 'w-full' : 'min-w-max'}`}>
          
-         {/* BOTONES STICKY: Se quedan pegados al lado izquierdo al hacer scroll horizontal */}
          <div className="sticky left-2 sm:left-6 z-10 w-max mt-2 mb-4 flex justify-start">
             <div className="bg-slate-200/90 backdrop-blur-md p-1.5 rounded-xl flex items-center shadow-sm border border-slate-300/50">
               <button 
