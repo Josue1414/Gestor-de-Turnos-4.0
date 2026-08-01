@@ -7,7 +7,7 @@ import { DiaEventoSchema, ParticipanteSchema } from '../utils/schemas';
 import { rangesOverlap } from '../utils/validations';
 import { useToast } from '../components/ToastProvider';
 
-import { suscribirANotificaciones } from '../utils/pushNotifications';
+import { suscribirANotificaciones, verificarSuscripcion} from '../utils/pushNotifications';
 
 interface AdminDB {
   id: string;
@@ -499,6 +499,14 @@ export const useAdminLogic = (eventoId: string) => {
   };
 
   const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    const revisarEstadoPush = async () => {
+      const estaActivado = await verificarSuscripcion();
+      setPushEnabled(estaActivado);
+    };
+    revisarEstadoPush();
+  }, []);
 
 const handleTogglePush = async () => {
   try {

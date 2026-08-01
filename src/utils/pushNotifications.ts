@@ -54,3 +54,25 @@ export const enviarAlertaVercel = async (subscription: object, nombreParticipant
     console.error('Error enviando la alerta:', error);
   }
 };
+
+// Agrega esta función al final de tu archivo src/utils/pushNotifications.ts
+
+export const verificarSuscripcion = async (): Promise<boolean> => {
+  // Verificamos si el navegador soporta notificaciones
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return false;
+  }
+
+  try {
+    // Esperamos a que el Service Worker esté listo
+    const registration = await navigator.serviceWorker.ready;
+    // Preguntamos si ya existe una suscripción vigente
+    const subscription = await registration.pushManager.getSubscription();
+    
+    // Si subscription tiene datos, retorna true, de lo contrario false
+    return subscription !== null;
+  } catch (error) {
+    console.error('Error al verificar la suscripción push:', error);
+    return false;
+  }
+};

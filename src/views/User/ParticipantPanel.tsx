@@ -1,5 +1,6 @@
 // src/views/User/ParticipantPanel.tsx
-import { Calendar, Users, ShieldCheck, LogOut, Settings, LayoutList, LayoutGrid, Bell } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Users, ShieldCheck, Settings, LayoutList, LayoutGrid, Bell, Smartphone } from 'lucide-react';
 
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
 import VistaTarjetasCajas from '../../components/VistaTarjetasCajas';
@@ -7,6 +8,7 @@ import ModalInfoUsuario from '../../components/ModalInfoUsuario';
 import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
+import InstallGuideModal from '../../components/InstallGuideModal';
 
 import { useParticipantLogic } from './useParticipantLogic';
 
@@ -16,12 +18,41 @@ const ParticipantPanel = () => {
     diaActivo, setDiaActivo, vistaTarjetas, setVistaTarjetas,
     downloadModal, setDownloadModal, showDirectorio, setShowDirectorio,
     showCroquis, setShowCroquis, isUsuarioModalOpen, setIsUsuarioModalOpen,
-    showLogoutConfirm, setShowLogoutConfirm, miUsuario, participantesDirectorio,
+    miUsuario, participantesDirectorio,
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
-    handleAsignarme, handleQuitarme, handleLogout,
+    handleAsignarme, handleQuitarme,
     adminContacto, turnoAlertaInfo, handleSolicitarAsistencia
   } = useParticipantLogic();
+
+  // --- ESTADOS Y LÓGICA DE INSTALACIÓN PWA ---
+  const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (deferredPrompt as any).prompt();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { outcome } = await (deferredPrompt as any).userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      setShowInstallGuide(true);
+    }
+  };
+  // ------------------------------------------
 
   if (loading) {
     return (
@@ -55,19 +86,8 @@ const ParticipantPanel = () => {
         {/* --- ENCABEZADO PRINCIPAL REESTRUCTURADO --- */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-3xl shadow-sm border border-slate-200 w-full max-w-[1400px] mx-auto gap-4">
           
-          {/* SECCIÓN 1: Info del Usuario y Botón Salir */}
+          {/* SECCIÓN 1: Info del Usuario */}
           <div className="flex items-start gap-3 w-full sm:w-auto">
-            <button 
-              onClick={() => setShowLogoutConfirm(true)} 
-              className="bg-red-50 text-red-600 border border-red-100 hover:bg-red-200 p-2 sm:px-3 rounded-xl text-[11px] font-bold shadow-sm transition flex items-center justify-center shrink-0 mt-1 sm:mt-0"
-              title="Cerrar Sesión"
-            >
-              <LogOut size={18} className="w-5 h-5 sm:w-4 sm:h-4" /> 
-              <span className="hidden sm:inline ml-1.5">Salir</span>
-            </button>
-
-            <div className="h-8 w-px bg-slate-200 hidden sm:block self-center"></div>
-
             <div className="min-w-0 flex flex-col items-start gap-1">
               <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none truncate">
                 Hola, <span className="text-blue-600">{miUsuario.nombre}</span>
@@ -105,6 +125,16 @@ const ParticipantPanel = () => {
 
           {/* SECCIÓN 4: Botones de Acción (Abajo en móvil, Derecha en PC) */}
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
+            
+            {/* BOTÓN: INSTALAR APP */}
+            <button 
+              onClick={handleInstallClick} 
+              className="bg-slate-800 border border-slate-800 text-white p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm hover:bg-slate-700"
+              title="Instalar aplicación en tu dispositivo"
+            >
+              <Smartphone size={16} className="w-4 h-4" /> <span>Instalar App</span>
+            </button>
+
             <button onClick={() => setShowCroquis(true)} className="bg-slate-50 border border-slate-200 text-slate-700 p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm hover:bg-slate-100">
               📍 <span>Croquis</span>
             </button>
@@ -254,21 +284,11 @@ const ParticipantPanel = () => {
 
       <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisDataParaMostrar} onSaveCroquis={async () => Promise.resolve()}/>
 
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 shadow-inner border border-red-100">
-              <LogOut size={32} />
-            </div>
-            <h3 className="text-xl font-black text-slate-800 mb-2">¿Cerrar Sesión?</h3>
-            <p className="text-sm text-slate-500 mb-6 font-medium">Estás a punto de salir de tu cuenta. Tendrás que volver a ingresar con tu fecha de nacimiento.</p>
-            <div className="flex gap-3 w-full">
-              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition">Cancelar</button>
-              <button onClick={handleLogout} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black shadow-md hover:bg-red-600 transition">Sí, salir</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* RENDERIZAMOS EL MODAL DE INSTRUCCIONES DE INSTALACIÓN PWA */}
+      <InstallGuideModal 
+        isOpen={showInstallGuide} 
+        onClose={() => setShowInstallGuide(false)} 
+      />
       
     </div>
   );
