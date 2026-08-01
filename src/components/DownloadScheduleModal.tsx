@@ -134,9 +134,8 @@ const parseTimeUniversal = (timeStr: string) => {
     }
 };
 
-// Colores de diseño
-const COLOR_AM = '#3b82f6'; // Azul Claro
-const COLOR_PM = '#1e3a8a'; // Azul Oscuro
+const COLOR_AM = '#3b82f6'; 
+const COLOR_PM = '#1e3a8a'; 
 
 const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({ 
   isOpen, onClose, type, seccionName, dias, diaActivo, participantes, targetUserId 
@@ -146,7 +145,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
   const [success, setSuccess] = useState(false);
   const [customError, setCustomError] = useState<{title: string, message: string} | null>(null);
 
-  // Lógica de turnos personales
   const todosMisTurnos = useMemo(() => {
     if (type !== 'personal' || !targetUserId || !dias) return [];
     
@@ -184,22 +182,21 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
 
   if (!isOpen) return null;
 
-  const diaActual = dias && dias.length > 0 ? dias[diaActivo] : null;
+  // PARCHE DE SEGURIDAD: Si diaActivo está fuera de rango por el filtrado del capitán, tomamos el primero disponible.
+  const diaActual = dias && dias.length > 0 ? (dias[diaActivo] || dias[0]) : null;
+  
   const participantName = type === 'personal' && targetUserId 
     ? participantes?.find(p => p.id === targetUserId)?.nombre || 'Participante' : '';
 
-  // --- LÓGICA VISTA ADMIN (SEPARADA Y PAGINADA) ---
   const cajasNormales = getCajasNormales(diaActual);
   const cajasEspeciales = getCajasEspeciales(diaActual);
 
-  // Dividir las cajas normales en grupos de máximo 7
   const MAX_CAJAS_PER_TABLE = 7;
   const cajasChunks: Caja[][] = [];
   for (let i = 0; i < cajasNormales.length; i += MAX_CAJAS_PER_TABLE) {
       cajasChunks.push(cajasNormales.slice(i, i + MAX_CAJAS_PER_TABLE));
   }
 
-  // Extraer horarios ÚNICAMENTE de las cajas NORMALES
   const horariosNormalesMap = new Map<string, number>();
   cajasNormales.forEach((caja: Caja) => {
       const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
@@ -216,21 +213,35 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
     return participantes?.find(p => p.id === id)?.nombre || '---';
   };
 
-  // --- FUNCIÓN DE DESCARGA ---
+  // --- SOLUCIÓN: REVELADO TEMPORAL DEL CONTENEDOR PARA CAPTURA LIMPIA ---
   const handleDownload = async () => {
     if (!printRef.current) return;
     setIsDownloading(true);
     setCustomError(null);
     
+    const scrollContainer = document.getElementById('modal-scroll-area');
+    const originalOverflow = scrollContainer ? scrollContainer.style.overflow : '';
+    const originalMaxHeight = scrollContainer ? scrollContainer.style.maxHeight : '';
+    
     try {
+      if (scrollContainer) {
+        // Expandimos el contenedor para que html2canvas lo vea completo
+        scrollContainer.style.overflow = 'visible';
+        scrollContainer.style.maxHeight = 'none';
+      }
+
+      // Esperamos a que el navegador dibuje la expansión
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const element = printRef.current;
       const canvas = await html2canvas(element, {
-        scale: 1.5, 
+        scale: 2, 
         useCORS: true, 
         backgroundColor: '#ffffff',
         logging: false,
-        width: 800,
-        windowWidth: 800
+        scrollY: -window.scrollY, // Evita recortes si el usuario hizo scroll general en la app
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
       });
       
       const image = canvas.toDataURL('image/png', 1.0);
@@ -257,6 +268,11 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
         message: errorMessage
       });
     } finally {
+      if (scrollContainer) {
+        // Restauramos el diseño del modal
+        scrollContainer.style.overflow = originalOverflow;
+        scrollContainer.style.maxHeight = originalMaxHeight;
+      }
       setIsDownloading(false);
     }
   };
@@ -265,7 +281,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-6 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
         
-        {/* ENCABEZADO MODAL */}
         <div className="bg-slate-900 p-5 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-blue-500/20 rounded-xl text-blue-400"><ImageIcon size={20} /></div>
@@ -274,13 +289,12 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
           <button onClick={onClose} className="bg-slate-800 hover:bg-red-500 text-white p-2 rounded-xl transition-all"><X size={20} /></button>
         </div>
 
-        {/* ÁREA DE SCROLL (VISTA PREVIA) */}
-        <div className="flex-1 overflow-auto p-4 sm:p-8 bg-slate-100 border-y border-slate-200">
-          <div className="flex justify-center items-start min-w-max h-full">
+        {/* IDENTIFICADOR AÑADIDO: 'modal-scroll-area' */}
+        <div id="modal-scroll-area" className="flex-1 overflow-auto p-4 sm:p-8 bg-slate-100 border-y border-slate-200">
+          <div className="flex justify-center items-start min-w-max h-max">
             
             <div className="bg-white shadow-2xl mx-auto flex-shrink-0">
               
-              {/* === ZONA DE LA FOTO === */}
               <div 
                 id="print-container"
                 ref={printRef} 
@@ -292,7 +306,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                   fontFamily: 'system-ui, -apple-system, sans-serif' 
                 }} 
               >
-                {/* CABECERA DOCUMENTO */}
                 <div style={{ marginBottom: '32px', borderBottom: '4px solid #f1f5f9', paddingBottom: '24px', textAlign: 'center' }}>
                   <h1 style={{ fontSize: '30px', fontWeight: 900, letterSpacing: '-0.05em', textTransform: 'uppercase', color: '#0f172a', margin: '0 0 12px 0' }}>
                     {seccionName || 'Gestor de Turnos'}
@@ -312,7 +325,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                      )}
                   </div>
 
-                  {/* LEYENDA ADMIN */}
                   {type === 'general' && (
                      <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px' }}>
                         <span style={{ fontSize: '10px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Referencia Horarios:</span>
@@ -328,11 +340,9 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                   )}
                 </div>
 
-                {/* VISTA GENERAL ADMIN */}
                 {type === 'general' && diaActual && (
                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                      
-                     {/* TABLA DE CAJAS NORMALES PAGINADA EN GRUPOS DE 7 */}
                      {cajasChunks.length > 0 && cajasChunks.map((chunkCajas, chunkIndex) => (
                        <div key={`chunk-${chunkIndex}`} style={{ borderRadius: '16px', overflow: 'hidden', border: '2px solid #e2e8f0', backgroundColor: '#ffffff', marginBottom: chunkIndex < cajasChunks.length - 1 ? '24px' : '0' }}>
                          <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${chunkCajas.length}, minmax(0, 1fr))`, backgroundColor: '#0f172a', color: '#ffffff' }}>
@@ -347,7 +357,7 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                          </div>
                          
                          {horariosNormalesOrdenados.map((hRaw, idx) => {
-                            const parsedTimeInfo = parseTimeUniversal(hRaw); // Variable renombrada y utilizada
+                            const parsedTimeInfo = parseTimeUniversal(hRaw); 
                             return (
                              <div key={hRaw} style={{ display: 'grid', gridTemplateColumns: `100px repeat(${chunkCajas.length}, minmax(0, 1fr))`, backgroundColor: idx % 2 === 0 ? '#f8fafc' : '#ffffff', borderBottom: '1px solid #e2e8f0' }}>
                                
@@ -373,7 +383,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                                  const isRealmenteAsignado = rawName.trim() !== '' && rawName !== '---';
                                  const displayText = isRealmenteAsignado ? rawName : 'Disponible';
                                  
-                                 // COLOR VERDE (#16a34a) SI ESTÁ DISPONIBLE, NEGRO SI ESTÁ OCUPADO
                                  const textColor = isRealmenteAsignado ? '#0f172a' : '#16a34a';
                                  
                                  return (
@@ -394,7 +403,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                        </div>
                      ))}
 
-                     {/* SECCIÓN DE CAJAS ESPECIALES AISLADA */}
                      {cajasEspeciales.length > 0 && (
                         <div style={{ marginTop: '16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
@@ -408,7 +416,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                             {cajasEspeciales.map(caja => {
                               const turnosEspecialesArr = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) as Turno[] : []);
                               
-                              // Ordenamos los turnos de esta caja especial cronológicamente
                               const turnosOrdenados = turnosEspecialesArr.sort((a, b) => parseTimeUniversal(a.horario).minutes - parseTimeUniversal(b.horario).minutes);
 
                               return (
@@ -423,7 +430,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                                         const rawName = turno.participanteId ? getNombreParticipante(turno.participanteId) : '';
                                         const isAsignado = rawName.trim() !== '' && rawName !== '---';
                                         
-                                        // COLOR VERDE (#16a34a) SI ESTÁ DISPONIBLE EN CAJA ESPECIAL TAMBIÉN
                                         const textColor = isAsignado ? '#0f172a' : '#16a34a';
 
                                         return (
@@ -452,7 +458,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                    </div>
                 )}
 
-                {/* VISTA PERSONAL (TABLA COMPACTA ORDENADA) */}
                 {type === 'personal' && (
                   <table style={{ borderCollapse: 'collapse', width: '100%', textAlign: 'left' }}>
                      <thead>
@@ -479,7 +484,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                                     {t.dia}
                                  </td>
                                  <td style={{ padding: '16px', border: '1px solid #e2e8f0', textAlign: 'center', fontSize: '15px', fontWeight: 900 }}>
-                                    {/* Rango de Tiempo con Colores Individuales (Participante) */}
                                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px' }}>
                                        <span style={{ color: t.parsedTime.start.isPM ? COLOR_PM : COLOR_AM }}>
                                           {t.parsedTime.start.text12h}
@@ -510,19 +514,16 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
                   </table>
                 )}
 
-                {/* PIE DE PÁGINA DOCUMENTO */}
                 <div style={{ marginTop: '40px', paddingTop: '16px', borderTop: '2px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8' }}>
                   <p style={{ margin: 0 }}>Gestor de Turnos 4.0</p>
                   <p style={{ margin: 0 }}>{new Date().toLocaleDateString('es-MX')}</p>
                 </div>
               </div>
-              {/* === FIN ZONA DE LA FOTO === */}
             </div>
 
           </div>
         </div>
 
-        {/* PIE DEL MODAL CON BOTONES */}
         <div className="p-5 bg-white border-t flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
           <div className="flex items-center gap-2 text-slate-400">
              <ClipboardList size={16} />
@@ -544,7 +545,6 @@ const DownloadScheduleModal: React.FC<DownloadScheduleModalProps> = ({
           </div>
         </div>
 
-        {/* ALERTA DE ERROR TÉCNICO */}
         {customError && (
           <div className="absolute inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
             <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl text-center border-b-8 border-red-500">

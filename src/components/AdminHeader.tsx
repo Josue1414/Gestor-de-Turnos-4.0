@@ -193,7 +193,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${pushEnabled ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
                 title="Recibir notificaciones cuando la app esté minimizada"
               >
-                <Bell size={14} /> {pushEnabled ? 'Push Activo' : 'Activar Push'}
+                <Bell size={14} /> {pushEnabled ? 'Notificaciones Activas' : 'Activar Notificaciones'}
               </button>
             )}
 

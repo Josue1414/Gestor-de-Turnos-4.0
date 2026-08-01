@@ -37,7 +37,6 @@ interface TurnoEspecialConfig {
 }
 
 export const useAdminLogic = (eventoId: string) => {
-  // DETECCIÓN DE ROL Y CREDENCIALES LOCALES
   const userRole = localStorage.getItem('user_role');
   const isCapitan = userRole === 'capitan';
   const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
@@ -71,7 +70,6 @@ export const useAdminLogic = (eventoId: string) => {
   const [downloadModal, setDownloadModal] = useState<{isOpen: boolean; type: 'general'|'personal'; targetUserId?: string}>({ isOpen: false, type: 'general' });
   const [loading, setLoading] = useState(true);
   
-  // NUEVO ESTADO: Bandera para saber si el evento existe
   const [eventoExiste, setEventoExiste] = useState<boolean>(true); 
 
   const [misDatosAdmin, setMisDatosAdmin] = useState<UsuarioPerfil | null>(null);
@@ -101,7 +99,6 @@ export const useAdminLogic = (eventoId: string) => {
         setEventoExiste(true);
         const data = docSnap.data();
         
-        // 1. CARGAR DÍAS (El esqueleto base es el del Admin)
         const rawDias = data.diasPorAdmin?.[adminIdL] || [];
         const validatedDias = Array.isArray(rawDias)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,7 +111,6 @@ export const useAdminLogic = (eventoId: string) => {
                 ...caja,
                 turnos: caja.turnos.map((turno, tIdx) => ({
                   ...turno,
-                  // Rescatamos los valores originales que vienen de Firebase
                   entregada: d.cajas[cIdx]?.turnos[tIdx]?.entregada || false,
                   devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false,
                   solicitaAsistencia: d.cajas[cIdx]?.turnos[tIdx]?.solicitaAsistencia || false
@@ -125,7 +121,6 @@ export const useAdminLogic = (eventoId: string) => {
           : [];
         setDias(validatedDias as DiaEvento[]);
 
-        // 2. CARGAR CAPITANES
         const misCapitanes = data.capitanesPorAdmin?.[adminIdL] || [];
         setCapitanes(misCapitanes);
 
@@ -135,7 +130,6 @@ export const useAdminLogic = (eventoId: string) => {
           setCajasAsignadasCapitan(miDataCapitan?.cajasAsignadas || []);
         }
 
-        // 3. CARGAR PARTICIPANTES (AISLAMIENTO TOTAL + CRUCE SIN DUPLICADOS)
         let allParts: any[] = [];
         
         if (isCapitan) {
@@ -209,7 +203,6 @@ export const useAdminLogic = (eventoId: string) => {
 
         if (data.nombre) setSeccionName(data.nombre);
         
-        // 4. DATOS DEL PERFIL ACTUAL
         if (isCapitan) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const miDataCapitan = misCapitanes.find((c: any) => c.id === capitanIdL);
@@ -320,8 +313,8 @@ export const useAdminLogic = (eventoId: string) => {
     const cajasNormales = diaActual.cajas.filter(c => !isCajaEspecial(c));
 
     if (!forzar && cajasNormales.length > 0) {
-      const turnosAValidar = horarioEditando ? cajasNormales[0].turnos.filter(t => t.horario !== horarioEditando) : cajasNormales[0].turnos;
-      const turnoCruzado = turnosAValidar.find(t => rangesOverlap(t.horario, nuevoHorario));
+      const turnosAValidar = horarioEditando ? cajasNormales[0].turnos.filter((t: any) => t.horario !== horarioEditando) : cajasNormales[0].turnos;
+      const turnoCruzado = turnosAValidar.find((t: any) => rangesOverlap(t.horario, nuevoHorario));
       if (turnoCruzado) {
         setClashModal({ isOpen: true, inicio, fin, turnoCruzado: turnoCruzado.horario });
         return false; 
@@ -339,15 +332,21 @@ export const useAdminLogic = (eventoId: string) => {
       return {
         ...d, cajas: d.cajas.map(c => {
           if (isCajaEspecial(c)) return c;
-          const turnosActualizados = horarioEditando 
-            ? c.turnos.map(t => t.horario === horarioEditando ? { ...t, horario: nuevoHorario } : t)
+          
+          // SOLUCIÓN AL FANTASMA: Revisamos si el horario editado realmente existe en esta caja.
+          const existeViejo = c.turnos.some((t: any) => t.horario === horarioEditando);
+          
+          const turnosActualizados = (horarioEditando && existeViejo)
+            ? c.turnos.map((t: any) => t.horario === horarioEditando ? { ...t, horario: nuevoHorario } : t)
             : [...c.turnos, { id: `t_${Date.now()}_${Math.random()}`, horario: nuevoHorario, participanteId: null }];
-          return { ...c, turnos: turnosActualizados.sort((a, b) => getMinutos(a.horario) - getMinutos(b.horario)) };
+            
+          return { ...c, turnos: turnosActualizados.sort((a: any, b: any) => getMinutos(a.horario) - getMinutos(b.horario)) };
         })
       };
     });
 
     syncEvent(nuevosDias);
+    setHorarioEditando(null); // Aseguramos que se limpie el estado
     setCreateShiftModal({ ...createShiftModal, isOpen: false });
     setClashModal({ isOpen: false, inicio: '', fin: '', turnoCruzado: '' });
     return true;
@@ -461,7 +460,6 @@ export const useAdminLogic = (eventoId: string) => {
     } catch (error) { console.error(error); showToast('Error al eliminar.', 'error'); }
   };
 
-  // CORRECCIÓN: Actualizamos todos los días, no solo el activo
   const actualizarEstadoTurno = async (cajaId: string, turnoId: string, entregada: boolean, devuelta: boolean) => {
     if (!eventoId) return;
     
@@ -482,7 +480,6 @@ export const useAdminLogic = (eventoId: string) => {
     }
   };
 
-  // CORRECCIÓN: Buscamos en TODOS los días para poder desmarcar sin importar dónde esté el admin
   const resolverAlerta = async (cajaId: string, turnoId: string) => {
     if (!eventoId) return;
     
@@ -509,7 +506,6 @@ const handleTogglePush = async () => {
     if (sub) {
       const docRef = doc(db, 'eventos', eventoId);
       const targetId = isCapitan ? capitanIdL : adminIdL;
-      // Guardamos la suscripción del dispositivo en Firebase
       await updateDoc(docRef, { [`suscripcionesPush.${targetId}`]: JSON.parse(JSON.stringify(sub)) });
       setPushEnabled(true);
       showToast('Notificaciones Push activadas en este dispositivo', 'success');

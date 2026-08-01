@@ -71,7 +71,7 @@ const AdminPanel = () => {
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
     isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta,
-    pushEnabled, handleTogglePush
+    pushEnabled, handleTogglePush, horarioEditando
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -240,7 +240,9 @@ const AdminPanel = () => {
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
   
   const handleValidarCrearHorario = (inicio: string, fin: string) => {
-    const validacion = validarNuevoHorario(inicio, fin, diaActual);
+    // AHORA PASAMOS EL HORARIO EDITANDO A LA FUNCIÓN DE VALIDACIÓN
+    const validacion = validarNuevoHorario(inicio, fin, diaActual, horarioEditando || undefined);
+    
     if (validacion.error) { alert(validacion.error); return; }
     if (validacion.clash) {
       if (setCreateShiftModal) setCreateShiftModal({ isOpen: false, defaultStart: '', defaultEnd: '' });

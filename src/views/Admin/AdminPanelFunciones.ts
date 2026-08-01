@@ -85,7 +85,8 @@ export const getSiguienteHorario = (diaActual: any) => {
   return { defaultStart: '08:00', defaultEnd: '09:00' };
 };
 
-export const validarNuevoHorario = (inicio: string, fin: string, diaActual: any) => {
+// MODIFICACIÓN PRINCIPAL: Se recibe el horario a ignorar
+export const validarNuevoHorario = (inicio: string, fin: string, diaActual: any, horarioExcluido?: string) => {
   const startMins = parseTimeToMinutes(inicio);
   const endMins = parseTimeToMinutes(fin);
 
@@ -101,6 +102,10 @@ export const validarNuevoHorario = (inicio: string, fin: string, diaActual: any)
   const isDuplicateOrClash = cajasNormales.some((c: any) => {
     const turnosArr = Array.isArray(c.turnos) ? c.turnos : Object.values(c.turnos || {});
     return turnosArr.some((t: any) => {
+      
+      // IGNORAMOS EL TURNO SI ES EXACTAMENTE EL QUE ESTAMOS EDITANDO
+      if (horarioExcluido && t.horario === horarioExcluido) return false;
+
       if (checkChoque(t.horario, nuevoHorarioStr)) {
         turnoCruzado = t.horario;
         return true;
