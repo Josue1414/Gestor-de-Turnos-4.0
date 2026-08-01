@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import webpush from 'web-push';
 
 webpush.setVapidDetails(
-  'mailto:tu-correo@ejemplo.com',
+  'mailto:hola.ahorratiempo@gmail.com', // <-- CRÍTICO: Usa un correo real
   process.env.VITE_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
@@ -26,10 +26,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       icon: '/logo-gestor-de-turnos.png'
     });
 
-    await webpush.sendNotification(subscription, payload);
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Error enviando push:', error);
-    return res.status(500).json({ error: 'Error al enviar notificación' });
+    const response = await webpush.sendNotification(subscription, payload);
+    return res.status(200).json({ success: true, response });
+  } catch (error: any) {
+    // Hemos mejorado el registro de errores para ver exactamente qué falla
+    console.error('Error detallado de web-push:', error.statusCode, error.body);
+    return res.status(500).json({ error: 'Error al enviar notificación', details: error.body });
   }
 }
