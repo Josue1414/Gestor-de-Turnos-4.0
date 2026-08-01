@@ -1,6 +1,6 @@
 // src/components/AdminHeader.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { MapIcon, ArrowLeft, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell, Smartphone } from 'lucide-react';
+import { MapIcon, ArrowLeft, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell, Smartphone, CheckCircle2 } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
 import InstallGuideModal from './InstallGuideModal'; 
@@ -95,6 +95,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   // --- ESTADOS DE PWA ---
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -127,15 +128,35 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
     }
   }, [alertasAsistencia.length]);
 
-  // --- LÓGICA DE CAPTURA DEL EVENTO DE INSTALACIÓN ---
+  // --- LÓGICA DE CAPTURA DEL EVENTO DE INSTALACIÓN Y VERIFICACIÓN ---
   useEffect(() => {
+    // Verificar si ya está instalada al montar el componente (Android / Escritorio)
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+      setIsAppInstalled(true);
+    }
+    // Verificar si ya está instalada en Safari (iOS)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window.navigator as any).standalone === true) {
+      setIsAppInstalled(true);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
 
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setDeferredPrompt(null);
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
 
   const handleInstallClick = async () => {
@@ -220,13 +241,23 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             {/* justify-start en móvil para alinear a la izquierda, sm:justify-end en escritorio */}
             <div className="flex flex-wrap gap-2 relative w-full sm:w-auto justify-start sm:justify-end" ref={menuRef}>
               
-              <button 
-                onClick={handleInstallClick}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border bg-slate-800 text-white border-slate-800 hover:bg-slate-700"
-                title="Instalar aplicación en tu dispositivo"
-              >
-                <Smartphone size={14} /> Instalar App
-              </button>
+              {/* LÓGICA RENDERIZADO DEL BOTÓN INSTALAR */}
+              {isAppInstalled ? (
+                <div 
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 cursor-default"
+                  title="App ya instalada en este dispositivo"
+                >
+                  <CheckCircle2 size={14} /> Instalada
+                </div>
+              ) : (
+                <button 
+                  onClick={handleInstallClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border bg-slate-800 text-white border-slate-800 hover:bg-slate-700"
+                  title="Instalar aplicación en tu dispositivo"
+                >
+                  <Smartphone size={14} /> Instalar App
+                </button>
+              )}
 
               {onTogglePush && (
                 <button 
