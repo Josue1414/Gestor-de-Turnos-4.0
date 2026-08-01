@@ -1,5 +1,5 @@
 // src/views/User/ParticipantPanel.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Users, ShieldCheck, Settings, LayoutList, LayoutGrid, Bell, Smartphone } from 'lucide-react';
 
 import MatrizTurnosParticipante from '../../components/MatrizTurnosParticipante';
