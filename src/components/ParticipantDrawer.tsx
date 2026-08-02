@@ -167,10 +167,12 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                               ))}
                             </>
                           ) : (
-                            /* 2. Si es creado por un Capitán (Ignora lo anterior y muestra solo esto) */
-                            <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                              Capitán: {p.creador}
-                            </span>
+                            /* 2. Si es creado por un Capitán. En vista Capitán NO muestra pastilla. En vista Admin SÍ muestra. */
+                            (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin') && (
+                              <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                                Capitán: {p.creador}
+                              </span>
+                            )
                           )}
                         </div>
                       )}

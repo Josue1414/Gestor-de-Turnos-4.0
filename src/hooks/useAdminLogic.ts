@@ -151,7 +151,15 @@ export const useAdminLogic = (eventoId: string) => {
           });
           
           const mapCapitan = new Map();
-          [...misParts, ...partsEnMisCajas].forEach(p => mapCapitan.set(p.id, p));
+          
+          // IDENTIFICAR Y ASIGNAR PROPIEDAD "CREADOR" A LOS DEL CAPITÁN Y ADMIN
+          misParts.forEach((p: any) => mapCapitan.set(p.id, { ...p, creador: miDataCapitan?.nombre || 'Capitan' }));
+          partsEnMisCajas.forEach((p: any) => {
+            if (!mapCapitan.has(p.id)) {
+                mapCapitan.set(p.id, { ...p, creador: 'Admin' });
+            }
+          });
+          
           allParts = Array.from(mapCapitan.values());
 
         } else {
@@ -524,20 +532,20 @@ export const useAdminLogic = (eventoId: string) => {
     revisarEstadoPush();
   }, []);
 
-const handleTogglePush = async () => {
-  try {
-    const sub = await suscribirANotificaciones();
-    if (sub) {
-      const docRef = doc(db, 'eventos', eventoId);
-      const targetId = isCapitan ? capitanIdL : adminIdL;
-      await updateDoc(docRef, { [`suscripcionesPush.${targetId}`]: JSON.parse(JSON.stringify(sub)) });
-      setPushEnabled(true);
-      showToast('Notificaciones Push activadas en este dispositivo', 'success');
+  const handleTogglePush = async () => {
+    try {
+      const sub = await suscribirANotificaciones();
+      if (sub) {
+        const docRef = doc(db, 'eventos', eventoId);
+        const targetId = isCapitan ? capitanIdL : adminIdL;
+        await updateDoc(docRef, { [`suscripcionesPush.${targetId}`]: JSON.parse(JSON.stringify(sub)) });
+        setPushEnabled(true);
+        showToast('Notificaciones Push activadas en este dispositivo', 'success');
+      }
+    } catch (error) {
+      showToast('Error al activar notificaciones', 'error');
     }
-  } catch (error) {
-    showToast('Error al activar notificaciones', 'error');
-  }
-};
+  };
 
   return {
     dias, diaActivo, setDiaActivo, showDirectorio, setShowDirectorio, showCroquis, setShowCroquis,
