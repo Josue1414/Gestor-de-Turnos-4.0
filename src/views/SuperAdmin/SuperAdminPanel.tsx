@@ -5,6 +5,10 @@ import {
   ShieldCheck, Plus, Calendar, UploadCloud, LogOut
 } from 'lucide-react';
 
+// FALTABAN ESTAS IMPORTACIONES PARA GUARDAR EN FIREBASE
+import { doc, updateDoc } from 'firebase/firestore'; 
+import { db } from '../../firebase';
+
 import { useSuperAdminLogic, type EventoData, type AdminData } from '../../hooks/useSuperAdminLogic';
 import { guardarCroquis } from '../../utils/croquisService';
 
@@ -18,6 +22,9 @@ import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 interface EventoExtended extends EventoData {
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
+  // ACTUALIZACIÓN DE LA INTERFAZ PARA EVITAR ERROR DE TYPE
+  poligonosGlobales?: any[];
+  poligonosPorAdmin?: Record<string, any[]>;
 }
 
 const SuperAdminPanel = () => {
@@ -74,14 +81,17 @@ const SuperAdminPanel = () => {
     croquisDataParaMostrar.push({
       id: 'general',
       title: "Croquis General del Evento",
-      url: activeEvent?.croquisUrl || null
+      url: activeEvent?.croquisUrl || null,
+      poligonos: activeEvent?.poligonosGlobales || []
     });
 
     if (croquisModalState.adminId) {
       croquisDataParaMostrar.push({
         id: croquisModalState.adminId,
         title: "Croquis Individual del Área",
-        url: activeEvent?.croquisPorAdmin?.[croquisModalState.adminId] || null
+        url: activeEvent?.croquisPorAdmin?.[croquisModalState.adminId] || null,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        poligonos: (activeEvent as any)?.poligonosPorAdmin?.[croquisModalState.adminId] || []
       });
     }
   }
@@ -240,9 +250,24 @@ const SuperAdminPanel = () => {
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
         canEdit={true} 
         croquis={croquisDataParaMostrar}
+        currentUserRole="SuperAdmin" // <--- AGREGAR ESTA LÍNEA
         onSaveCroquis={async (file, id) => {
           if (croquisModalState.eventoId) {
             await guardarCroquis(croquisModalState.eventoId, id === 'general' ? null : id, file);
+          }
+        }}
+        onSavePoligono={async (poligono, croquisId) => {
+          if (!croquisModalState.eventoId || !activeEvent) return;
+          const eventoRef = doc(db, 'eventos', croquisModalState.eventoId);
+          
+          if (croquisId === 'general') {
+            const actuales = activeEvent.poligonosGlobales || [];
+            await updateDoc(eventoRef, { poligonosGlobales: [...actuales, poligono] });
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mapActual = (activeEvent as any).poligonosPorAdmin || {};
+            const adminPolys = mapActual[croquisId] || [];
+            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...adminPolys, poligono] });
           }
         }}
       />
@@ -250,7 +275,7 @@ const SuperAdminPanel = () => {
       <BaseStructureModal 
         isOpen={baseStructureModalState} 
         onClose={() => setBaseStructureModalState(false)} 
-        // ACTUALIZADO: Forzamos el tipo `any` para evitar el choque temporal de interfaces
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSave={(estructura: any) => setEstructuraGuardada({
           dias: estructura.dias,
           horarios: estructura.horarios || [], 

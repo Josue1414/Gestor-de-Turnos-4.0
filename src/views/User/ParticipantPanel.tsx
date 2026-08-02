@@ -282,7 +282,19 @@ const ParticipantPanel = () => {
         seccionName="Mis Accesos" dias={dias} diaActivo={diaActivo} participantes={participantes} targetUserId={miUsuario.id} 
       />
 
-      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisDataParaMostrar} onSaveCroquis={async () => Promise.resolve()}/>
+      <CroquisModal 
+        isOpen={showCroquis} 
+        onClose={() => setShowCroquis(false)} 
+        canEdit={false} 
+        croquis={croquisDataParaMostrar} 
+        onSaveCroquis={async () => Promise.resolve()}
+        // --- NUEVAS PROPIEDADES AGREGADAS ---
+        dias={dias} 
+        diaActivo={diaActivo} 
+        getParticipante={(id) => participantes.find(p => p.id === id)} 
+        currentUserRole="Participante" 
+      />
+
 
       {/* RENDERIZAMOS EL MODAL DE INSTRUCCIONES DE INSTALACIÓN PWA */}
       <InstallGuideModal 

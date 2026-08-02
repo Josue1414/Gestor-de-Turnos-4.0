@@ -28,7 +28,10 @@ interface EventoExtended {
   participantesPorCapitan?: Record<string, unknown[]>;
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
-  globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean }; 
+  globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
+
+  poligonosGlobales?: any[]; 
+  poligonosPorAdmin?: Record<string, any[]>;
 }
 
 const SupervisorPanel = () => {
@@ -134,10 +137,21 @@ const SupervisorPanel = () => {
   const eventoExt = evento as EventoExtended;
   const isGlobalLocked = eventoExt?.globalPermissions && (!eventoExt.globalPermissions.cajas || !eventoExt.globalPermissions.horarios || !eventoExt.globalPermissions.especiales);
 
+  // 1. Reemplazar la constante croquisDataParaMostrar
   const croquisDataParaMostrar: CroquisItem[] = [];
-  croquisDataParaMostrar.push({ id: 'general', title: "Croquis General del Evento", url: eventoExt?.croquisUrl || null });
+  croquisDataParaMostrar.push({ 
+    id: 'general', 
+    title: "Croquis General del Evento", 
+    url: eventoExt?.croquisUrl || null,
+    poligonos: eventoExt?.poligonosGlobales || [] // <-- Inyectamos los polígonos
+  });
   if (croquisModal.adminId) {
-    croquisDataParaMostrar.push({ id: croquisModal.adminId, title: "Croquis Individual del Área", url: eventoExt?.croquisPorAdmin?.[croquisModal.adminId] || null });
+    croquisDataParaMostrar.push({ 
+      id: croquisModal.adminId, 
+      title: "Croquis Individual del Área", 
+      url: eventoExt?.croquisPorAdmin?.[croquisModal.adminId] || null,
+      poligonos: (eventoExt?.poligonosPorAdmin as Record<string, any>)?.[croquisModal.adminId] || [] // <-- Inyectamos
+    });
   }
 
   return (
@@ -264,11 +278,26 @@ const SupervisorPanel = () => {
       <CroquisModal
         isOpen={croquisModal.isOpen}
         onClose={() => setCroquisModal({ isOpen: false, adminId: null })}
-        canEdit={true}
+        canEdit={true} 
         croquis={croquisDataParaMostrar}
+        currentUserRole="Supervisor" // <--- AGREGAR ESTA LÍNEA
         onSaveCroquis={async (file, croquisId) => {
           if (eventoId) {
             await guardarCroquis(eventoId, croquisId === 'general' ? null : croquisId, file);
+          }
+        }}
+        // NUEVO: Conectamos la acción de guardar con Firebase
+        onSavePoligono={async (poligono, croquisId) => {
+          if (!eventoId) return;
+          const eventoRef = doc(db, 'eventos', eventoId);
+          
+          if (croquisId === 'general') {
+            const actuales = eventoExt?.poligonosGlobales || [];
+            await updateDoc(eventoRef, { poligonosGlobales: [...actuales, poligono] });
+          } else {
+            const mapActual = (eventoExt as any).poligonosPorAdmin || {};
+            const adminPolys = mapActual[croquisId] || [];
+            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...adminPolys, poligono] });
           }
         }}
       />

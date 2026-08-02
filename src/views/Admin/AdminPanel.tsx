@@ -133,9 +133,22 @@ const AdminPanel = () => {
           }
         }
 
-        const listaCroquis: CroquisItem[] = [{ id: 'general', title: 'Croquis General del Evento', url: data.croquisUrl || null }];
+     
+        const listaCroquis: CroquisItem[] = [{ 
+          id: 'general', 
+          title: 'Croquis General del Evento', 
+          url: data.croquisUrl || null,
+          poligonos: data.poligonosGlobales || [] // <-- Agregar esta línea
+        }];
         const croquisIndividual = data.croquisPorAdmin?.[adminIdL];
-        if (croquisIndividual) listaCroquis.push({ id: adminIdL, title: `Croquis Individual (${myAdmin?.name || 'Área'})`, url: croquisIndividual });
+        if (croquisIndividual) {
+          listaCroquis.push({ 
+            id: adminIdL, 
+            title: `Croquis Individual (${myAdmin?.name || 'Área'})`, 
+            url: croquisIndividual,
+            poligonos: data.poligonosPorAdmin?.[adminIdL] || [] // <-- Agregar esta línea
+          });
+        }
         setCroquisData(listaCroquis);
       }
     });

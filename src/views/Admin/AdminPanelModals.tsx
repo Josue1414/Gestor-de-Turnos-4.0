@@ -60,7 +60,21 @@ const AdminPanelModals = (props: any) => {
       
       <ModalAlertaChoque isOpen={clashModal?.isOpen || false} onClose={() => setClashModal && setClashModal({ ...clashModal, isOpen: false })} horarioNuevo={`${clashModal?.inicio} - ${clashModal?.fin}`} horarioCruzado={clashModal?.turnoCruzado || ''} />
       
-      <CroquisModal isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisData} onSaveCroquis={async () => Promise.resolve()} />
+      {/* 
+        ACTUALIZACIÓN IMPORTANTE: 
+        Pasamos las propiedades de los días, rol actual y un buscador de participantes
+      */}
+      <CroquisModal 
+        isOpen={showCroquis} 
+        onClose={() => setShowCroquis(false)} 
+        canEdit={false} 
+        croquis={croquisData} 
+        onSaveCroquis={async () => Promise.resolve()} 
+        dias={dias}
+        diaActivo={diaActivo}
+        getParticipante={(id) => participantesEnriquecidos.find((p: any) => p.id === id)}
+        currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'}
+      />
       
       <ModalAsignarCapitan 
         isOpen={showCapitanModal} 
