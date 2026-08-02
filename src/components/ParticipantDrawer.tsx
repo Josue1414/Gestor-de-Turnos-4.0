@@ -1,6 +1,6 @@
 // src/components/ParticipantDrawer.tsx
 import React, { useState } from 'react';
-import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown } from 'lucide-react';
+import { X, Users, Settings, MessageCircle, Trash2, UserPlus, ChevronDown, Link } from 'lucide-react';
 import type { Participante } from '../types';
 import { useToast } from './ToastProvider';
 
@@ -44,7 +44,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
       return a.nombre.localeCompare(b.nombre);
     });
 
-  // Permisos generales para acciones como copiar enlace de invitación
   const canEdit = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin' || currentUserRole === 'Capitan';
 
   const copiarSeguro = (texto: string) => {
@@ -61,16 +60,21 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
     }
   };
 
-  const handleWhatsApp = (participante: ParticipanteExtendido, e: React.MouseEvent) => {
+  const handleWhatsApp = (participante: ParticipanteExtendido, url: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!participante.telefono) { 
       showToast('Este participante no tiene número de teléfono registrado.', 'error'); 
       return; 
     }
     const numeroLimpio = participante.telefono.replace(/\D/g, '');
-    const url = `${window.location.origin}/p/${eventoId}/${adminId}/${participante.id}`;
-    const mensaje = `¡Hola ${participante.nombre}! 👋\n\nAquí tienes tu link de acceso único para elegir tus turnos en el evento:\n${url}\n\nPor favor, no compartas este link, es solo tuyo.`;
+    const mensaje = `¡Hola ${participante.nombre}! 👋\n\nAquí tienes tu link de acceso único para registrarte en el evento:\n${url}\n\nPor favor, no compartas este link, es solo tuyo.`;
     window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
+  const handleCopySpecificLink = (participante: ParticipanteExtendido, url: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    copiarSeguro(`¡Hola ${participante.nombre}! Accede a tus turnos aquí:\n${url}`);
+    showToast(`¡Link de ${participante.nombre} copiado!`, 'success');
   };
 
   const handleCopyInviteLink = () => {
@@ -135,10 +139,23 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
               const tieneTelefono = Boolean(p.telefono && p.telefono.trim().length > 7);
               const isExpanded = expandedId === p.id;
 
-              // Lógica estricta de permisos por usuario
+              // REGLAS ESTRICTAS DE VISIBILIDAD DE BOTONES
               const esAdminOSuper = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
-              const esCapitanYEsSuCreador = currentUserRole === 'Capitan' && p.creador !== 'Admin';
+              const isAdminParticipant = !p.creador || p.creador === 'Admin';
+              
+              // 1. Permisos Completos (Editar y Eliminar): Admin borra a todos, Capitán solo borra a los suyos.
+              const esCapitanYEsSuCreador = currentUserRole === 'Capitan' && !isAdminParticipant;
               const tienePermisosCompletos = esAdminOSuper || esCapitanYEsSuCreador;
+              
+              // 2. Botones de Comunicación (WhatsApp y Copiar Link Único)
+              // El Capitán se puede comunicar con TODOS los de su lista (incluso los creados por Admin)
+              const canShowCommunicationButtons = currentUserRole === 'Capitan' || (esAdminOSuper && isAdminParticipant);
+
+              // 3. Generar Link Único
+              // Si lo está viendo el Capitán, SIEMPRE manda al login de SU equipo. Si lo ve el Admin, manda al general.
+              const participantInviteUrl = currentUserRole === 'Capitan'
+                ? `${window.location.origin}/invite-team/${eventoId}/${adminId}/${customInviteLink}/${p.id}`
+                : `${window.location.origin}/invite/${eventoId}/${adminId}/${p.id}`;
               
               return (
                 <div key={p.id} className={`bg-white rounded-xl p-3 border shadow-sm transition-all ${esMiUsuario ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'}`}>
@@ -151,12 +168,11 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         {esMiUsuario && <span className="text-xs text-blue-500 font-black shrink-0">(Tú)</span>}
                       </div>
 
-                      {/* --- LÓGICA CORREGIDA DE PASTILLAS --- */}
+                      {/* LÓGICA DE PASTILLAS */}
                       {currentUserRole !== 'Participante' && (
                         <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
-                          {(!p.creador || p.creador === 'Admin') ? (
+                          {isAdminParticipant ? (
                             <>
-                              {/* 1. Si es creado por el Administrador */}
                               <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
                                 Creado por Admin
                               </span>
@@ -167,7 +183,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                               ))}
                             </>
                           ) : (
-                            /* 2. Si es creado por un Capitán. En vista Capitán NO muestra pastilla. En vista Admin SÍ muestra. */
                             (currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin') && (
                               <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
                                 Capitán: {p.creador}
@@ -179,11 +194,20 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      {currentUserRole === 'Capitan' && (
+                      
+                      {canShowCommunicationButtons && (
                         <>
                           <button 
-                            onClick={(e) => handleWhatsApp(p, e)}
-                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center w-8 h-8 ${tieneTelefono ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`}
+                            onClick={(e) => handleCopySpecificLink(p, participantInviteUrl, e)}
+                            className="p-1.5 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition w-8 h-8 flex items-center justify-center"
+                            title="Copiar Link Único de Invitación"
+                          >
+                            <Link size={16} />
+                          </button>
+
+                          <button 
+                            onClick={(e) => handleWhatsApp(p, participantInviteUrl, e)}
+                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center w-8 h-8 ${tieneTelefono ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-slate-50 text-slate-300 cursor-not-allowed'}`}
                             title={tieneTelefono ? "Enviar link por WhatsApp" : "No tiene teléfono registrado"}
                           >
                             <MessageCircle size={16} />
