@@ -1,11 +1,7 @@
 // src/views/SuperAdmin/SuperAdminPanel.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ShieldCheck, Plus, Calendar, UploadCloud, LogOut
-} from 'lucide-react';
-
-// FALTABAN ESTAS IMPORTACIONES PARA GUARDAR EN FIREBASE
+import { ShieldCheck, Plus, Calendar, UploadCloud, LogOut } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../../firebase';
 
@@ -22,7 +18,6 @@ import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 interface EventoExtended extends EventoData {
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
-  // ACTUALIZACIÓN DE LA INTERFAZ PARA EVITAR ERROR DE TYPE
   poligonosGlobales?: any[];
   poligonosPorAdmin?: Record<string, any[]>;
 }
@@ -75,6 +70,13 @@ const SuperAdminPanel = () => {
   };
 
   const activeEvent = eventos.find(e => e.id === croquisModalState.eventoId) as EventoExtended | undefined;
+  
+  // NUEVO: Extraemos todos los días para enviárselos al Croquis Modal
+  const todosLosDiasSuperAdmin = useMemo(() => {
+    if (!activeEvent?.diasPorAdmin) return [];
+    return Object.values(activeEvent.diasPorAdmin).flat() as any[];
+  }, [activeEvent?.diasPorAdmin]);
+
   const croquisDataParaMostrar: CroquisItem[] = [];
 
   if (croquisModalState.eventoId) {
@@ -250,7 +252,8 @@ const SuperAdminPanel = () => {
         onClose={() => setCroquisModalState({isOpen: false, eventoId: null})} 
         canEdit={true} 
         croquis={croquisDataParaMostrar}
-        currentUserRole="SuperAdmin" // <--- AGREGAR ESTA LÍNEA
+        dias={todosLosDiasSuperAdmin} // <-- NUEVO: Pasamos los días
+        currentUserRole="SuperAdmin"
         onSaveCroquis={async (file, id) => {
           if (croquisModalState.eventoId) {
             await guardarCroquis(croquisModalState.eventoId, id === 'general' ? null : id, file);

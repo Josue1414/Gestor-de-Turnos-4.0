@@ -1,6 +1,6 @@
 // src/views/Supervisor/SupervisorPanel.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ShieldCheck, LogOut, Plus, Calendar, MapIcon, Download, Lock, Unlock } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore'; 
@@ -125,6 +125,14 @@ const SupervisorPanel = () => {
     setGlobalBlockModal(false);
   };
 
+  const eventoExt = evento as EventoExtended;
+
+  // NUEVO: Extraemos TODOS los días para enviárselos al Croquis Modal
+  const todosLosDiasSupervisor = useMemo(() => {
+    if (!eventoExt?.diasPorAdmin) return [];
+    return Object.values(eventoExt.diasPorAdmin).flat() as any[];
+  }, [eventoExt?.diasPorAdmin]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -134,23 +142,21 @@ const SupervisorPanel = () => {
     );
   }
 
-  const eventoExt = evento as EventoExtended;
   const isGlobalLocked = eventoExt?.globalPermissions && (!eventoExt.globalPermissions.cajas || !eventoExt.globalPermissions.horarios || !eventoExt.globalPermissions.especiales);
 
-  // 1. Reemplazar la constante croquisDataParaMostrar
   const croquisDataParaMostrar: CroquisItem[] = [];
   croquisDataParaMostrar.push({ 
     id: 'general', 
     title: "Croquis General del Evento", 
     url: eventoExt?.croquisUrl || null,
-    poligonos: eventoExt?.poligonosGlobales || [] // <-- Inyectamos los polígonos
+    poligonos: eventoExt?.poligonosGlobales || [] 
   });
   if (croquisModal.adminId) {
     croquisDataParaMostrar.push({ 
       id: croquisModal.adminId, 
       title: "Croquis Individual del Área", 
       url: eventoExt?.croquisPorAdmin?.[croquisModal.adminId] || null,
-      poligonos: (eventoExt?.poligonosPorAdmin as Record<string, any>)?.[croquisModal.adminId] || [] // <-- Inyectamos
+      poligonos: (eventoExt?.poligonosPorAdmin as Record<string, any>)?.[croquisModal.adminId] || [] 
     });
   }
 
@@ -219,7 +225,6 @@ const SupervisorPanel = () => {
             const statsObj = calculateAdminStats(adminDias, allParticipantes);
 
             const handleExport = () => {
-              // 3. CORRECCIÓN: Exportamos los datos usando "organization"
               const adminInfo = { name: admin.name, org: (admin as any).organization || 'Sin Organización' };
               exportToExcel(
                 eventoExt?.nombre || 'Evento', 
@@ -280,13 +285,13 @@ const SupervisorPanel = () => {
         onClose={() => setCroquisModal({ isOpen: false, adminId: null })}
         canEdit={true} 
         croquis={croquisDataParaMostrar}
-        currentUserRole="Supervisor" // <--- AGREGAR ESTA LÍNEA
+        dias={todosLosDiasSupervisor} // <-- NUEVO: Pasamos los días para rellenar las cajas
+        currentUserRole="Supervisor"
         onSaveCroquis={async (file, croquisId) => {
           if (eventoId) {
             await guardarCroquis(eventoId, croquisId === 'general' ? null : croquisId, file);
           }
         }}
-        // NUEVO: Conectamos la acción de guardar con Firebase
         onSavePoligono={async (poligono, croquisId) => {
           if (!eventoId) return;
           const eventoRef = doc(db, 'eventos', eventoId);

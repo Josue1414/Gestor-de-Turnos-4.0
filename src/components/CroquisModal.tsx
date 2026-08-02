@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize, Loader2, ChevronLeft, ChevronRight, PenTool } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import type { Coordenada, PoligonoCroquis, DiaEvento, Participante } from '../types';
+import type { Coordenada, DiaEvento, Participante } from '../types';
 import CapaTrazados from './CroquisInteractivo/CapaTrazados';
 import PanelDibujo from './CroquisInteractivo/PanelDibujo';
 import TarjetaTurnoEnVivo, { type PoligonoCroquisExt } from './CroquisInteractivo/TarjetaTurnoEnVivo';
@@ -12,7 +12,7 @@ export interface CroquisItem {
   id: string;
   title: string;
   url: string | null;
-  poligonos?: PoligonoCroquis[]; 
+  poligonos?: any[]; 
 }
 
 interface CroquisModalProps {
@@ -41,6 +41,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
 
   // --- ESTADOS DEL MODO DIBUJO ---
   const [modoDibujo, setModoDibujo] = useState(false);
+  const [etapaDibujo, setEtapaDibujo] = useState<'config' | 'trazando'>('config');
   const [puntosActuales, setPuntosActuales] = useState<Coordenada[]>([]);
   const [polyName, setPolyName] = useState('');
   const [polyColor, setPolyColor] = useState('#6366f1');
@@ -60,7 +61,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     }
   }, [isOpen]);
 
-  // Se movieron las declaraciones arriba para evitar errores al mover el early return
   const currentItem = croquis?.[activeIndex];
   const imagenUrl = localOverride !== undefined ? localOverride : currentItem?.url;
 
@@ -80,13 +80,16 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     return polys.filter(p => {
       if (modoDibujo) return true; 
       
+      if (currentUserRole === 'SuperAdmin' || currentUserRole === 'Supervisor') {
+        return p.estado === 'publicado';
+      }
+      
       if (p.cajaVinculadaNombre && p.cajaVinculadaNombre !== 'Ninguna') {
          if (!cajasDeHoyNombres.includes(p.cajaVinculadaNombre)) return false;
       }
       return p.estado === 'publicado';
     });
-  }, [currentItem?.poligonos, modoDibujo, cajasDeHoyNombres]);
-
+  }, [currentItem?.poligonos, modoDibujo, cajasDeHoyNombres, currentUserRole]);
 
   const handleCloseModal = () => {
     if (isUploading) return;
@@ -147,6 +150,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
 
   const cancelarDibujo = () => {
     setModoDibujo(false);
+    setEtapaDibujo('config');
     setPuntosActuales([]);
     setPolyName('');
     setPolyNotas('');
@@ -181,7 +185,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     return diaActualObj.cajas.find(c => c.nombre === poligonoActivo.cajaVinculadaNombre);
   }, [poligonoActivo, dias, diaActivo]);
 
-  // EL EARLY RETURN AHORA VIVE DEBAJO DE TODOS LOS HOOKS (REGLA DE ORO DE REACT)
   if (!isOpen || !croquis || croquis.length === 0 || !currentItem) return null;
 
   return (
@@ -197,7 +200,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
           <div className="flex items-center gap-3 sm:gap-4">
             {canEdit && imagenUrl && !modoDibujo && (
               <button 
-                onClick={() => { setModoDibujo(true); setPoligonoActivo(null); }}
+                onClick={() => { setModoDibujo(true); setEtapaDibujo('config'); setPoligonoActivo(null); }}
                 className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20"
               >
                 <PenTool size={14} /> <span className="hidden sm:inline">Trazar Área</span>
@@ -242,7 +245,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
               minScale={0.5} 
               maxScale={8} 
               centerOnInit={true}
-              panning={{ disabled: modoDibujo }}
+              panning={{ disabled: modoDibujo && etapaDibujo === 'trazando' }} // Permite hacer paneo mientras configuras
               doubleClick={{ disabled: modoDibujo }}
             >
               {({ zoomIn, zoomOut, resetTransform }) => (
@@ -265,16 +268,17 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
 
                   <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     
-                    <div className="relative inline-flex items-center justify-center max-w-[95vw] max-h-[80vh]" onClick={() => setPoligonoActivo(null)}>
+                    {/* ELIMINAMOS "overflow-hidden" Y "rounded-lg" PARA QUE NO RECORTE EL LIENZO */}
+                    <div className="relative inline-block leading-none max-w-[95vw] max-h-[80vh]" onClick={() => setPoligonoActivo(null)}>
                       <img 
                         src={imagenUrl} 
                         alt="Croquis" 
-                        className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg pointer-events-none" 
+                        className="max-w-full max-h-full object-contain drop-shadow-2xl pointer-events-none block" 
                       />
                       
-                      <div className="absolute inset-0 z-10 rounded-lg overflow-hidden">
+                      <div className="absolute inset-0 z-10">
                         <CapaTrazados 
-                          modoDibujo={modoDibujo}
+                          modoDibujo={modoDibujo && etapaDibujo === 'trazando'}
                           puntosActuales={puntosActuales}
                           colorActual={polyColor}
                           poligonosGuardados={poligonosFiltrados as any[]}
@@ -283,6 +287,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
                         />
                       </div>
                     </div>
+
                   </TransformComponent>
                 </>
               )}
@@ -319,6 +324,8 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
         {/* PANEL DE DIBUJO FLOTANTE */}
         {modoDibujo && (
           <PanelDibujo 
+            etapa={etapaDibujo}
+            onIniciarTrazo={() => setEtapaDibujo('trazando')}
             puntosContados={puntosActuales.length}
             nombre={polyName} setNombre={setPolyName}
             color={polyColor} setColor={setPolyColor}

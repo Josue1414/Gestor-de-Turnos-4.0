@@ -25,7 +25,6 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
   const manejarClic = (e: MouseEvent<SVGSVGElement>) => {
     if (!modoDibujo || !onAgregarPunto || !svgRef.current) return;
     
-    // Calculamos el clic exacto en porcentaje (0 a 100) sin importar el zoom
     const rect = svgRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -43,22 +42,21 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
     >
-      {/* 1. POLÍGONOS GUARDADOS (RELIEVE Y FILTROS) */}
       <defs>
         <filter id="relieve" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.5" />
         </filter>
       </defs>
 
-      {poligonosGuardados.filter(p => p.estado === 'publicado' || modoDibujo).map((poly) => (
+      {poligonosGuardados.map((poly) => (
         <polygon
           key={poly.id}
           points={formatearPuntos(poly.puntos)}
-          fill={`${poly.color}40`} // Relleno translúcido (Hex Opacity)
+          fill={`${poly.color}40`} 
           stroke={poly.color}
-          strokeWidth="0.5"
+          strokeWidth="0.3"
           filter={!modoDibujo ? "url(#relieve)" : ""}
-          className={`transition-all duration-300 ${!modoDibujo ? 'cursor-pointer hover:stroke-[1] hover:fill-[opacity-0.6]' : 'pointer-events-none opacity-50'}`}
+          className={`transition-all duration-300 ${!modoDibujo ? 'cursor-pointer hover:stroke-[0.8] hover:fill-[opacity-0.6]' : 'pointer-events-none opacity-50'}`}
           onClick={(e) => {
             if (!modoDibujo && onPoligonoClick) {
               e.stopPropagation();
@@ -66,20 +64,18 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
             }
           }}
         >
-          {/* Tooltip nativo sencillo por si dejan el mouse encima */}
           <title>{poly.nombre}</title>
         </polygon>
       ))}
 
-      {/* 2. DIBUJO EN PROGRESO */}
       {modoDibujo && puntosActuales.length > 0 && (
         <>
           <polygon
             points={formatearPuntos(puntosActuales)}
             fill={`${colorActual}30`}
             stroke={colorActual}
-            strokeWidth="0.6"
-            strokeDasharray="1,1" // Línea punteada
+            strokeWidth="0.3"
+            strokeDasharray="0.5,0.5"
             className="pointer-events-none"
           />
           {puntosActuales.map((punto, i) => (
@@ -87,10 +83,10 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
               key={i}
               cx={punto.x}
               cy={punto.y}
-              r="0.8"
+              r="0.3" 
               fill="white"
               stroke={colorActual}
-              strokeWidth="0.3"
+              strokeWidth="0.2"
               className="pointer-events-none"
             />
           ))}
