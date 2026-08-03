@@ -1,9 +1,11 @@
 // public/sw.js
 self.addEventListener('install', (event) => {
+  // Obliga al nuevo Service Worker a tomar el control inmediatamente
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+  // Reclama el control de todos los clientes (pestañas) abiertos
   event.waitUntil(clients.claim());
 });
 
@@ -15,17 +17,22 @@ self.addEventListener('push', function (event) {
     data = event.data.json();
   } catch (e) {
     data = {
-      title: 'Nueva Notificación',
+      title: 'Alerta de Asistencia',
       body: event.data.text(),
       icon: '/logo-gestor-de-turnos.png'
     };
   }
 
   const options = {
-    body: data.body,
+    body: data.body || 'Un participante requiere tu asistencia.',
     icon: data.icon || '/logo-gestor-de-turnos.png',
+    badge: '/logo-gestor-de-turnos.png', // Crucial para Android (ícono en la barra de notificaciones)
     vibrate: [300, 100, 300, 100, 300], 
-    data: { dateOfArrival: Date.now(), url: '/' }
+    requireInteraction: true, // Fuerza a que la notificación no desaparezca sola
+    data: { 
+      dateOfArrival: Date.now(), 
+      url: data.url || '/' 
+    }
   };
 
   event.waitUntil(

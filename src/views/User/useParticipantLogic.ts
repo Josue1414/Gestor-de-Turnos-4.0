@@ -10,6 +10,8 @@ import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 import { enviarAlertaVercel } from '../../utils/pushNotifications';
 
+import { useTiempoReal } from '../../hooks/useTiempoReal';
+
 export interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
   codigoPais?: string;
@@ -54,6 +56,8 @@ export const useParticipantLogic = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [adminContacto, setAdminContacto] = useState({ nombre: 'Administrador', telefono: '' });
+
+  const horaActual = useTiempoReal();
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -414,19 +418,52 @@ export const useParticipantLogic = () => {
   }, [croquisGral, croquisIndiv, adminId, poligonosGral, poligonosIndiv]);
 
  const turnoAlertaInfo = useMemo(() => {
-   if (!dias || !miUsuario) return null;
-   
-   for (const dia of dias) {
-     for (const caja of dia.cajas) {
-        const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
-        const turno = turnos.find((t: any) => t.participanteId === miUsuario.id);
-        if (turno) {
-          return { cajaId: caja.id, turnoId: turno.id, solicitaAsistencia: turno.solicitaAsistencia };
-        }
-     }
-   }
-   return null;
- }, [dias, miUsuario]);
+    if (!diaActual || !miUsuario || !horaActual) return null;
+
+    // 1. Verificamos si ya hay una alerta ACTIVA (por si el turno terminó pero el admin no la ha resuelto)
+    for (const caja of diaActual.cajas) {
+      const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
+      const turnoConAlerta = turnos.find((t: any) => t.participanteId === miUsuario.id && t.solicitaAsistencia);
+      if (turnoConAlerta) {
+        return { cajaId: caja.id, turnoId: turnoConAlerta.id, solicitaAsistencia: true };
+      }
+    }
+
+    // 2. Si no hay alertas activas, buscamos si el participante está en un turno EN ESTE MOMENTO EXACTO
+    const hoyStr = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
+    
+    // Validamos que el día seleccionado en la pantalla coincida con el día actual real
+    if (!diaActual.fecha || !diaActual.fecha.includes(hoyStr)) return null;
+
+    const minActual = horaActual.getHours() * 60 + horaActual.getMinutes();
+
+    for (const caja of diaActual.cajas) {
+      const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
+      
+      const turnoActual = turnos.find((t: any) => {
+        if (t.participanteId !== miUsuario.id) return false;
+        
+        const [inicioStr, finStr] = t.horario.split('-').map((s: string) => s.trim());
+        const obtenerMinutos = (horaStr: string) => {
+          if (!horaStr) return 0;
+          const [h, m] = horaStr.split(':').map(Number);
+          return (h * 60) + m;
+        };
+        
+        const minInicio = obtenerMinutos(inicioStr);
+        const minFin = obtenerMinutos(finStr || inicioStr);
+        
+        return minActual >= minInicio && minActual <= minFin;
+      });
+
+      if (turnoActual) {
+        return { cajaId: caja.id, turnoId: turnoActual.id, solicitaAsistencia: turnoActual.solicitaAsistencia };
+      }
+    }
+
+    // Si no está en su horario, retornamos null (esto ocultará el botón automáticamente en ParticipantPanel)
+    return null;
+  }, [diaActual, miUsuario, horaActual]);
 
   const handleSolicitarAsistencia = async (estado: boolean) => {
   if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
