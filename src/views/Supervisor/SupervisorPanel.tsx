@@ -305,6 +305,18 @@ const SupervisorPanel = () => {
             await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...adminPolys, poligono] });
           }
         }}
+        onDeletePoligono={async (poligonoId, croquisId) => {
+          if (!eventoId) return;
+          const eventoRef = doc(db, 'eventos', eventoId);
+          if (croquisId === 'general') {
+            const actuales = eventoExt?.poligonosGlobales || [];
+            await updateDoc(eventoRef, { poligonosGlobales: actuales.filter(p => p.id !== poligonoId) });
+          } else {
+            const mapActual = (eventoExt as any).poligonosPorAdmin || {};
+            const adminPolys = mapActual[croquisId] || [];
+            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: adminPolys.filter((p: any) => p.id !== poligonoId) });
+          }
+        }}
       />
 
       {showExitAlert && (

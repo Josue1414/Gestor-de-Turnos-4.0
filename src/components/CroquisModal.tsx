@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Upload, Map as MapIcon, Trash2, ZoomIn, ZoomOut, Maximize, Loader2, ChevronLeft, ChevronRight, PenTool } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import type { Coordenada, DiaEvento, Participante } from '../types';
+import type { Coordenada, DiaEvento } from '../types';
 import CapaTrazados from './CroquisInteractivo/CapaTrazados';
 import PanelDibujo from './CroquisInteractivo/PanelDibujo';
 import TarjetaTurnoEnVivo, { type PoligonoCroquisExt } from './CroquisInteractivo/TarjetaTurnoEnVivo';
@@ -21,35 +21,39 @@ interface CroquisModalProps {
   canEdit?: boolean;
   croquis: CroquisItem[];
   dias?: DiaEvento[]; 
-  diaActivo?: number; 
-  getParticipante?: (id: string | null) => Participante | undefined;
   currentUserRole?: 'SuperAdmin' | 'Supervisor' | 'Administrador' | 'Capitan' | 'Participante';
   
   onSaveCroquis: (file: File | null, croquisId: string) => Promise<void>;
   onSavePoligono?: (poligono: any, croquisId: string) => Promise<void>; 
+  onDeletePoligono?: (poligonoId: string, croquisId: string) => Promise<void>;
 }
 
 const CroquisModal: React.FC<CroquisModalProps> = ({ 
   isOpen, onClose, canEdit = false, croquis, 
-  dias = [], diaActivo = 0, getParticipante, currentUserRole = 'Administrador',
-  onSaveCroquis, onSavePoligono 
+  dias = [], currentUserRole = 'Administrador',
+  onSaveCroquis, onSavePoligono, onDeletePoligono
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [localOverride, setLocalOverride] = useState<string | null | undefined>(undefined);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- ESTADOS DEL MODO DIBUJO ---
   const [modoDibujo, setModoDibujo] = useState(false);
   const [etapaDibujo, setEtapaDibujo] = useState<'config' | 'trazando'>('config');
   const [puntosActuales, setPuntosActuales] = useState<Coordenada[]>([]);
+  const [editingPolyId, setEditingPolyId] = useState<string | null>(null);
+  
   const [polyName, setPolyName] = useState('');
   const [polyColor, setPolyColor] = useState('#6366f1');
   const [polyNotas, setPolyNotas] = useState('');
-  const [polyCajaVinculada, setPolyCajaVinculada] = useState('Ninguna');
   const [polyVisibilidad, setPolyVisibilidad] = useState<'todos' | 'solo_admins_capitanes'>('todos');
+  const [polyMostrarTexto, setPolyMostrarTexto] = useState(true);
+  
+  const [polyEncargadoNombre, setPolyEncargadoNombre] = useState('');
+  const [polyEncargadoTelefono, setPolyEncargadoTelefono] = useState('');
+  const [polyDiasSeleccionados, setPolyDiasSeleccionados] = useState<string[]>([]);
+  const [polyHorarios, setPolyHorarios] = useState<string[]>([]);
 
-  // --- ESTADOS DE LA TARJETA EN VIVO ---
   const [poligonoActivo, setPoligonoActivo] = useState<PoligonoCroquisExt | null>(null);
 
   useEffect(() => {
@@ -64,32 +68,24 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const currentItem = croquis?.[activeIndex];
   const imagenUrl = localOverride !== undefined ? localOverride : currentItem?.url;
 
-  const nombresCajasDisponibles = useMemo(() => {
-    const nombres = new Set<string>();
-    dias.forEach(d => d.cajas.forEach(c => nombres.add(c.nombre)));
-    return Array.from(nombres);
+  // Extraemos fechas únicas con Set para evitar duplicados
+  const diasDisponibles = useMemo(() => {
+    const nombresDias = dias.map((d, index) => d.fecha || `Día ${index + 1}`);
+    return Array.from(new Set(nombresDias));
   }, [dias]);
-
-  const cajasDeHoyNombres = useMemo(() => {
-    if (!dias[diaActivo]) return [];
-    return dias[diaActivo].cajas.map(c => c.nombre);
-  }, [dias, diaActivo]);
 
   const poligonosFiltrados = useMemo(() => {
     const polys = (currentItem?.poligonos || []) as PoligonoCroquisExt[];
     return polys.filter(p => {
       if (modoDibujo) return true; 
+      if (currentUserRole === 'SuperAdmin' || currentUserRole === 'Supervisor') return true; 
+      // Filtrar la visibilidad restringida para participantes
+      if (p.visibilidad === 'solo_admins_capitanes' && currentUserRole === 'Participante') return false;
       
-      if (currentUserRole === 'SuperAdmin' || currentUserRole === 'Supervisor') {
-        return p.estado === 'publicado';
-      }
-      
-      if (p.cajaVinculadaNombre && p.cajaVinculadaNombre !== 'Ninguna') {
-         if (!cajasDeHoyNombres.includes(p.cajaVinculadaNombre)) return false;
-      }
-      return p.estado === 'publicado';
+      // DEVOLVER TRUE: Esto corrige que los participantes no vean los croquis (ya no dependemos de un estado estricto "publicado" en datos viejos)
+      return true;
     });
-  }, [currentItem?.poligonos, modoDibujo, cajasDeHoyNombres, currentUserRole]);
+  }, [currentItem?.poligonos, modoDibujo, currentUserRole]);
 
   const handleCloseModal = () => {
     if (isUploading) return;
@@ -115,18 +111,14 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     if (file && currentItem) {
       if (file.size > 5 * 1024 * 1024) {
         alert("La imagen no debe superar los 5MB.");
-        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
       setIsUploading(true);
       try {
-        const previewUrl = URL.createObjectURL(file);
-        setLocalOverride(previewUrl);
+        setLocalOverride(URL.createObjectURL(file));
         await onSaveCroquis(file, currentItem.id);
       } catch (error) {
-        console.error("Error al subir croquis:", error);
         setLocalOverride(undefined);
-        alert("Error al subir el croquis.");
       } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -140,9 +132,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     try {
       await onSaveCroquis(null, currentItem.id);
       setLocalOverride(null);
-    } catch (error) {
-      console.error(error);
-      alert("Error al eliminar el croquis.");
     } finally {
       setIsUploading(false);
     }
@@ -151,39 +140,61 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const cancelarDibujo = () => {
     setModoDibujo(false);
     setEtapaDibujo('config');
+    setEditingPolyId(null);
     setPuntosActuales([]);
     setPolyName('');
     setPolyNotas('');
-    setPolyCajaVinculada('Ninguna');
     setPolyVisibilidad('todos');
+    setPolyMostrarTexto(true);
+    setPolyEncargadoNombre('');
+    setPolyEncargadoTelefono('');
+    setPolyDiasSeleccionados([]);
+    setPolyHorarios([]);
   };
 
   const handleGuardarTerritorio = async () => {
     if (!onSavePoligono || !currentItem) return;
     const nuevoPoligono: PoligonoCroquisExt = {
-      id: `poly_${Date.now()}`,
+      id: editingPolyId || `poly_${Date.now()}`,
       nombre: polyName.trim(),
       color: polyColor,
       puntos: puntosActuales,
       notas: polyNotas.trim(),
-      cajaVinculadaNombre: polyCajaVinculada,
+      encargadoNombre: polyEncargadoNombre.trim(),
+      encargadoTelefono: polyEncargadoTelefono.trim(),
+      diasAplicables: polyDiasSeleccionados,
+      horarios: polyHorarios,
       visibilidad: polyVisibilidad,
-      estado: 'publicado'
+      estado: 'publicado',
+      mostrarTexto: polyMostrarTexto 
     };
     await onSavePoligono(nuevoPoligono, currentItem.id);
     cancelarDibujo();
   };
 
-  const handlePoligonoClick = (poligono: PoligonoCroquisExt) => {
-    setPoligonoActivo(poligono);
+  const handleDeleteTerritorio = async (id: string) => {
+    if (!onDeletePoligono || !currentItem) return;
+    await onDeletePoligono(id, currentItem.id);
+    setPoligonoActivo(null);
   };
 
-  const cajaEnVivoActual = useMemo(() => {
-    if (!poligonoActivo || poligonoActivo.cajaVinculadaNombre === 'Ninguna') return undefined;
-    const diaActualObj = dias[diaActivo];
-    if (!diaActualObj) return undefined;
-    return diaActualObj.cajas.find(c => c.nombre === poligonoActivo.cajaVinculadaNombre);
-  }, [poligonoActivo, dias, diaActivo]);
+  const iniciarEdicion = (poly: PoligonoCroquisExt) => {
+    setEditingPolyId(poly.id);
+    setPolyName(poly.nombre);
+    setPolyColor(poly.color || '#6366f1');
+    setPolyNotas(poly.notas || '');
+    setPolyVisibilidad(poly.visibilidad || 'todos');
+    setPolyMostrarTexto(poly.mostrarTexto ?? true);
+    setPolyEncargadoNombre(poly.encargadoNombre || '');
+    setPolyEncargadoTelefono(poly.encargadoTelefono || '');
+    setPolyDiasSeleccionados(poly.diasAplicables || []);
+    setPolyHorarios(poly.horarios || []);
+    setPuntosActuales(poly.puntos || []);
+    
+    setPoligonoActivo(null);
+    setModoDibujo(true);
+    setEtapaDibujo('config');
+  };
 
   if (!isOpen || !croquis || croquis.length === 0 || !currentItem) return null;
 
@@ -220,15 +231,10 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
         </div>
 
         <div className="flex-1 relative bg-slate-100/50 flex items-center justify-center overflow-hidden dotted-background group">
-          
           {croquis.length > 1 && !modoDibujo && (
             <>
-              <button onClick={() => cambiarImagen('izq')} className="absolute left-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100">
-                <ChevronLeft size={28} />
-              </button>
-              <button onClick={() => cambiarImagen('der')} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100">
-                <ChevronRight size={28} />
-              </button>
+              <button onClick={() => cambiarImagen('izq')} className="absolute left-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100"><ChevronLeft size={28} /></button>
+              <button onClick={() => cambiarImagen('der')} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 bg-white/80 p-3 rounded-full shadow-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all sm:opacity-0 sm:group-hover:opacity-100"><ChevronRight size={28} /></button>
             </>
           )}
 
@@ -240,14 +246,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
           )}
 
           {imagenUrl ? (
-            <TransformWrapper 
-              initialScale={1} 
-              minScale={0.5} 
-              maxScale={8} 
-              centerOnInit={true}
-              panning={{ disabled: modoDibujo && etapaDibujo === 'trazando' }} // Permite hacer paneo mientras configuras
-              doubleClick={{ disabled: modoDibujo }}
-            >
+            <TransformWrapper initialScale={1} minScale={0.5} maxScale={8} centerOnInit={true} panning={{ disabled: modoDibujo && etapaDibujo === 'trazando' }} doubleClick={{ disabled: modoDibujo }}>
               {({ zoomIn, zoomOut, resetTransform }) => (
                 <>
                   {!modoDibujo && (
@@ -267,27 +266,17 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
                   )}
 
                   <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    
-                    {/* ELIMINAMOS "overflow-hidden" Y "rounded-lg" PARA QUE NO RECORTE EL LIENZO */}
-                    <div className="relative inline-block leading-none max-w-[95vw] max-h-[80vh]" onClick={() => setPoligonoActivo(null)}>
-                      <img 
-                        src={imagenUrl} 
-                        alt="Croquis" 
-                        className="max-w-full max-h-full object-contain drop-shadow-2xl pointer-events-none block" 
-                      />
-                      
-                      <div className="absolute inset-0 z-10">
+                    <div className="relative inline-flex leading-none shadow-2xl" onClick={() => setPoligonoActivo(null)}>
+                      <img src={imagenUrl} alt="Croquis" className="max-w-[1500px] max-h-[80vh] w-auto h-auto object-contain pointer-events-none block" />
+                      <div className="absolute inset-0 z-10 w-full h-full">
                         <CapaTrazados 
-                          modoDibujo={modoDibujo && etapaDibujo === 'trazando'}
-                          puntosActuales={puntosActuales}
-                          colorActual={polyColor}
-                          poligonosGuardados={poligonosFiltrados as any[]}
+                          modoDibujo={modoDibujo && etapaDibujo === 'trazando'} puntosActuales={puntosActuales} colorActual={polyColor}
+                          poligonosGuardados={poligonosFiltrados as any[]} currentUserRole={currentUserRole}
                           onAgregarPunto={(punto) => setPuntosActuales(prev => [...prev, punto])}
-                          onPoligonoClick={handlePoligonoClick}
+                          onPoligonoClick={setPoligonoActivo}
                         />
                       </div>
                     </div>
-
                   </TransformComponent>
                 </>
               )}
@@ -310,38 +299,31 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
           )}
         </div>
 
-        {/* TARJETA EN VIVO */}
         {poligonoActivo && (
           <TarjetaTurnoEnVivo 
-            poligono={poligonoActivo}
-            cajaActual={cajaEnVivoActual}
-            rolUsuario={currentUserRole}
-            getParticipante={getParticipante}
-            onClose={() => setPoligonoActivo(null)}
+            poligono={poligonoActivo} rolUsuario={currentUserRole}
+            onClose={() => setPoligonoActivo(null)} onEdit={iniciarEdicion} onDelete={handleDeleteTerritorio}
           />
         )}
 
-        {/* PANEL DE DIBUJO FLOTANTE */}
         {modoDibujo && (
           <PanelDibujo 
-            etapa={etapaDibujo}
-            onIniciarTrazo={() => setEtapaDibujo('trazando')}
-            puntosContados={puntosActuales.length}
-            nombre={polyName} setNombre={setPolyName}
-            color={polyColor} setColor={setPolyColor}
-            notas={polyNotas} setNotas={setPolyNotas}
-            cajaVinculadaNombre={polyCajaVinculada} setCajaVinculadaNombre={setPolyCajaVinculada}
+            etapa={etapaDibujo} onIniciarTrazo={() => setEtapaDibujo('trazando')}
+            puntosContados={puntosActuales.length} nombre={polyName} setNombre={setPolyName}
+            color={polyColor} setColor={setPolyColor} notas={polyNotas} setNotas={setPolyNotas}
+            encargadoNombre={polyEncargadoNombre} setEncargadoNombre={setPolyEncargadoNombre}
+            encargadoTelefono={polyEncargadoTelefono} setEncargadoTelefono={setPolyEncargadoTelefono}
+            diasDisponibles={diasDisponibles} diasSeleccionados={polyDiasSeleccionados} setDiasSeleccionados={setPolyDiasSeleccionados}
+            horarios={polyHorarios} setHorarios={setPolyHorarios}
             visibilidad={polyVisibilidad} setVisibilidad={setPolyVisibilidad}
-            nombresCajasDisponibles={nombresCajasDisponibles}
+            mostrarTexto={polyMostrarTexto} setMostrarTexto={setPolyMostrarTexto}
             onDeshacer={() => setPuntosActuales(prev => prev.slice(0, -1))}
-            onLimpiar={() => setPuntosActuales([])}
-            onCancelar={cancelarDibujo}
-            onGuardar={handleGuardarTerritorio}
+            onLimpiar={() => setPuntosActuales([])} onCancelar={cancelarDibujo} onGuardar={handleGuardarTerritorio}
           />
         )}
 
       </div>
-      <style dangerouslySetInnerHTML={{__html: `.dotted-background { background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; }`}} />
+      <style dangerouslySetInnerHTML={{__html: `.dotted-background { background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; } .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }`}} />
     </div>
   );
 };
