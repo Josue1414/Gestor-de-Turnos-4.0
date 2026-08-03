@@ -1,8 +1,10 @@
+// src/components/MatrizTurnosParticipante.tsx
 import React, { useMemo } from 'react';
 import { Plus, User, Lock, Clock } from 'lucide-react';
 import type { DiaEvento, Participante } from '../types';
 import CajasEspeciales from './CajasEspeciales';
 import { useTurnoModal } from '../hooks/useTurnoModal';
+import { useTiempoReal } from '../hooks/useTiempoReal'; 
 import ModalInfoTurno from './ModalInfoTurno';
 
 interface ContactoWA {
@@ -15,7 +17,6 @@ interface MatrizTurnosParticipanteProps {
   diaActual: DiaEvento;
   getParticipante: (id: string | null) => Participante | undefined;
   miUsuarioId: string;
-  // Volvemos a string (ID) para que coincida con el Hook
   onAsignarme: (cajaId: string, turnoId: string) => void;
   onQuitarme: (cajaId: string, turnoId: string) => void;
   contactosWhatsApp?: ContactoWA[];
@@ -28,6 +29,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
 }) => {
 
   const { isOpen, openModal, closeModal, turnoData, countdown } = useTurnoModal();
+  const horaActual = useTiempoReal();
 
   const checkIsEspecial = (c: unknown): boolean => {
     if (!c || typeof c !== 'object') return false;
@@ -90,6 +92,7 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
         isBusy={isBusy}
         onAsignarme={onAsignarme}
         onQuitarme={onQuitarme}
+        fechaDia={diaActual.fecha}
       />
 
       {cajasNormales.length > 0 && (
@@ -149,23 +152,68 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                               const isMiTurno = turno.participanteId === miUsuarioId;
                               const estaOcupadoEnOtroLado = isBusy(turno.horario) && !isMiTurno;
                               
+                              // --- LÓGICA DE TIEMPO REAL INTEGRADA ---
+                              let isActivo = false;
+
+                              if (diaActual.fecha && turno.horario && horaActual) {
+                                const hoyStr = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
+                                
+                                if (diaActual.fecha.includes(hoyStr)) {
+                                  const [inicioStr, finStr] = turno.horario.split('-').map((s: string) => s.trim());
+                                  const obtenerMinutos = (horaStr: string) => {
+                                    if (!horaStr) return 0;
+                                    const [h, m] = horaStr.split(':').map(Number);
+                                    return (h * 60) + m;
+                                  };
+                                  const minActual = horaActual.getHours() * 60 + horaActual.getMinutes();
+                                  const minInicio = obtenerMinutos(inicioStr);
+                                  const minFin = obtenerMinutos(finStr || inicioStr);
+
+                                  isActivo = minActual >= minInicio && minActual <= minFin;
+                                }
+                              }
+                              // ----------------------------------------
+
                               return (
                                 <div key={turno.id} className="w-full">
                                   {isMiTurno ? (
                                     <button 
-                                      onClick={() => openModal(caja.id, turno.id, turno.horario, caja.nombre, getParticipante(miUsuarioId), turno)} 
-                                      className="w-full text-left bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-1.5 sm:p-2 transition-colors shadow-md relative group overflow-hidden"
+                                      onClick={() => openModal(caja.id, turno.id, turno.horario, caja.nombre, participanteTurno, turno)} 
+                                      className={`w-full text-left rounded-lg p-1.5 sm:p-2 transition-all shadow-md relative group overflow-hidden border ${
+                                        isActivo
+                                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-300'
+                                          : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500'
+                                      }`}
                                     >
-                                      <div className="flex justify-between items-center">
-                                        <span className="font-black text-[9px] sm:text-sm truncate">TÚ ESTÁS AQUÍ</span>
-                                        <Lock size={10} className="group-hover:hidden sm:w-3 sm:h-3 shrink-0" />
-                                        <span className="text-[8px] sm:text-[10px] bg-white text-blue-700 px-1 sm:px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1">Ver</span>
+                                      <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-1 font-bold text-[10px] sm:text-sm truncate pr-4">
+                                          <User size={12} className="shrink-0 sm:w-3.5 sm:h-3.5 opacity-80" />
+                                          <span className="truncate">{participanteTurno?.nombre}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[7px] sm:text-[8px] bg-white/25 px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider flex items-center gap-1">
+                                            Tú estás aquí
+                                          </span>
+                                          {isActivo && (
+                                            <span className="text-[7px] sm:text-[8px] bg-white text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase animate-pulse">
+                                              En curso
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </button>
                                   ) : participanteTurno ? (
-                                    <div className="bg-slate-100 border border-slate-200 rounded-lg p-1.5 sm:p-2 opacity-60 overflow-hidden">
-                                      <div className="flex items-center gap-1 font-bold text-slate-600 text-[10px] sm:text-sm break-words">
-                                        <User size={10} className="shrink-0 sm:w-3 sm:h-3" /> <span className="truncate">{participanteTurno.nombre}</span>
+                                    <div className={`border rounded-lg p-1.5 sm:p-2 overflow-hidden transition-all ${isActivo ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/50 shadow-sm' : 'bg-slate-100 border-slate-200 opacity-60'}`}>
+                                      <div className={`flex justify-between items-center gap-1 font-bold text-[10px] sm:text-sm break-words ${isActivo ? 'text-emerald-900' : 'text-slate-600'}`}>
+                                        <div className="flex items-center gap-1 truncate">
+                                          <User size={10} className="shrink-0 sm:w-3 sm:h-3" /> <span className="truncate">{participanteTurno.nombre}</span>
+                                        </div>
+                                        {/* ICONO Y TEXTO DE "EN CURSO" */}
+                                        {isActivo && (
+                                          <span className="ml-1 text-[7px] sm:text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase animate-pulse shrink-0">
+                                            En curso
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   ) : estaOcupadoEnOtroLado ? (
@@ -176,9 +224,15 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
                                       <span className="text-[8px] sm:text-[9px] text-red-500 font-bold block mt-0.5 truncate">En este horario</span>
                                     </div>
                                   ) : (
-                                    // Pasamos turno.id
-                                    <button onClick={() => onAsignarme(caja.id, turno.id)} className="w-full h-8 sm:h-12 bg-white border border-dashed border-emerald-400 rounded-lg text-emerald-600 flex items-center justify-center gap-1 hover:bg-emerald-50 transition-colors shadow-sm overflow-hidden">
-                                      <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="text-[10px] sm:text-xs font-bold">Asignarme</span>
+                                    <button 
+                                      onClick={() => onAsignarme(caja.id, turno.id)} 
+                                      className={`w-full h-8 sm:h-12 border rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm overflow-hidden text-[10px] sm:text-xs font-bold ${
+                                        isActivo 
+                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600' 
+                                        : 'bg-white border-dashed border-emerald-400 text-emerald-600 hover:bg-emerald-50'
+                                      }`}
+                                    >
+                                      <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span>Asignarme</span>
                                     </button>
                                   )}
                                 </div>
@@ -202,14 +256,12 @@ const MatrizTurnosParticipante: React.FC<MatrizTurnosParticipanteProps> = ({
         </div>
       )}
 
-      {/* RENDERIZADO DEL MODAL PARA EL PARTICIPANTE */}
       <ModalInfoTurno
         isOpen={isOpen} onClose={closeModal} turnoData={turnoData} countdown={countdown}
         isParticipantView={true}
         contactosWhatsApp={contactosWhatsApp}
         onRemove={() => {
           if (turnoData?.participante) {
-            // Pasamos los IDs directamente
             onQuitarme(turnoData.cajaId, turnoData.turnoId);
           }
           closeModal();

@@ -288,10 +288,8 @@ const ParticipantPanel = () => {
         canEdit={false} 
         croquis={croquisDataParaMostrar} 
         onSaveCroquis={async () => Promise.resolve()}
-        // --- NUEVAS PROPIEDADES AGREGADAS ---
         dias={dias} 
         diaActivo={diaActivo} 
-        getParticipante={(id) => participantes.find(p => p.id === id)} 
         currentUserRole="Participante" 
       />
 

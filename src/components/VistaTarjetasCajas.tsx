@@ -3,6 +3,7 @@
 import React from 'react';
 import { Clock, Edit2, Trash2, User, UserPlus, Box, Star, Users, CheckCircle2, Bell } from 'lucide-react';
 import { useTurnoModal } from '../hooks/useTurnoModal';
+import { useTiempoReal } from '../hooks/useTiempoReal';
 import ModalInfoTurno from './ModalInfoTurno';
 
 interface ContactoWA {
@@ -39,6 +40,7 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
 }) => {
 
   const { isOpen, openModal, closeModal, turnoData, countdown, cajaEntregada, setCajaEntregada, cajaDevuelta, setCajaDevuelta } = useTurnoModal();
+  const horaActual = useTiempoReal(); 
 
   if (!diaActual || !diaActual.cajas) return null;
 
@@ -62,7 +64,6 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
           const turnosOcupados = caja.turnos.filter((t: any) => t.participanteId).length;
           const turnosLibres = totalTurnos - turnosOcupados;
           
-          // Buscar si la caja está asignada a algún capitán para este día
           const capitanDeCaja = capitanes?.find((cap: any) => 
             (cap.cajasAsignadas || []).includes(caja.id) && 
             (cap.diasAsignados || []).includes(diaActual.id)
@@ -80,7 +81,6 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     <h3 className={`font-black text-sm uppercase tracking-tight ${especial ? 'text-amber-900' : 'text-slate-800'}`}>
                       {caja.nombre}
                     </h3>
-                    {/* ETIQUETA DEL CAPITÁN */}
                     {capitanDeCaja && (
                       <span className={`text-[9px] font-black px-1.5 py-0.5 rounded w-fit mt-0.5 uppercase tracking-wider ${especial ? 'bg-amber-200 text-amber-800' : 'bg-indigo-100 text-indigo-700'}`}>
                         Capitan: {capitanDeCaja.nombre}
@@ -126,9 +126,44 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     const estaOcupado = !!participante;
                     const isMiTurno = miUsuarioId && turno.participanteId === miUsuarioId;
                     const estaOcupadoEnOtroLado = miUsuarioId && isBusy && isBusy(turno.horario) && !isMiTurno;
-                    
-                    // Solo se mostrará el diseño de alerta si NO estamos en la vista de participante
                     const tieneAlerta = !!turno.solicitaAsistencia && !miUsuarioId;
+
+                    let estadoTurno: 'normal' | 'activo' | 'atrasado' = 'normal';
+
+                    if (diaActual.fecha && turno.horario && horaActual) {
+                      const hoyStr = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
+                      
+                      if (diaActual.fecha.includes(hoyStr)) {
+                        const [inicioStr, finStr] = turno.horario.split('-').map((s: string) => s.trim());
+                        const obtenerMinutos = (horaStr: string) => {
+                          if (!horaStr) return 0;
+                          const [h, m] = horaStr.split(':').map(Number);
+                          return (h * 60) + m;
+                        };
+                        const minActual = horaActual.getHours() * 60 + horaActual.getMinutes();
+                        const minInicio = obtenerMinutos(inicioStr);
+                        const minFin = obtenerMinutos(finStr || inicioStr);
+
+                        const isActivo = minActual >= minInicio && minActual <= minFin;
+                        const isAtrasado = minActual > minFin && !(turno.entregada && turno.devuelta);
+
+                        if (isActivo) estadoTurno = 'activo';
+                        else if (isAtrasado) estadoTurno = 'atrasado';
+                      }
+                    }
+
+                    // CLASES DINÁMICAS (Se removió el fondo rojo para atrasado)
+                    let cardClass = `flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-xl border transition-all `;
+                    
+                    if (tieneAlerta) cardClass += 'bg-orange-50 border-orange-400 shadow-sm ring-1 ring-orange-200';
+                    else if (estadoTurno === 'activo') cardClass += 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300 shadow-sm';
+                    else if (estaOcupado) cardClass += especial ? 'bg-amber-50/50 border-amber-200' : 'bg-blue-50/50 border-blue-100';
+                    else cardClass += 'bg-slate-50 border-slate-200';
+
+                    if (!miUsuarioId && estaOcupado) cardClass += ' cursor-pointer hover:shadow-md hover:border-blue-400';
+
+                    const clockColor = tieneAlerta ? 'text-orange-500' : estadoTurno === 'activo' ? 'text-emerald-500' : estadoTurno === 'atrasado' ? 'text-red-500' : estaOcupado ? (especial ? 'text-amber-500' : 'text-blue-500') : 'text-slate-400';
+                    const timeColor = tieneAlerta ? 'text-orange-900' : estadoTurno === 'activo' ? 'text-emerald-900' : estadoTurno === 'atrasado' ? 'text-red-900' : estaOcupado ? (especial ? 'text-amber-900' : 'text-blue-900') : 'text-slate-600';
 
                     const handleClickCard = () => {
                       if (estaOcupado && !miUsuarioId) {
@@ -137,25 +172,18 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     };
 
                     return (
-                      <div 
-                        key={turno.id} 
-                        onClick={handleClickCard}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-xl border transition-all 
-                          ${tieneAlerta ? 'bg-orange-50 border-orange-400 shadow-sm ring-1 ring-orange-200' 
-                          : estaOcupado ? (especial ? 'bg-amber-50/50 border-amber-200' : 'bg-blue-50/50 border-blue-100') 
-                          : 'bg-slate-50 border-slate-200'} 
-                          ${!miUsuarioId && estaOcupado ? 'cursor-pointer hover:shadow-md hover:border-blue-400' : ''}`}
-                      >
-                        
-                        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-0">
-                          <Clock size={12} className={tieneAlerta ? 'text-orange-500' : estaOcupado ? (especial ? 'text-amber-500' : 'text-blue-500') : 'text-slate-400'} />
-                          <span className={`text-[11px] font-black ${tieneAlerta ? 'text-orange-900' : estaOcupado ? (especial ? 'text-amber-900' : 'text-blue-900') : 'text-slate-600'}`}>
+                      <div key={turno.id} onClick={handleClickCard} className={cardClass}>
+                        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-0 flex-wrap">
+                          <Clock size={12} className={clockColor} />
+                          <span className={`text-[11px] font-black ${timeColor}`}>
                             {turno.horario}
                           </span>
+                          
+                          {estadoTurno === 'activo' && <span className="ml-1 text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase animate-pulse">En curso</span>}
+                          {estadoTurno === 'atrasado' && <span className="ml-1 text-[8px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black uppercase">Faltante</span>}
                         </div>
 
                         <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
-                          
                           {isMiTurno ? (
                              <button 
                                onClick={(e) => { 
@@ -195,9 +223,14 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                               <span className="text-[10px] font-bold text-slate-400 italic sm:hidden">Libre</span>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); onAsignar(caja.id, caja.nombre, turno.id, turno.horario); }} 
-                                className={`text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center justify-center gap-1 shadow-sm ${miUsuarioId ? 'bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto text-white' : especial ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
+                                className={`text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center justify-center gap-1 shadow-sm ${
+                                  miUsuarioId ? 'bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto text-white' 
+                                  : estadoTurno === 'atrasado' ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                  : especial ? 'bg-amber-500 hover:bg-amber-600 text-white' 
+                                  : 'bg-slate-800 hover:bg-slate-900 text-white'
+                                }`}
                               >
-                                <UserPlus size={12} /> {miUsuarioId ? 'Asignarme' : 'Asignar'}
+                                <UserPlus size={12} /> {miUsuarioId ? 'Asignarme' : estadoTurno === 'atrasado' ? 'Faltó Asignar' : 'Asignar'}
                               </button>
                             </>
                           )}

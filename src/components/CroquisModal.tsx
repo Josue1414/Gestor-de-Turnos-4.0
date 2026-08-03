@@ -21,6 +21,7 @@ interface CroquisModalProps {
   canEdit?: boolean;
   croquis: CroquisItem[];
   dias?: DiaEvento[]; 
+  diaActivo?: number; 
   currentUserRole?: 'SuperAdmin' | 'Supervisor' | 'Administrador' | 'Capitan' | 'Participante';
   
   onSaveCroquis: (file: File | null, croquisId: string) => Promise<void>;
@@ -30,7 +31,7 @@ interface CroquisModalProps {
 
 const CroquisModal: React.FC<CroquisModalProps> = ({ 
   isOpen, onClose, canEdit = false, croquis, 
-  dias = [], currentUserRole = 'Administrador',
+  dias = [], diaActivo = 0, currentUserRole = 'Administrador',
   onSaveCroquis, onSavePoligono, onDeletePoligono
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -68,24 +69,40 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const currentItem = croquis?.[activeIndex];
   const imagenUrl = localOverride !== undefined ? localOverride : currentItem?.url;
 
-  // Extraemos fechas únicas con Set para evitar duplicados
   const diasDisponibles = useMemo(() => {
-    const nombresDias = dias.map((d, index) => d.fecha || `Día ${index + 1}`);
+    const nombresDias = dias.map((d, index) => d.nombreDia || d.fecha || `Día ${index + 1}`);
     return Array.from(new Set(nombresDias));
   }, [dias]);
 
   const poligonosFiltrados = useMemo(() => {
     const polys = (currentItem?.poligonos || []) as PoligonoCroquisExt[];
+    const diaActualObj = dias[diaActivo];
+    
+    // CREAMOS UN ARRAY CON TODAS LAS FORMAS DE FECHA POSIBLES PARA EL DÍA ACTUAL
+    const posiblesNombresDia = [
+      diaActualObj?.nombreDia, 
+      diaActualObj?.fecha, 
+      `Día ${diaActivo + 1}`
+    ].filter(Boolean);
+
     return polys.filter(p => {
       if (modoDibujo) return true; 
-      if (currentUserRole === 'SuperAdmin' || currentUserRole === 'Supervisor') return true; 
-      // Filtrar la visibilidad restringida para participantes
-      if (p.visibilidad === 'solo_admins_capitanes' && currentUserRole === 'Participante') return false;
-      
-      // DEVOLVER TRUE: Esto corrige que los participantes no vean los croquis (ya no dependemos de un estado estricto "publicado" en datos viejos)
+
+      if (currentUserRole === 'Participante' && p.visibilidad === 'solo_admins_capitanes') {
+        return false;
+      }
+
+      // VALIDACIÓN DE FECHAS ESTRICTA 
+      if (p.diasAplicables && p.diasAplicables.length > 0) {
+        const aplicaParaHoy = p.diasAplicables.some(diaAplicable => posiblesNombresDia.includes(diaAplicable));
+        if (!aplicaParaHoy) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [currentItem?.poligonos, modoDibujo, currentUserRole]);
+  }, [currentItem?.poligonos, modoDibujo, currentUserRole, dias, diaActivo]);
 
   const handleCloseModal = () => {
     if (isUploading) return;

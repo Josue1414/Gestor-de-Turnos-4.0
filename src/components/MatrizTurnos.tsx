@@ -130,6 +130,7 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
         onQuitar={onQuitar} 
         onDeleteTurnoEspecial={onDeleteTurnoEspecial}
         onEditTurnoEspecial={onEditTurnoEspecial}
+        fechaDia={diaActual.fecha}
       />
 
       {cajasNormales.length > 0 ? (

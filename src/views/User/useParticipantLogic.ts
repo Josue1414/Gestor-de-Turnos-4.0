@@ -8,7 +8,6 @@ import type { DiaEvento, Participante } from '../../types';
 import type { UsuarioModalData } from '../../components/ModalInfoUsuario';
 import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
-
 import { enviarAlertaVercel } from '../../utils/pushNotifications';
 
 export interface ParticipanteExtendidoDb extends Participante {
@@ -21,7 +20,7 @@ export interface ParticipanteExtendidoDb extends Participante {
   fechaNacimiento?: string;
   capitanId?: string; 
   cajasDelCapitan?: string[]; 
-  diasDelCapitan?: string[]; // <-- 1. NUEVO: Para guardar los días del capitán
+  diasDelCapitan?: string[]; 
   capitanNombre?: string; 
   capitanTelefono?: string; 
 }
@@ -40,6 +39,10 @@ export const useParticipantLogic = () => {
   
   const [croquisGral, setCroquisGral] = useState<string | null>(null);
   const [croquisIndiv, setCroquisIndiv] = useState<string | null>(null);
+  
+  // NUEVOS ESTADOS PARA ALMACENAR TRAZOS
+  const [poligonosGral, setPoligonosGral] = useState<any[]>([]);
+  const [poligonosIndiv, setPoligonosIndiv] = useState<any[]>([]);
   
   const [diaActivo, setDiaActivo] = useState(0);
   const [vistaTarjetas, setVistaTarjetas] = useState(false); 
@@ -90,7 +93,7 @@ export const useParticipantLogic = () => {
                  capitanNombre: cap.nombre, 
                  capitanTelefono: cap.telefono || '', 
                  cajasDelCapitan: cap.cajasAsignadas || [],
-                 diasDelCapitan: cap.diasAsignados || [] // <-- 2. Rescatamos los días del capitán
+                 diasDelCapitan: cap.diasAsignados || [] 
                });
              }
           });
@@ -118,28 +121,26 @@ export const useParticipantLogic = () => {
         const viewCapitanId = localStorage.getItem('view_capitan_id');
         
         let cajasVisibles: string[] | null = null;
-        let diasVisibles: string[] | null = null; // <-- 3. Bandera para los días
+        let diasVisibles: string[] | null = null; 
         let nombreEquipoActual = '';
 
         if (viewCapitanId) {
            const capVista = capitanes.find((c: any) => c.id === viewCapitanId);
            if (capVista) {
                cajasVisibles = capVista.cajasAsignadas || [];
-               diasVisibles = capVista.diasAsignados || []; // Extraemos
+               diasVisibles = capVista.diasAsignados || [];
                nombreEquipoActual = capVista.nombre;
            }
         } else if (currentUser?.capitanId) {
            cajasVisibles = currentUser.cajasDelCapitan || [];
-           diasVisibles = currentUser.diasDelCapitan || []; // Extraemos
+           diasVisibles = currentUser.diasDelCapitan || []; 
            nombreEquipoActual = currentUser.capitanNombre || '';
         }
 
-        // 4. LÓGICA DE FILTRADO CORREGIDA: Primero limitamos estrictamente los días
         if (diasVisibles !== null) {
            diasProcesados = diasProcesados.filter(d => diasVisibles!.includes(d.id));
         }
 
-        // Luego limitamos las cajas dentro de esos días permitidos
         if (cajasVisibles) {
            diasProcesados = diasProcesados.map(d => ({
              ...d,
@@ -154,6 +155,11 @@ export const useParticipantLogic = () => {
         setDias(diasProcesados);
         setCroquisGral(data.croquisUrl || null);
         setCroquisIndiv(data.croquisPorAdmin?.[adminId] || null);
+
+        // EXTRAER POLÍGONOS DE LA BASE DE DATOS
+        setPoligonosGral(data.poligonos_general || data.poligonosGeneral || data.croquisPoligonos?.general || []);
+        setPoligonosIndiv(data[`poligonos_${adminId}`] || data.poligonosPorAdmin?.[adminId] || data.croquisPoligonos?.[adminId] || []);
+
       } else {
         showToast('El evento no existe.', 'error');
         navigate('/');
@@ -387,14 +393,25 @@ export const useParticipantLogic = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [handleLogout]);
 
+  // AHORA SÍ SE INYECTAN LOS POLÍGONOS A LA VISTA
   const croquisDataParaMostrar: CroquisItem[] = useMemo(() => {
     const arr: CroquisItem[] = [];
-    arr.push({ id: 'general', title: 'Croquis General', url: croquisGral });
+    arr.push({ 
+        id: 'general', 
+        title: 'Croquis General', 
+        url: croquisGral,
+        poligonos: poligonosGral 
+    });
     if (croquisIndiv) {
-      arr.push({ id: adminId || 'admin', title: 'Croquis del Área', url: croquisIndiv });
+      arr.push({ 
+          id: adminId || 'admin', 
+          title: 'Croquis del Área', 
+          url: croquisIndiv,
+          poligonos: poligonosIndiv 
+      });
     }
     return arr;
-  }, [croquisGral, croquisIndiv, adminId]);
+  }, [croquisGral, croquisIndiv, adminId, poligonosGral, poligonosIndiv]);
 
  const turnoAlertaInfo = useMemo(() => {
    if (!dias || !miUsuario) return null;
@@ -412,7 +429,6 @@ export const useParticipantLogic = () => {
  }, [dias, miUsuario]);
 
   const handleSolicitarAsistencia = async (estado: boolean) => {
-  // Agregamos !miUsuario a la validación de retorno temprano
   if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
   
   try {
@@ -422,25 +438,21 @@ export const useParticipantLogic = () => {
     const data = docSnap.data();
     const rawDias = data.diasPorAdmin?.[adminId] || [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
       ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
       } : c)
     } : d);
 
     await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
 
-    // --- MAGIA DE LA VIBRACIÓN Y PUSH ---
     if ("vibrate" in navigator) {
       navigator.vibrate(estado ? [100, 50, 100] : [50]);
     }
 
-    // SI EL ESTADO ES TRUE (Pidiendo ayuda), BUSCAMOS LA SUSCRIPCIÓN Y ENVIAMOS PUSH
     if (estado) {
       const targetId = miUsuario.capitanId || adminId;
-      const subscription = data.suscripcionesPush?.[targetId]; // Leemos la suscripción de Firebase
+      const subscription = data.suscripcionesPush?.[targetId];
       
       if (subscription) {
         const cajaObj = diaActual.cajas.find((c: any) => c.id === turnoAlertaInfo.cajaId);
