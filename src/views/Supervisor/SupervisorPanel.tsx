@@ -29,8 +29,8 @@ interface EventoExtended {
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
   globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
-  cajasSincronizadas?: boolean; // NUEVO
-  diasGlobales?: any[]; // NUEVO
+  cajasSincronizadas?: boolean; 
+  diasGlobales?: any[]; 
 
   poligonosGlobales?: any[]; 
   poligonosPorAdmin?: Record<string, any[]>;
@@ -43,7 +43,7 @@ const SupervisorPanel = () => {
   const [showExitAlert, setShowExitAlert] = useState(false);
   const [globalBlockModal, setGlobalBlockModal] = useState(false); 
   const [syncTrigger, setSyncTrigger] = useState(0);
-  const [showMoreMenu, setShowMoreMenu] = useState(false); // ESTADO PARA EL MENÚ
+  const [showMoreMenu, setShowMoreMenu] = useState(false); 
 
   useEffect(() => {
     window.history.pushState(null, '', window.location.pathname);
@@ -62,7 +62,7 @@ const SupervisorPanel = () => {
   const { 
     evento, loading, handleAddAdmin, handleDeleteAdmin, 
     handleEditAccess, handleSaveProfile, handleSaveGlobalStructure,
-    handleToggleSincronizacion // IMPORTADO DEL HOOK
+    handleToggleSincronizacion 
   } = useSupervisorLogic(eventoId);
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, adminId: '', adminName: '' });
@@ -137,6 +137,14 @@ const SupervisorPanel = () => {
     return Object.values(eventoExt.diasPorAdmin).flat() as any[];
   }, [eventoExt?.diasPorAdmin, eventoExt?.cajasSincronizadas, eventoExt?.diasGlobales]);
 
+  // NUEVO: Extraemos todos los participantes para que el croquis en Supervisor pueda leer nombres y encargados
+  const todosLosParticipantesSupervisor = useMemo(() => {
+    if (!eventoExt) return [];
+    const adminParts = Object.values(eventoExt.participantesPorAdmin || {}).flat();
+    const capParts = Object.values(eventoExt.participantesPorCapitan || {}).flat();
+    return [...adminParts, ...capParts];
+  }, [eventoExt]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -181,7 +189,6 @@ const SupervisorPanel = () => {
             <MapIcon size={16} /> Croquis Gral.
           </button>
 
-          {/* CONTENEDOR MÁS AJUSTES */}
           <div className="relative flex-1 lg:flex-none" onClick={(e) => e.stopPropagation()}>
             <button 
               onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -240,7 +247,6 @@ const SupervisorPanel = () => {
           eventoExt.admins.map((adminRaw) => {
             const admin = adminRaw as AdminData;
             
-            // Si están sincronizadas, los stats se calculan con base en diasGlobales
             const adminDias = eventoExt.cajasSincronizadas 
                ? (eventoExt.diasGlobales || []) 
                : (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
@@ -320,6 +326,7 @@ const SupervisorPanel = () => {
         canEdit={true} 
         croquis={croquisDataParaMostrar}
         dias={todosLosDiasSupervisor}
+        participantes={todosLosParticipantesSupervisor} // <-- PASAMOS LOS PARTICIPANTES PARA QUE NO FALLE LA TARJETA
         currentUserRole="Supervisor"
         onSaveCroquis={async (file, croquisId) => {
           if (eventoId) {
@@ -331,13 +338,13 @@ const SupervisorPanel = () => {
           const eventoRef = doc(db, 'eventos', eventoId);
           
           if (croquisId === 'general') {
-            const actuales = eventoExt?.poligonosGlobales || []; // Nota: En AdminPanel usa "diaActual" u obtén los datos
-            const filtrados = actuales.filter((p: any) => p.id !== poligono.id); // CORRECCIÓN CLAVE
+            const actuales = eventoExt?.poligonosGlobales || []; 
+            const filtrados = actuales.filter((p: any) => p.id !== poligono.id); 
             await updateDoc(eventoRef, { poligonosGlobales: [...filtrados, poligono] });
           } else {
-            const mapActual = (eventoExt as any).poligonosPorAdmin || {}; // Igual aquí
+            const mapActual = (eventoExt as any).poligonosPorAdmin || {}; 
             const adminPolys = mapActual[croquisId] || [];
-            const filtrados = adminPolys.filter((p: any) => p.id !== poligono.id); // CORRECCIÓN CLAVE
+            const filtrados = adminPolys.filter((p: any) => p.id !== poligono.id); 
             await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...filtrados, poligono] });
           }
         }}

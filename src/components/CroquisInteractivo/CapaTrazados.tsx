@@ -165,12 +165,16 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
       {poligonosGuardados.map((poly) => {
         const esTransparente = poly.color === 'transparent';
         
-        // Identificamos la alerta buscando por ID o por el Nombre de la caja
         const nombreLlave = poly.nombre ? String(poly.nombre).trim().toLowerCase() : '';
-        const tipoAlerta = (poly.cajaId && cajasConAlerta[poly.cajaId]) || cajasConAlerta[nombreLlave] || null;
+        const tipoAlertaById = poly.cajaId ? cajasConAlerta[poly.cajaId] : null;
+        const tipoAlertaByName = cajasConAlerta[nombreLlave] || null;
+        
+        const tipoAlerta = (tipoAlertaById === 'peligro' || tipoAlertaByName === 'peligro') 
+          ? 'peligro' 
+          : (tipoAlertaById || tipoAlertaByName || null);
+          
         const tieneAlerta = !!tipoAlerta;
         
-        // Azul para asistencia normal, Rojo para peligro
         const colorAlertaBorder = tipoAlerta === 'peligro' ? '#dc2626' : '#2563eb'; 
         const colorAlertaFill = tipoAlerta === 'peligro' ? '#ef4444' : '#3b82f6';
         
@@ -183,13 +187,11 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
         const animClass = tieneAlerta ? 'animate-pulse drop-shadow-xl' : '';
         const bbox = calcularBoundingBox(poly.puntos);
 
-        // Reemplazo a los íconos ✋ y 🚨
         const textoMostrar = tieneAlerta ? (tipoAlerta === 'peligro' ? '🚨' : '✋') : poly.nombre;
         const debeMostrarTexto = tieneAlerta || poly.mostrarTexto; 
         
         let fontSizeDinamico = 2.5; 
         if (debeMostrarTexto) {
-           // Los emojis necesitan un multiplicador más alto para que queden bien
            const anchoLetraAprox = tieneAlerta ? 1.5 : 0.6; 
            const maxW = bbox.w * 0.8;
            const maxH = bbox.h * 0.8;

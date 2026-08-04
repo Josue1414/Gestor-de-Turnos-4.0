@@ -93,7 +93,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     const alertas: Record<string, 'asistencia' | 'peligro'> = {};
     dias.forEach(dia => {
       dia.cajas?.forEach(caja => {
-        // Firebase a veces envía los arrays como objetos si faltan índices
         const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : Object.values(caja.turnos || {});
         const turnosConAlerta = turnosArr.filter((t: any) => t.solicitaAsistencia);
         
@@ -101,17 +100,10 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
           const esPeligro = turnosConAlerta.some((t: any) => t.tipoAsistencia === 'peligro');
           const tipo = esPeligro ? 'peligro' : 'asistencia';
           
-          // Guardamos por ID de la caja
-          if (!alertas[caja.id] || tipo === 'peligro') {
-            alertas[caja.id] = tipo;
-          }
-          
-          // Guardamos por Nombre de la caja (Clave para que funcione en Supervisor)
+          if (caja.id) alertas[caja.id] = tipo;
           if (caja.nombre) {
             const nombreLlave = String(caja.nombre).trim().toLowerCase();
-            if (!alertas[nombreLlave] || tipo === 'peligro') {
-              alertas[nombreLlave] = tipo;
-            }
+            alertas[nombreLlave] = tipo;
           }
         }
       });
@@ -388,7 +380,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
             onClose={() => setPoligonoActivo(null)} onEdit={iniciarEdicion} onDelete={handleDeleteTerritorio}
             dias={dias}
             diaActivo={diaActivo}
-            participantes={participantes}
+            participantes={participantes} 
           />
         )}
 

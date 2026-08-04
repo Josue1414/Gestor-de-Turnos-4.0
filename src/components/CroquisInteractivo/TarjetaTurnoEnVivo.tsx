@@ -40,25 +40,32 @@ const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUs
 
   const infoAlerta = useMemo(() => {
     if (poligono.cajaId && dias) {
-      // Recorremos todos los días para no atarnos a un índice que pueda fallar en vista global
+      let foundPeligro = null;
+      let foundAsistencia = null;
+      
       for (const dia of dias) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const caja = dia.cajas?.find((c: any) => c.id === poligono.cajaId || String(c.nombre).trim().toLowerCase() === String(poligono.nombre).trim().toLowerCase());
         if (caja) {
           const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : Object.values(caja.turnos || {});
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const turnoAlerta = turnosArr.find((t: any) => t.solicitaAsistencia);
-          if (turnoAlerta) {
-            const participante = participantes?.find(p => p.id === turnoAlerta.participanteId);
-            return {
-              tipo: turnoAlerta.tipoAsistencia || 'asistencia',
-              horario: turnoAlerta.horario,
-              participanteNombre: participante?.nombre || 'Participante Desconocido',
-              encargadoNombre: participante?.capitanNombre || participante?.creador || poligono.encargadoNombre || 'Administrador',
-              telefonoEncargado: participante?.capitanTelefono || poligono.encargadoTelefono || ''
-            };
-          }
+          
+          const turnoPeligro = turnosArr.find((t: any) => t.solicitaAsistencia && String(t.tipoAsistencia).toLowerCase() === 'peligro');
+          const turnoAsistencia = turnosArr.find((t: any) => t.solicitaAsistencia && String(t.tipoAsistencia).toLowerCase() !== 'peligro');
+
+          if (turnoPeligro && !foundPeligro) foundPeligro = turnoPeligro;
+          if (turnoAsistencia && !foundAsistencia) foundAsistencia = turnoAsistencia;
         }
+      }
+
+      const turnoAlerta = foundPeligro || foundAsistencia;
+      if (turnoAlerta) {
+        const participante = participantes?.find(p => p.id === turnoAlerta.participanteId);
+        return {
+          tipo: String(turnoAlerta.tipoAsistencia).toLowerCase() === 'peligro' ? 'peligro' : 'asistencia',
+          horario: turnoAlerta.horario,
+          participanteNombre: participante?.nombre || 'Participante Desconocido',
+          encargadoNombre: participante?.capitanNombre || participante?.creador || poligono.encargadoNombre || 'Administrador',
+          telefonoEncargado: participante?.capitanTelefono || poligono.encargadoTelefono || ''
+        };
       }
     }
     return null;

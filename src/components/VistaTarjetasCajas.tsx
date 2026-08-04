@@ -1,7 +1,7 @@
 // src/components/VistaTarjetasCajas.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
-import { Clock, Edit2, Trash2, User, UserPlus, Box, Star, Users, CheckCircle2, Bell } from 'lucide-react';
+import { Clock, Edit2, Trash2, User, UserPlus, Box, Star, Users, CheckCircle2 } from 'lucide-react';
 import { useTurnoModal } from '../hooks/useTurnoModal';
 import { useTiempoReal } from '../hooks/useTiempoReal';
 import ModalInfoTurno from './ModalInfoTurno';
@@ -126,7 +126,10 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                     const estaOcupado = !!participante;
                     const isMiTurno = miUsuarioId && turno.participanteId === miUsuarioId;
                     const estaOcupadoEnOtroLado = miUsuarioId && isBusy && isBusy(turno.horario) && !isMiTurno;
-                    const tieneAlerta = !!turno.solicitaAsistencia && !miUsuarioId;
+                    
+                    const pideAsistencia = !!turno.solicitaAsistencia;
+                    const tipoAlerta = turno.tipoAsistencia || 'asistencia';
+                    const tieneAlerta = pideAsistencia && !miUsuarioId;
 
                     let estadoTurno: 'normal' | 'activo' | 'atrasado' = 'normal';
 
@@ -152,18 +155,25 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                       }
                     }
 
-                    // CLASES DINÁMICAS (Se removió el fondo rojo para atrasado)
+                    // CLASES DINÁMICAS Basadas en colores correspondientes
                     let cardClass = `flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-xl border transition-all `;
                     
-                    if (tieneAlerta) cardClass += 'bg-orange-50 border-orange-400 shadow-sm ring-1 ring-orange-200';
-                    else if (estadoTurno === 'activo') cardClass += 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300 shadow-sm';
-                    else if (estaOcupado) cardClass += especial ? 'bg-amber-50/50 border-amber-200' : 'bg-blue-50/50 border-blue-100';
-                    else cardClass += 'bg-slate-50 border-slate-200';
+                    if (tieneAlerta) {
+                      cardClass += tipoAlerta === 'peligro' 
+                        ? 'bg-red-50 border-red-400 shadow-sm ring-1 ring-red-200'
+                        : 'bg-blue-50 border-blue-400 shadow-sm ring-1 ring-blue-200';
+                    } else if (estadoTurno === 'activo') {
+                      cardClass += 'bg-emerald-50 border-emerald-400 ring-1 ring-emerald-300 shadow-sm';
+                    } else if (estaOcupado) {
+                      cardClass += especial ? 'bg-amber-50/50 border-amber-200' : 'bg-slate-50 border-slate-200';
+                    } else {
+                      cardClass += 'bg-white border-slate-200';
+                    }
 
                     if (!miUsuarioId && estaOcupado) cardClass += ' cursor-pointer hover:shadow-md hover:border-blue-400';
 
-                    const clockColor = tieneAlerta ? 'text-orange-500' : estadoTurno === 'activo' ? 'text-emerald-500' : estadoTurno === 'atrasado' ? 'text-red-500' : estaOcupado ? (especial ? 'text-amber-500' : 'text-blue-500') : 'text-slate-400';
-                    const timeColor = tieneAlerta ? 'text-orange-900' : estadoTurno === 'activo' ? 'text-emerald-900' : estadoTurno === 'atrasado' ? 'text-red-900' : estaOcupado ? (especial ? 'text-amber-900' : 'text-blue-900') : 'text-slate-600';
+                    const clockColor = tieneAlerta ? (tipoAlerta === 'peligro' ? 'text-red-500' : 'text-blue-500') : estadoTurno === 'activo' ? 'text-emerald-500' : estadoTurno === 'atrasado' ? 'text-slate-400' : estaOcupado ? (especial ? 'text-amber-500' : 'text-slate-400') : 'text-slate-300';
+                    const timeColor = tieneAlerta ? (tipoAlerta === 'peligro' ? 'text-red-900' : 'text-blue-900') : estadoTurno === 'activo' ? 'text-emerald-900' : estadoTurno === 'atrasado' ? 'text-slate-500' : estaOcupado ? (especial ? 'text-amber-900' : 'text-slate-700') : 'text-slate-500';
 
                     const handleClickCard = () => {
                       if (estaOcupado && !miUsuarioId) {
@@ -180,7 +190,8 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                           </span>
                           
                           {estadoTurno === 'activo' && <span className="ml-1 text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase animate-pulse">En curso</span>}
-                          {estadoTurno === 'atrasado' && <span className="ml-1 text-[8px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black uppercase">Faltante</span>}
+                          {/* ETIQUETA FALTANTE EN AMARILLO TENUE */}
+                          {estadoTurno === 'atrasado' && <span className="ml-1 text-[8px] bg-amber-50 border border-amber-200 text-amber-600 px-1.5 py-0.5 rounded font-black uppercase">Faltante</span>}
                         </div>
 
                         <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
@@ -190,24 +201,26 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                                  e.stopPropagation(); 
                                  openModal(caja.id, turno.id, turno.horario, caja.nombre, getParticipante(miUsuarioId), turno); 
                                }} 
-                               className={`w-full sm:w-auto text-left text-white rounded-lg p-1.5 transition-colors shadow-sm relative group overflow-hidden ${tieneAlerta ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                               className={`w-full sm:w-auto text-left text-white rounded-lg p-1.5 transition-colors shadow-sm relative group overflow-hidden ${pideAsistencia ? (tipoAlerta === 'peligro' ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600') : 'bg-indigo-600 hover:bg-indigo-700'}`}
                              >
                                 <div className="flex justify-between items-center gap-2">
                                   <span className="font-black text-[9px] truncate flex items-center gap-1">
-                                    {tieneAlerta && <Bell size={10} className="animate-pulse" />}
+                                    {pideAsistencia && tipoAlerta === 'peligro' && <span className="animate-pulse text-[10px]">🚨</span>}
+                                    {pideAsistencia && tipoAlerta === 'asistencia' && <span className="animate-pulse text-[10px]">✋</span>}
                                     TÚ ESTÁS AQUÍ
                                   </span>
-                                  <span className={`text-[8px] bg-white px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1 ${tieneAlerta ? 'text-orange-700' : 'text-blue-700'}`}>Ver</span>
+                                  <span className={`text-[8px] bg-white px-1.5 py-0.5 rounded font-bold hidden group-hover:block absolute right-1 ${pideAsistencia ? (tipoAlerta === 'peligro' ? 'text-red-700' : 'text-blue-700') : 'text-indigo-700'}`}>Ver</span>
                                 </div>
                              </button>
                           ) : estaOcupado ? (
                             <>
                               <div className="flex items-center gap-1 truncate opacity-80">
-                                <User size={12} className={tieneAlerta ? 'text-orange-600' : especial ? 'text-amber-600' : 'text-blue-600'} />
-                                <span className={`text-[10px] font-bold truncate max-w-[100px] ${tieneAlerta ? 'text-orange-800' : 'text-slate-800'}`} title={participante.nombre}>
+                                <User size={12} className={tieneAlerta ? (tipoAlerta === 'peligro' ? 'text-red-600' : 'text-blue-600') : especial ? 'text-amber-600' : 'text-slate-400'} />
+                                <span className={`text-[10px] font-bold truncate max-w-[100px] ${tieneAlerta ? (tipoAlerta === 'peligro' ? 'text-red-800' : 'text-blue-800') : 'text-slate-600'}`} title={participante.nombre}>
                                   {participante.nombre}
                                 </span>
-                                {tieneAlerta && <Bell size={12} className="text-orange-500 animate-bounce shrink-0 ml-0.5" />}
+                                {tieneAlerta && tipoAlerta === 'peligro' && <span className="animate-bounce shrink-0 ml-0.5 text-xs">🚨</span>}
+                                {tieneAlerta && tipoAlerta === 'asistencia' && <span className="animate-bounce shrink-0 ml-0.5 text-xs">✋</span>}
                               </div>
                               <div className="flex gap-0.5">
                                 {turno.entregada && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Entregada" />}
@@ -225,7 +238,7 @@ const VistaTarjetasCajas: React.FC<VistaTarjetasCajasProps> = ({
                                 onClick={(e) => { e.stopPropagation(); onAsignar(caja.id, caja.nombre, turno.id, turno.horario); }} 
                                 className={`text-[10px] font-black px-2.5 py-1 rounded-md transition flex items-center justify-center gap-1 shadow-sm ${
                                   miUsuarioId ? 'bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto text-white' 
-                                  : estadoTurno === 'atrasado' ? 'bg-red-500 hover:bg-red-600 text-white' 
+                                  : estadoTurno === 'atrasado' ? 'bg-slate-500 hover:bg-slate-600 text-white' 
                                   : especial ? 'bg-amber-500 hover:bg-amber-600 text-white' 
                                   : 'bg-slate-800 hover:bg-slate-900 text-white'
                                 }`}

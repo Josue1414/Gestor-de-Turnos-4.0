@@ -1,6 +1,6 @@
 // src/components/AdminHeader.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { MapIcon, ArrowLeft, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell, Smartphone, CheckCircle2 } from 'lucide-react';
+import { MapIcon, ArrowLeft, Settings, Users, Plus, Inbox, Clock, Download, BarChart2, Shield, Bell, Smartphone, CheckCircle2, AlertTriangle, LifeBuoy } from 'lucide-react';
 import SeccionCapitanes, { type CapitanData } from './SeccionCapitanes';
 import type { DiaDisponible, CajaDisponible } from './ModalAsignarCapitan';
 import InstallGuideModal from './InstallGuideModal'; 
@@ -65,7 +65,7 @@ interface AdminHeaderProps {
   cajasDisponibles?: CajaDisponible[];
   onEditCapitan?: (id: string, nombre: string, diasAsignados: string[], cajasAsignadas: string[]) => void;
 
-  alertasAsistencia?: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[];
+  alertasAsistencia?: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string; tipo?: 'asistencia' | 'peligro' }[];
   onResolveAlert?: (cajaId: string, turnoId: string) => void;
   pushEnabled?: boolean;
   onTogglePush?: () => void;
@@ -92,7 +92,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   const [showStats, setShowStats] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
   
-  // --- ESTADOS DE PWA ---
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
@@ -109,6 +108,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
   };
 
   const hasAlerts = alertasAsistencia.length > 0;
+  // VERIFICAMOS SI HAY ALGUNA ALERTA DE PELIGRO
+  const hasPeligro = alertasAsistencia.some(a => a.tipo === 'peligro');
+  
+  const bellButtonClass = hasPeligro ? 'bg-red-600 hover:bg-red-700 text-white border-red-700 animate-pulse' : 'bg-blue-500 hover:bg-blue-600 text-white border-blue-600 animate-pulse';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -128,13 +131,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
     }
   }, [alertasAsistencia.length]);
 
-  // --- LÓGICA DE CAPTURA DEL EVENTO DE INSTALACIÓN Y VERIFICACIÓN ---
   useEffect(() => {
-    // Verificar si ya está instalada al montar el componente (Android / Escritorio)
     if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
       setIsAppInstalled(true);
     }
-    // Verificar si ya está instalada en Safari (iOS)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((window.navigator as any).standalone === true) {
       setIsAppInstalled(true);
@@ -177,13 +177,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
     <>
       <header className="flex flex-col gap-4 bg-white p-3 sm:p-4 rounded-3xl shadow-sm border border-slate-200 mb-4 w-full relative z-[100]">
         
-        {/* CONTENEDOR PRINCIPAL: Organización Responsiva */}
         <div className="flex flex-col sm:flex-row items-start justify-between gap-4 w-full">
           
-          {/* --- LADO IZQUIERDO --- */}
           <div className="w-full sm:w-auto flex-1 min-w-0 flex flex-col">
             
-            {/* Fila 1 (Móvil): Título y Ajustes */}
             <div className="flex justify-between items-start w-full">
               <div className="min-w-0 flex-1">
                 {isEditingTitle && canEditTitle ? (
@@ -203,7 +200,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
                 )}
               </div>
 
-              {/* BOTONES AJUSTES/REGRESAR (Solo visibles aquí en móvil, alineados a la derecha de la fila 1) */}
               <div className="flex sm:hidden gap-2 shrink-0 ml-2 mt-1">
                  {onBack && (
                    <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
@@ -218,7 +214,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               </div>
             </div>
 
-            {/* Fila 2 (Móvil): Pastilla de Info Admin/Capitán */}
             {adminInfo && (
               <div className="mt-2 sm:mt-1 flex flex-wrap items-center gap-2">
                 <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${isCapitan ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
@@ -233,15 +228,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
             )}
           </div>
 
-          {/* --- LADO DERECHO --- */}
-          {/* Se cambia a items-start y justify-start para que en móvil quede pegado a la izquierda */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-start sm:justify-end gap-3 sm:gap-2 shrink-0 w-full sm:w-auto">
             
-            {/* Fila 3 (Móvil): Botones INSTALAR, PUSH y ALERTAS */}
-            {/* justify-start en móvil para alinear a la izquierda, sm:justify-end en escritorio */}
             <div className="flex flex-wrap gap-2 relative w-full sm:w-auto justify-start sm:justify-end" ref={menuRef}>
               
-              {/* LÓGICA RENDERIZADO DEL BOTÓN INSTALAR */}
               {isAppInstalled ? (
                 <div 
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 cursor-default"
@@ -271,7 +261,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
 
               <button 
                 onClick={() => setShowAlertMenu(!showAlertMenu)} 
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${hasAlerts ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition shadow-sm border ${hasAlerts ? bellButtonClass : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
               >
                 <Bell size={14} className={hasAlerts ? "animate-bounce" : ""} /> 
                 {hasAlerts ? ` (${alertasAsistencia.length})` : ''}
@@ -279,22 +269,25 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
 
               {/* MENÚ DESPLEGABLE DE ALERTAS */}
               {showAlertMenu && (
-                <div className="absolute top-full left-0 sm:right-0 sm:left-auto mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-orange-100 z-[999] overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                  <div className="bg-orange-500 p-3 text-white flex justify-between items-center">
-                    <h3 className="font-black text-sm flex items-center gap-2"><Bell size={16} /> Asistencia Solicitada</h3>
+                <div className="absolute top-full left-0 sm:right-0 sm:left-auto mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[999] overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                  <div className={`${hasPeligro ? 'bg-red-600' : 'bg-blue-500'} p-3 text-white flex justify-between items-center`}>
+                    <h3 className="font-black text-sm flex items-center gap-2"><Bell size={16} /> Alertas Activas</h3>
                   </div>
                   <div className="max-h-60 overflow-y-auto p-2 space-y-2 bg-slate-50">
                     {hasAlerts ? (
                       alertasAsistencia.map((alerta, i) => (
-                        <div key={i} className="bg-white p-3 rounded-xl border border-orange-200 shadow-sm relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
-                          <p className="text-xs font-black text-orange-900 ml-1">{alerta.participante}</p>
-                          <p className="text-[10px] font-bold text-orange-700 ml-1 mb-2">
+                        <div key={i} className={`bg-white p-3 rounded-xl border shadow-sm relative overflow-hidden ${alerta.tipo === 'peligro' ? 'border-red-200' : 'border-blue-200'}`}>
+                          <div className={`absolute top-0 left-0 w-1 h-full ${alerta.tipo === 'peligro' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                          <p className={`text-xs font-black ml-1 flex items-center gap-1 ${alerta.tipo === 'peligro' ? 'text-red-700' : 'text-blue-700'}`}>
+                            {alerta.tipo === 'peligro' ? <AlertTriangle size={14} /> : <LifeBuoy size={14} />}
+                            {alerta.participante}
+                          </p>
+                          <p className={`text-[10px] font-bold ml-1 mb-2 ${alerta.tipo === 'peligro' ? 'text-red-600' : 'text-blue-600'}`}>
                             {alerta.dia} • {alerta.horario} • {alerta.cajaNombre}
                           </p>
                           <button 
                             onClick={() => { onResolveAlert?.(alerta.cajaId, alerta.turnoId); if (alertasAsistencia.length === 1) setShowAlertMenu(false); }} 
-                            className="w-full py-2 bg-orange-50 text-orange-600 border border-orange-200 rounded-lg text-[10px] font-black hover:bg-orange-500 hover:text-white transition"
+                            className={`w-full py-2 text-[10px] font-black border rounded-lg transition ${alerta.tipo === 'peligro' ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-500 hover:text-white' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-500 hover:text-white'}`}
                           >
                             Marcar como resuelto
                           </button>
@@ -308,7 +301,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
               )}
             </div>
 
-            {/* BOTONES AJUSTES/REGRESAR (Visibles aquí SOLO EN ESCRITORIO) */}
             <div className="hidden sm:flex gap-2 shrink-0">
                {onBack && (
                  <button onClick={onBack} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-xl text-[11px] hover:bg-slate-700 transition shadow-sm border border-slate-700">
@@ -324,7 +316,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
           </div>
         </div>
 
-        {/* RESTO DEL HEADER (Métricas, Controles, etc.) */}
         <div className="flex flex-wrap items-center justify-between gap-3 w-full border-t border-slate-100 pt-3">
           <div className="flex flex-wrap gap-2">
             {onShowCroquis && (
@@ -420,7 +411,6 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({
         )}
       </header>
 
-      {/* RENDERIZAMOS EL MODAL DE INSTRUCCIONES MANUALES AL FINAL */}
       <InstallGuideModal 
         isOpen={showInstallGuide} 
         onClose={() => setShowInstallGuide(false)} 

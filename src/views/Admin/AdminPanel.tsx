@@ -138,7 +138,7 @@ const AdminPanel = () => {
           id: 'general', 
           title: 'Croquis General del Evento', 
           url: data.croquisUrl || null,
-          poligonos: data.poligonosGlobales || [] // <-- Agregar esta línea
+          poligonos: data.poligonosGlobales || [] 
         }];
         const croquisIndividual = data.croquisPorAdmin?.[adminIdL];
         if (croquisIndividual) {
@@ -146,7 +146,7 @@ const AdminPanel = () => {
             id: adminIdL, 
             title: `Croquis Individual (${myAdmin?.name || 'Área'})`, 
             url: croquisIndividual,
-            poligonos: data.poligonosPorAdmin?.[adminIdL] || [] // <-- Agregar esta línea
+            poligonos: data.poligonosPorAdmin?.[adminIdL] || [] 
           });
         }
         setCroquisData(listaCroquis);
@@ -176,7 +176,8 @@ const AdminPanel = () => {
   const diaActualFiltrado = diasFiltrados.find(d => d.id === dias[diaActivo]?.id) || null;
 
   const alertasAsistencia = useMemo(() => {
-    const alertas: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string }[] = [];
+    // AGREGAMOS EL TIPO DE ALERTA AL ARRAY DE RESPUESTA 👇
+    const alertas: { dia: string; cajaId: string; cajaNombre: string; turnoId: string; horario: string; participante: string; tipo: 'asistencia' | 'peligro' }[] = [];
     
     diasFiltrados.forEach(dia => {
       dia.cajas.forEach(caja => {
@@ -191,7 +192,9 @@ const AdminPanel = () => {
               cajaNombre: caja.nombre as string,
               turnoId: turno.id,
               horario: turno.horario,
-              participante: part?.nombre || 'Desconocido'
+              participante: part?.nombre || 'Desconocido',
+              // PASAMOS EL TIPO AL HEADER 👇
+              tipo: turno.tipoAsistencia || 'asistencia'
             });
           }
         });
@@ -253,11 +256,9 @@ const AdminPanel = () => {
   
   const localBusyUserIds = useMemo(() => getLocalBusyUserIds(diaActual, modalAsignacion.horario || ''), [diaActual, modalAsignacion.horario]);
 
-  // NUEVO: FILTRO INTELIGENTE PARA LA LISTA DE ASIGNACIÓN
   const participantesParaAsignacion = useMemo(() => {
     if (!modalAsignacion.isOpen || !modalAsignacion.cajaId) return participantesEnriquecidos;
     
-    // Buscamos si la caja a la que se le dio clic pertenece a un capitán
     const capitanDeCaja = capitanes?.find((cap: any) => 
       (cap.cajasAsignadas || []).includes(modalAsignacion.cajaId) && 
       (cap.diasAsignados || []).includes(diaActualFiltrado?.id)
@@ -267,10 +268,8 @@ const AdminPanel = () => {
       const isCreadoPorAdmin = !p.creador || p.creador === 'Admin';
       
       if (capitanDeCaja) {
-        // Caja de Capitán: permite creados por el Admin y por ESTE mismo Capitán
         return isCreadoPorAdmin || p.creador === capitanDeCaja.nombre;
       } else {
-        // Caja General: SOLO permite creados por el Admin
         return isCreadoPorAdmin;
       }
     });
@@ -303,13 +302,11 @@ const AdminPanel = () => {
 
       const updatePayload: Record<string, any> = {};
 
-      // 1. Limpiar al participante de la lista del Admin
       const adminParts: Participante[] = data.participantesPorAdmin?.[adminIdL] || [];
       if (adminParts.some(p => p.id === targetId)) {
         updatePayload[`participantesPorAdmin.${adminIdL}`] = adminParts.filter((p) => p.id !== targetId);
       }
 
-      // 2. Limpiar al participante de la lista de Capitanes
       if (isCapitan && capitanIdL) {
         const capParts: Participante[] = data.participantesPorCapitan?.[capitanIdL] || [];
         if (capParts.some(p => p.id === targetId)) {
@@ -325,7 +322,6 @@ const AdminPanel = () => {
         });
       }
 
-      // 3. Liberar sus turnos en las cajas (Limpieza visual)
       const diasDelAdmin: DiaEvento[] = data.diasPorAdmin?.[adminIdL] || [];
       const diasLimpios = diasDelAdmin.map((dia) => ({
         ...dia, 
@@ -511,7 +507,6 @@ const AdminPanel = () => {
     );
   }
 
-  // --- INICIO DE NUEVO BLOQUE: GUARDADO DE TRAZOS EN ADMIN PANEL ---
   const handleSavePoligono = async (poligono: any, croquisId: string) => {
     if (!eventoId) return;
     const eventoRef = doc(db, 'eventos', eventoId);
@@ -521,7 +516,6 @@ const AdminPanel = () => {
     
     if (croquisId === 'general') {
       const actuales = data.poligonosGlobales || data.poligonosGeneral || data.poligonos_general || [];
-      // LA CLAVE MAGICA: Filtramos el trazo viejo para evitar IDs duplicados
       const filtrados = actuales.filter((p: any) => p.id !== poligono.id);
       await updateDoc(eventoRef, { poligonosGlobales: [...filtrados, poligono] });
     } else {
@@ -548,7 +542,6 @@ const AdminPanel = () => {
       await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: adminPolys.filter((p: any) => p.id !== poligonoId) });
     }
   };
-  // --- FIN DE NUEVO BLOQUE ---
 
   if (diasFiltrados.length === 0) {
     return (
@@ -601,7 +594,7 @@ const AdminPanel = () => {
             participantes={participantesEnriquecidos}
             cajasDisponibles={cajasTotalesParaCapitanes} 
             onEditCapitan={handleEditarCapitan}
-            alertasAsistencia={alertasAsistencia}
+            alertasAsistencia={alertasAsistencia} // <--- PASAMOS LAS ALERTAS CON EL TIPO
             onResolveAlert={resolverAlerta}
             pushEnabled={pushEnabled}
             onTogglePush={handleTogglePush}
@@ -701,8 +694,8 @@ const AdminPanel = () => {
         handleCrearCapitan={handleCrearCapitan}
         isCapitan={isCapitan} customInviteLink={customInviteLink} 
 
-        onSavePoligono={handleSavePoligono}     // <-- AGREGAR
-        onDeletePoligono={handleDeletePoligono} // <-- AGREGAR
+        onSavePoligono={handleSavePoligono}     
+        onDeletePoligono={handleDeletePoligono} 
       />
     </div>
   );

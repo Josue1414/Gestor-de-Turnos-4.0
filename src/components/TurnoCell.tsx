@@ -1,6 +1,6 @@
 // src/components/TurnoCell.tsx
 import React from 'react';
-import { Plus, User, AlertCircle, Clock, Bell } from 'lucide-react';
+import { Plus, User, AlertCircle, Clock } from 'lucide-react';
 
 interface TurnoCellProps {
   cajaId: string;
@@ -20,6 +20,8 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
 }) => {
   
   const pideAsistencia = turno?.solicitaAsistencia;
+  const tipoAlerta = turno?.tipoAsistencia || 'asistencia'; // Identificamos si es 'peligro' o 'asistencia'
+  
   let estadoTurno: 'normal' | 'activo' | 'atrasado' = 'normal';
 
   // LÓGICA DE TIEMPO REAL
@@ -52,11 +54,15 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
   let estilosEstado = "bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 text-indigo-900";
   
   if (pideAsistencia) {
-    estilosEstado = "bg-orange-100 border-orange-500 ring-2 ring-orange-500/50 animate-pulse text-orange-900";
+    // Aplicamos estilos basados en el tipo de alerta
+    if (tipoAlerta === 'peligro') {
+      estilosEstado = "bg-red-50 border-red-500 ring-2 ring-red-500/50 animate-pulse text-red-900";
+    } else {
+      estilosEstado = "bg-blue-50 border-blue-500 ring-2 ring-blue-500/50 animate-pulse text-blue-900";
+    }
   } else if (estadoTurno === 'activo') {
     estilosEstado = "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/50 hover:bg-emerald-100 text-emerald-900";
   } else if (estadoTurno === 'atrasado') {
-    // Restaurado a color azul normal, eliminando el fondo rojo
     estilosEstado = "bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-400 text-indigo-900";
   }
 
@@ -69,14 +75,17 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
             <span className="truncate">{participante.nombre}</span>
           </div>
           
-          {pideAsistencia && <Bell size={12} className="text-orange-600 animate-bounce shrink-0" />}
+          {/* Renderizado de Emojis Exclusivo según la situación */}
+          {pideAsistencia && tipoAlerta === 'peligro' && <span className="animate-bounce shrink-0 text-sm">🚨</span>}
+          {pideAsistencia && tipoAlerta === 'asistencia' && <span className="animate-bounce shrink-0 text-sm">✋</span>}
+          
           {!pideAsistencia && estadoTurno === 'activo' && <Clock size={12} className="text-emerald-600 animate-pulse shrink-0" />}
-          {!pideAsistencia && estadoTurno === 'atrasado' && <AlertCircle size={12} className="text-red-600 shrink-0" />}
+          {!pideAsistencia && estadoTurno === 'atrasado' && <AlertCircle size={12} className="text-amber-500 shrink-0" />}
         </div>
         
         <div className="flex items-center gap-1 mt-1">
-          <span className={`text-[8px] sm:text-[9px] font-bold uppercase block sm:mt-1 ${pideAsistencia ? 'text-orange-600' : estadoTurno === 'activo' ? 'text-emerald-600' : estadoTurno === 'atrasado' ? 'text-red-600 font-black' : 'text-indigo-500'}`}>
-            {pideAsistencia ? '¡Requiere Asistencia!' : estadoTurno === 'activo' ? 'En curso' : estadoTurno === 'atrasado' ? 'Faltante' : 'Ver detalles'}
+          <span className={`text-[8px] sm:text-[9px] font-bold uppercase block sm:mt-1 ${pideAsistencia ? (tipoAlerta === 'peligro' ? 'text-red-600' : 'text-blue-600') : estadoTurno === 'activo' ? 'text-emerald-600' : estadoTurno === 'atrasado' ? 'text-amber-500 font-black' : 'text-indigo-500'}`}>
+            {pideAsistencia ? (tipoAlerta === 'peligro' ? '¡Emergencia!' : '¡Asistencia!') : estadoTurno === 'activo' ? 'En curso' : estadoTurno === 'atrasado' ? 'Faltante' : 'Ver detalles'}
           </span>
           
           {estadoTurno !== 'atrasado' && !pideAsistencia && (
@@ -103,8 +112,8 @@ const TurnoCell: React.FC<TurnoCellProps> = ({
   if (estadoTurno === 'activo') {
     btnClass += "bg-emerald-50 border-emerald-400 text-emerald-600 hover:bg-emerald-100 ring-2 ring-emerald-400/50";
   } else if (estadoTurno === 'atrasado') {
-    // Fondo normal (blanco), pero borde y texto en rojo
-    btnClass += "bg-white border-red-300 text-red-600 hover:bg-red-50";
+    // SE QUEDA EN GRIS
+    btnClass += "bg-slate-50 border-slate-300 text-slate-500 hover:bg-slate-100";
   } else {
     btnClass += "bg-white border-indigo-300 text-indigo-600 hover:bg-indigo-50";
   }

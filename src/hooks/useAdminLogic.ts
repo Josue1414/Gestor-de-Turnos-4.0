@@ -110,16 +110,24 @@ export const useAdminLogic = (eventoId: string) => {
               if (!res.success) return d;
               
               const diaLimpio = res.data as DiaEvento;
-              diaLimpio.cajas = diaLimpio.cajas.map((caja, cIdx) => ({
-                ...caja,
-                turnos: caja.turnos.map((turno, tIdx) => ({
-                  ...turno,
-                  entregada: d.cajas[cIdx]?.turnos[tIdx]?.entregada || false,
-                  devuelta: d.cajas[cIdx]?.turnos[tIdx]?.devuelta || false,
-                  solicitaAsistencia: d.cajas[cIdx]?.turnos[tIdx]?.solicitaAsistencia || false
-                }))
-              }));
-              return diaLimpio;
+                diaLimpio.cajas = diaLimpio.cajas.map((caja) => {
+                  const cajaOriginal = d.cajas?.find((c: any) => c.id === caja.id) || {};
+                  const turnosOriginales = Array.isArray(cajaOriginal.turnos) ? cajaOriginal.turnos : [];
+                  return {
+                    ...caja,
+                    turnos: caja.turnos.map((turno) => {
+                      const turnoOriginal = turnosOriginales.find((t: any) => t.id === turno.id) || {};
+                      return {
+                        ...turno,
+                        entregada: turnoOriginal.entregada || false,
+                        devuelta: turnoOriginal.devuelta || false,
+                        solicitaAsistencia: turnoOriginal.solicitaAsistencia || false,
+                        tipoAsistencia: turnoOriginal.tipoAsistencia || null
+                      };
+                    })
+                  };
+                });
+                return diaLimpio;
             })
           : [];
         setDias(validatedDias as DiaEvento[]);
@@ -144,8 +152,8 @@ export const useAdminLogic = (eventoId: string) => {
            parts.forEach((p: any) => {
               allPartsMap.set(p.id, {
                  ...p,
-                 creador: isMyAdmin ? 'Admin' : 'Otro Admin', // Aísla en el dropdown
-                 esMio: isMyAdmin, // Bandera de seguridad
+                 creador: isMyAdmin ? 'Admin' : 'Otro Admin', 
+                 esMio: isMyAdmin, 
                  capitanesInvolucrados: new Set()
               });
            });
@@ -153,7 +161,7 @@ export const useAdminLogic = (eventoId: string) => {
 
         // Cargar participantes de Capitanes
         Object.entries(data.capitanesPorAdmin || {}).forEach(([aId, caps]: [string, any]) => {
-           if (!isSync && aId !== adminIdL) return; // Si no es sync, ignoramos otros admins
+           if (!isSync && aId !== adminIdL) return; 
            const isMyAdmin = aId === adminIdL;
 
            caps.forEach((cap: any) => {
@@ -169,7 +177,7 @@ export const useAdminLogic = (eventoId: string) => {
                     creadorLabel = cap.nombre;
                  }
                  if (isCapitan) {
-                    esMio = isMeAsCapitan; // Un capitán solo posee los suyos
+                    esMio = isMeAsCapitan; 
                  }
                  if (!isMyAdmin) creadorLabel = 'Otro Capitan';
 
@@ -213,7 +221,6 @@ export const useAdminLogic = (eventoId: string) => {
           ? allParts.map((p: any) => {
               const res = ParticipanteSchema.safeParse(p);
               if (!res.success) return p;
-              // Mantenemos las propiedades inyectadas localmente
               return { ...res.data, creador: p.creador, esMio: p.esMio } as Participante;
             })
           : [];
@@ -259,7 +266,6 @@ export const useAdminLogic = (eventoId: string) => {
   }, [eventoId, adminIdL, isCapitan, capitanIdL]);
 
 
-  // 3. FUNCIONES ENRUTADORAS DE GUARDADO
   const updateDiasData = async (nuevosDias: DiaEvento[]) => {
     if (!eventoId) return;
     const docRef = doc(db, 'eventos', eventoId);
@@ -272,7 +278,7 @@ export const useAdminLogic = (eventoId: string) => {
   };
 
   const syncEvent = async (nuevosDias: DiaEvento[]) => {
-    if (isCapitan) return; // Capitanes no editan estructuras base
+    if (isCapitan) return; 
     await updateDiasData(nuevosDias);
   };
 
@@ -442,7 +448,6 @@ export const useAdminLogic = (eventoId: string) => {
   };
 
   const quitarParticipante = async (cajaId: string, turnoId: string, participanteId?: string) => {
-    // 4. CANDADO DE SEGURIDAD (Evita que quiten participantes de otros Admins)
     if (participanteId) {
         const p = participantes.find(part => part.id === participanteId);
         if (p && !(p as any).esMio && !['superadmin', 'supervisor'].includes(userRole || '')) {
