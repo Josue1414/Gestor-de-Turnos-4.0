@@ -1,6 +1,5 @@
 // src/components/MatrizTurnos.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useMemo } from 'react';
 import { Clock, Lock } from 'lucide-react';
 import ActionMenu from './ActionMenu';
 import type { DiaEvento, Participante } from '../types';
