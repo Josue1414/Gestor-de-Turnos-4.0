@@ -71,6 +71,7 @@ const AdminPanelModals = (props: any) => {
         currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'}
         onSavePoligono={props.onSavePoligono}       // <-- Recibimos de AdminPanel
         onDeletePoligono={props.onDeletePoligono}
+        participantes={participantesEnriquecidos}
       />
       
       <ModalAsignarCapitan 

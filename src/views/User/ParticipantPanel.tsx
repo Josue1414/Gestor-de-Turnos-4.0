@@ -9,6 +9,7 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 import InstallGuideModal from '../../components/InstallGuideModal';
+import ModalPedirAyuda, { type ContactoAyuda } from '../../components/ModalPedirAyuda'; // <-- NUEVO
 
 import { useParticipantLogic } from './useParticipantLogic';
 
@@ -25,9 +26,11 @@ const ParticipantPanel = () => {
     adminContacto, turnoAlertaInfo, handleSolicitarAsistencia
   } = useParticipantLogic();
 
-  // --- ESTADOS Y LÓGICA DE INSTALACIÓN PWA ---
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
+  
+  // NUEVO: Estado para abrir el modal del Centro de Ayuda
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -52,7 +55,6 @@ const ParticipantPanel = () => {
       setShowInstallGuide(true);
     }
   };
-  // ------------------------------------------
 
   if (loading) {
     return (
@@ -65,7 +67,6 @@ const ParticipantPanel = () => {
 
   if (!miUsuario || !eventoId || !adminId) return null;
 
-  // --- SOLUCIÓN DE TYPESCRIPT A PRUEBA DE ERRORES ---
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const safeHandleAsignarme = (cajaId: string, turnoOrId: any) => {
     const tId = typeof turnoOrId === 'string' ? turnoOrId : turnoOrId?.id;
@@ -78,15 +79,21 @@ const ParticipantPanel = () => {
     if (tId) handleQuitarme(cajaId, tId);
   };
 
+  // PREPARAR CONTACTOS DE WHATSAPP PARA EL MODAL DE AYUDA Y VISTAS
+  const contactosAyuda: ContactoAyuda[] = [];
+  if (miUsuario.capitanNombre && miUsuario.capitanTelefono) {
+    contactosAyuda.push({ nombre: miUsuario.capitanNombre, telefono: miUsuario.capitanTelefono, rol: 'Capitán' });
+  }
+  if (adminContacto.nombre && adminContacto.telefono) {
+    contactosAyuda.push({ nombre: adminContacto.nombre, telefono: adminContacto.telefono, rol: 'Admin' });
+  }
+
   return (
     <div className="h-[100dvh] w-full bg-slate-100 font-sans flex flex-col overflow-auto relative">
       
       <div className="sticky left-0 w-[100vw] max-w-[100vw] px-2 sm:px-6 pt-2 sm:pt-6 pb-2 shrink-0 z-10 box-border">
-        
-        {/* --- ENCABEZADO PRINCIPAL REESTRUCTURADO --- */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-3xl shadow-sm border border-slate-200 w-full max-w-[1400px] mx-auto gap-4">
           
-          {/* SECCIÓN 1: Info del Usuario */}
           <div className="flex items-start gap-3 w-full sm:w-auto">
             <div className="min-w-0 flex flex-col items-start gap-1">
               <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none truncate">
@@ -101,36 +108,31 @@ const ParticipantPanel = () => {
             </div>
           </div>
 
-          {/* SECCIÓN 2 (SOLO MÓVIL): Botón Pedir Ayuda */}
+          {/* BOTÓN PEDIR AYUDA (MÓVIL) */}
           {turnoAlertaInfo && (
             <div className="w-full sm:hidden mt-1">
               <button
-                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+                onClick={() => setShowHelpModal(true)}
                 className={`w-full p-3.5 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition shadow-sm border
                   ${turnoAlertaInfo.solicitaAsistencia
-                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                    ? turnoAlertaInfo.tipoAsistencia === 'peligro' ? 'bg-red-500 hover:bg-red-600 text-white border-red-600 animate-pulse' : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
                     : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
                   }`}
               >
                 <Bell size={18} className="w-5 h-5" />
                 <span>
-                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+                  {turnoAlertaInfo.solicitaAsistencia ? 'Gestionar Alerta' : 'Centro de Ayuda'}
                 </span>
               </button>
             </div>
           )}
 
-          {/* SECCIÓN 3 (SOLO MÓVIL): Línea separadora */}
           <div className="w-full h-px bg-slate-200 sm:hidden my-1"></div>
 
-          {/* SECCIÓN 4: Botones de Acción (Abajo en móvil, Derecha en PC) */}
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full sm:w-auto">
-            
-            {/* BOTÓN: INSTALAR APP */}
             <button 
               onClick={handleInstallClick} 
               className="bg-slate-800 border border-slate-800 text-white p-2 sm:px-3 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition shadow-sm hover:bg-slate-700"
-              title="Instalar aplicación en tu dispositivo"
             >
               <Smartphone size={16} className="w-4 h-4" /> <span>Instalar App</span>
             </button>
@@ -147,30 +149,28 @@ const ParticipantPanel = () => {
                <Settings size={16} className="w-4 h-4" /> <span>Mi Perfil</span>
             </button>
 
-            {/* SECCIÓN 5 (SOLO ESCRITORIO): Botón Pedir Ayuda */}
+            {/* BOTÓN PEDIR AYUDA (ESCRITORIO) */}
             {turnoAlertaInfo && (
               <button
-                onClick={() => handleSolicitarAsistencia(!turnoAlertaInfo.solicitaAsistencia)}
+                onClick={() => setShowHelpModal(true)}
                 className={`hidden sm:flex p-2 px-3 rounded-xl text-[11px] font-bold items-center justify-center gap-1.5 transition shadow-sm border
                   ${turnoAlertaInfo.solicitaAsistencia
-                    ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
+                    ? turnoAlertaInfo.tipoAsistencia === 'peligro' ? 'bg-red-500 hover:bg-red-600 text-white border-red-600 animate-pulse' : 'bg-orange-500 hover:bg-orange-600 text-white border-orange-600 animate-pulse'
                     : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
                   }`}
               >
                 <Bell size={16} className="w-4 h-4" />
                 <span>
-                  {turnoAlertaInfo.solicitaAsistencia ? 'Ayuda Solicitada' : 'Pedir Ayuda'}
+                  {turnoAlertaInfo.solicitaAsistencia ? 'Gestionar Alerta' : 'Centro de Ayuda'}
                 </span>
               </button>
             )}
           </div>
-            
         </header>
       </div>
 
       <div className="sticky top-0 left-0 z-50 w-[100vw] max-w-[100vw] bg-slate-100 h-[60px] flex items-center shadow-sm border-b border-slate-200 px-2 sm:px-6 shrink-0 box-border mt-1 sm:mt-0">
         <div className="w-full max-w-[1400px] mx-auto flex gap-2 overflow-x-auto no-scrollbar items-center h-full px-1">
-          {/* Mapeamos diasAsignados y usamos originalIndex para mantener la sincronía del estado */}
           {dias.length > 0 ? (
             dias.map((dia, idx) => (
               <button 
@@ -207,23 +207,6 @@ const ParticipantPanel = () => {
         </div>
 
         {diaActual ? (() => {
-          
-          const numerosDeAsistencia = [];
-          
-          if (miUsuario.capitanNombre) {
-            numerosDeAsistencia.push({ 
-              nombre: miUsuario.capitanNombre, 
-              telefono: miUsuario.capitanTelefono || '', 
-              rol: 'Capitán' 
-            });
-          }
-          
-          numerosDeAsistencia.push({ 
-            nombre: adminContacto.nombre, 
-            telefono: adminContacto.telefono || '', 
-            rol: 'Admin' 
-          });
-
           return vistaTarjetas ? (
             <VistaTarjetasCajas 
               diaActual={diaActual} 
@@ -235,7 +218,7 @@ const ParticipantPanel = () => {
               onCrearCaja={() => {}} onDeleteCaja={() => {}} onDeleteHorario={() => {}} onEditCaja={() => {}} onEditHorario={() => {}} onDeleteTurnoEspecial={() => {}} onEditTurnoEspecial={() => {}}
               adminPerms={{ cajas: false, horarios: false, especiales: false }}
               onActualizarEstadoTurno={() => {}} 
-              contactosWhatsApp={numerosDeAsistencia}
+              contactosWhatsApp={contactosAyuda}
             />
           ) : (
             <MatrizTurnosParticipante 
@@ -244,7 +227,7 @@ const ParticipantPanel = () => {
               miUsuarioId={miUsuario.id} 
               onAsignarme={safeHandleAsignarme} 
               onQuitarme={safeHandleQuitarme} 
-              contactosWhatsApp={numerosDeAsistencia}
+              contactosWhatsApp={contactosAyuda}
             />
           )
         })() : (
@@ -256,48 +239,38 @@ const ParticipantPanel = () => {
       </div>
 
       <ParticipantDrawer 
-        isOpen={showDirectorio} 
-        onClose={() => setShowDirectorio(false)} 
-        participantes={participantesDirectorio} 
-        currentUserId={miUsuario.id} 
-        currentUserRole="Participante" 
-        onEditParticipante={(id) => { if (id === miUsuario.id) setIsUsuarioModalOpen(true); }}
-        onDeleteParticipante={() => {}} 
-        eventoId={eventoId} adminId={adminId}
-        turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount}
+        isOpen={showDirectorio} onClose={() => setShowDirectorio(false)} participantes={participantesDirectorio} currentUserId={miUsuario.id} currentUserRole="Participante" onEditParticipante={(id) => { if (id === miUsuario.id) setIsUsuarioModalOpen(true); }} onDeleteParticipante={() => {}} eventoId={eventoId} adminId={adminId} turnosLibresCount={turnosLibresCount} turnosOcupadosCount={turnosOcupadosCount}
       />
 
       <ModalInfoUsuario 
-        isOpen={isUsuarioModalOpen} 
-        onClose={() => setIsUsuarioModalOpen(false)} 
-        data={datosParaModal} 
-        isViewingSelf={true} 
-        currentUserRole="Participante" 
-        onSave={handleGuardarPerfilAjustado} 
-        onDownloadImage={() => setDownloadModal(true)} 
+        isOpen={isUsuarioModalOpen} onClose={() => setIsUsuarioModalOpen(false)} data={datosParaModal} isViewingSelf={true} currentUserRole="Participante" onSave={handleGuardarPerfilAjustado} onDownloadImage={() => setDownloadModal(true)} 
       />
 
       <DownloadScheduleModal 
-        isOpen={downloadModal} onClose={() => setDownloadModal(false)} type="personal" 
-        seccionName="Mis Accesos" dias={dias} diaActivo={diaActivo} participantes={participantes} targetUserId={miUsuario.id} 
+        isOpen={downloadModal} onClose={() => setDownloadModal(false)} type="personal" seccionName="Mis Accesos" dias={dias} diaActivo={diaActivo} participantes={participantes} targetUserId={miUsuario.id} 
       />
 
       <CroquisModal 
-        isOpen={showCroquis} 
-        onClose={() => setShowCroquis(false)} 
-        canEdit={false} 
-        croquis={croquisDataParaMostrar} 
-        onSaveCroquis={async () => Promise.resolve()}
-        dias={dias} 
-        diaActivo={diaActivo} 
-        currentUserRole="Participante" 
+        isOpen={showCroquis} onClose={() => setShowCroquis(false)} canEdit={false} croquis={croquisDataParaMostrar} onSaveCroquis={async () => Promise.resolve()} participantes={participantes} dias={dias} diaActivo={diaActivo} currentUserRole="Participante" 
       />
 
-
-      {/* RENDERIZAMOS EL MODAL DE INSTRUCCIONES DE INSTALACIÓN PWA */}
-      <InstallGuideModal 
-        isOpen={showInstallGuide} 
-        onClose={() => setShowInstallGuide(false)} 
+      <InstallGuideModal isOpen={showInstallGuide} onClose={() => setShowInstallGuide(false)} />
+      
+      {/* EL MODAL DEL CENTRO DE AYUDA */}
+      <ModalPedirAyuda 
+        isOpen={showHelpModal} 
+        onClose={() => setShowHelpModal(false)}
+        contactos={contactosAyuda}
+        alertaActiva={turnoAlertaInfo?.solicitaAsistencia || false}
+        tipoAlertaActiva={turnoAlertaInfo?.tipoAsistencia}
+        onSolicitar={(tipo) => {
+          handleSolicitarAsistencia(true, tipo);
+          setShowHelpModal(false);
+        }}
+        onCancelar={() => {
+          handleSolicitarAsistencia(false);
+          setShowHelpModal(false);
+        }}
       />
       
     </div>

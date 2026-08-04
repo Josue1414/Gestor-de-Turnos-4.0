@@ -6,49 +6,39 @@ import type { PoligonoCroquisExt } from './TarjetaTurnoEnVivo';
 interface CapaTrazadosProps {
   modoDibujo: boolean;
   puntosActuales: Coordenada[];
-  // CORRECCIÓN: Tipado que permite actualizaciones dinámicas de estado
   setPuntosActuales: React.Dispatch<React.SetStateAction<Coordenada[]>>;
   formaDibujo: 'libre'|'cuadrado'|'rectangulo'|'circulo';
   colorActual: string;
   poligonosGuardados?: PoligonoCroquisExt[];
   currentUserRole?: string;
-  cajasConAlerta?: string[];
+  cajasConAlerta?: Record<string, 'asistencia' | 'peligro'>;
   onPoligonoClick?: (poligono: PoligonoCroquisExt) => void;
 }
 
 const CapaTrazados: React.FC<CapaTrazadosProps> = ({
-  modoDibujo, puntosActuales, setPuntosActuales, formaDibujo, colorActual, poligonosGuardados = [], currentUserRole, cajasConAlerta = [], onPoligonoClick
+  modoDibujo, puntosActuales, setPuntosActuales, formaDibujo, colorActual, poligonosGuardados = [], currentUserRole, cajasConAlerta = {}, onPoligonoClick
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const esEditor = currentUserRole !== 'Participante';
 
-  // REFERENCIA PARA EVITAR PROBLEMAS DE CLOSURE DE REACT EN EVENTOS RÁPIDOS
   const dragInfo = useRef({
-    isDragging: false,
-    dragType: 'none' as 'none' | 'vertex' | 'center' | 'free',
-    vertexIndex: -1,
-    startCoords: null as Coordenada | null,
-    startPoints: [] as Coordenada[],
-    centroid: null as Coordenada | null
+    isDragging: false, dragType: 'none' as 'none' | 'vertex' | 'center' | 'free',
+    vertexIndex: -1, startCoords: null as Coordenada | null,
+    startPoints: [] as Coordenada[], centroid: null as Coordenada | null
   });
 
   const obtenerCoordenadasSvg = (e: React.PointerEvent<SVGElement>): Coordenada | null => {
     if (!svgRef.current) return null;
     const rect = svgRef.current.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100
-    };
+    return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 };
   };
 
   const calcularCentroide = (puntos: Coordenada[]) => {
     if (!puntos || puntos.length === 0) return { x: 50, y: 50 };
     let minX = 100, maxX = 0, minY = 100, maxY = 0;
     puntos.forEach(p => {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
     });
     return { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2 };
   };
@@ -57,15 +47,12 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
     if (!puntos || puntos.length === 0) return { x: 50, y: 50, w: 0, h: 0 };
     let minX = 100, maxX = 0, minY = 100, maxY = 0;
     puntos.forEach(p => {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
     });
     return { x: minX + (maxX - minX) / 2, y: minY + (maxY - minY) / 2, w: maxX - minX, h: maxY - minY };
   };
 
-  // EVENTOS DEL MOUSE / TÁCTILES
   const handlePointerDownSVG = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!modoDibujo || dragInfo.current.isDragging) return;
 
@@ -102,7 +89,6 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
     const info = dragInfo.current;
 
     if (info.dragType === 'free') {
-      // DIBUJO LIBRE INTELIGENTE
       setPuntosActuales(prev => {
         const last = prev[prev.length - 1];
         if (!last) return [coords];
@@ -112,7 +98,6 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
         return prev;
       });
     } else if (info.dragType === 'vertex' && info.centroid) {
-      // ESCALADO MATEMÁTICO PROPORCIONAL
       const pOriginal = info.startPoints[info.vertexIndex];
       const distOriginal = Math.hypot(pOriginal.x - info.centroid.x, pOriginal.y - info.centroid.y);
       const distNueva = Math.hypot(coords.x - info.centroid.x, coords.y - info.centroid.y);
@@ -125,7 +110,6 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
         })));
       }
     } else if (info.dragType === 'center' && info.startCoords) {
-      // MOVER TODA LA FIGURA
       const dx = coords.x - info.startCoords.x;
       const dy = coords.y - info.startCoords.y;
       setPuntosActuales(info.startPoints.map(p => ({
@@ -168,7 +152,6 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      // CORRECCIÓN PARA MÓVILES: Bloquea el scroll de la pantalla al intentar dibujar
       style={{ touchAction: modoDibujo ? 'none' : 'auto' }}
       className={`absolute inset-0 w-full h-full z-10 ${modoDibujo ? 'cursor-crosshair' : 'cursor-default'}`}
       viewBox="0 0 100 100" preserveAspectRatio="none"
@@ -181,29 +164,38 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
 
       {poligonosGuardados.map((poly) => {
         const esTransparente = poly.color === 'transparent';
-        const tieneAlerta = poly.cajaId && cajasConAlerta.includes(poly.cajaId);
         
-        const strokeColor = tieneAlerta ? '#ef4444' : (esTransparente ? (esEditor ? '#94a3b8' : 'transparent') : poly.color);
-        const fillColor = tieneAlerta ? '#ef4444' : (esTransparente ? 'transparent' : poly.color);
-        const fillOpacity = tieneAlerta ? '0.4' : (esTransparente ? '0' : '0.1'); 
+        // Identificamos la alerta buscando por ID o por el Nombre de la caja
+        const nombreLlave = poly.nombre ? String(poly.nombre).trim().toLowerCase() : '';
+        const tipoAlerta = (poly.cajaId && cajasConAlerta[poly.cajaId]) || cajasConAlerta[nombreLlave] || null;
+        const tieneAlerta = !!tipoAlerta;
+        
+        // Azul para asistencia normal, Rojo para peligro
+        const colorAlertaBorder = tipoAlerta === 'peligro' ? '#dc2626' : '#2563eb'; 
+        const colorAlertaFill = tipoAlerta === 'peligro' ? '#ef4444' : '#3b82f6';
+        
+        const strokeColor = tieneAlerta ? colorAlertaBorder : (esTransparente ? (esEditor ? '#94a3b8' : 'transparent') : poly.color);
+        const fillColor = tieneAlerta ? colorAlertaFill : (esTransparente ? 'transparent' : poly.color);
+        const fillOpacity = tieneAlerta ? '0.5' : (esTransparente ? '0' : '0.1'); 
         const strokeWidth = tieneAlerta ? '0.6' : (esTransparente && !esEditor ? '0' : '0.3');
         const strokeDash = esTransparente && esEditor && !tieneAlerta ? '1,1' : 'none';
         
         const animClass = tieneAlerta ? 'animate-pulse drop-shadow-xl' : '';
         const bbox = calcularBoundingBox(poly.puntos);
 
-        // AJUSTE DINÁMICO E INTELIGENTE DEL TAMAÑO DE LA FUENTE
-        const textoMostrar = tieneAlerta ? '⚠️' : poly.nombre;
+        // Reemplazo a los íconos ✋ y 🚨
+        const textoMostrar = tieneAlerta ? (tipoAlerta === 'peligro' ? '🚨' : '✋') : poly.nombre;
         const debeMostrarTexto = tieneAlerta || poly.mostrarTexto; 
         
         let fontSizeDinamico = 2.5; 
         if (debeMostrarTexto) {
-           const anchoLetraAprox = 0.6;
+           // Los emojis necesitan un multiplicador más alto para que queden bien
+           const anchoLetraAprox = tieneAlerta ? 1.5 : 0.6; 
            const maxW = bbox.w * 0.8;
            const maxH = bbox.h * 0.8;
            const calcSizeW = maxW / (textoMostrar.length * anchoLetraAprox);
            
-           fontSizeDinamico = Math.min(calcSizeW, maxH, 6);
+           fontSizeDinamico = Math.min(calcSizeW, maxH, tieneAlerta ? 8 : 6);
            if (fontSizeDinamico < 0.5) fontSizeDinamico = 0.5;
         }
 
@@ -232,13 +224,13 @@ const CapaTrazados: React.FC<CapaTrazadosProps> = ({
               <text
                 x={bbox.x}
                 y={bbox.y}
-                fill={tieneAlerta ? '#ef4444' : (esTransparente ? (esEditor ? '#94a3b8' : 'transparent') : poly.color)}
+                fill={tieneAlerta ? '#ffffff' : (esTransparente ? (esEditor ? '#94a3b8' : 'transparent') : poly.color)}
                 fontSize={`${fontSizeDinamico}`}
                 fontWeight="900"
                 textAnchor="middle"
                 alignmentBaseline="middle"
                 className="pointer-events-none select-none transition-all duration-300"
-                style={{ textShadow: esTransparente && !tieneAlerta ? 'none' : '0px 0px 2px white, 0px 0px 4px white' }}
+                style={{ textShadow: tieneAlerta ? '0px 0px 4px rgba(0,0,0,0.8)' : (esTransparente ? 'none' : '0px 0px 2px white, 0px 0px 4px white') }}
               >
                 {textoMostrar}
               </text>

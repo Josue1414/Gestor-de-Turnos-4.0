@@ -23,6 +23,8 @@ interface CroquisModalProps {
   dias?: DiaEvento[]; 
   diaActivo?: number; 
   currentUserRole?: 'SuperAdmin' | 'Supervisor' | 'Administrador' | 'Capitan' | 'Participante';
+
+  participantes?: any[];
   
   onSaveCroquis: (file: File | null, croquisId: string) => Promise<void>;
   onSavePoligono?: (poligono: any, croquisId: string) => Promise<void>; 
@@ -32,7 +34,8 @@ interface CroquisModalProps {
 const CroquisModal: React.FC<CroquisModalProps> = ({ 
   isOpen, onClose, canEdit = false, croquis, 
   dias = [], diaActivo = 0, currentUserRole = 'Administrador',
-  onSaveCroquis, onSavePoligono, onDeletePoligono
+  onSaveCroquis, onSavePoligono, onDeletePoligono,
+  participantes
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [localOverride, setLocalOverride] = useState<string | null | undefined>(undefined);
@@ -87,15 +90,33 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   }, [dias]);
 
   const cajasConAlerta = useMemo(() => {
-    const alertas = new Set<string>();
+    const alertas: Record<string, 'asistencia' | 'peligro'> = {};
     dias.forEach(dia => {
       dia.cajas?.forEach(caja => {
-        if (caja.turnos?.some(t => t.solicitaAsistencia)) {
-          alertas.add(caja.id);
+        // Firebase a veces envía los arrays como objetos si faltan índices
+        const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : Object.values(caja.turnos || {});
+        const turnosConAlerta = turnosArr.filter((t: any) => t.solicitaAsistencia);
+        
+        if (turnosConAlerta.length > 0) {
+          const esPeligro = turnosConAlerta.some((t: any) => t.tipoAsistencia === 'peligro');
+          const tipo = esPeligro ? 'peligro' : 'asistencia';
+          
+          // Guardamos por ID de la caja
+          if (!alertas[caja.id] || tipo === 'peligro') {
+            alertas[caja.id] = tipo;
+          }
+          
+          // Guardamos por Nombre de la caja (Clave para que funcione en Supervisor)
+          if (caja.nombre) {
+            const nombreLlave = String(caja.nombre).trim().toLowerCase();
+            if (!alertas[nombreLlave] || tipo === 'peligro') {
+              alertas[nombreLlave] = tipo;
+            }
+          }
         }
       });
     });
-    return Array.from(alertas);
+    return alertas;
   }, [dias]);
 
   const diasDisponibles = useMemo(() => {
@@ -201,9 +222,13 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const handleGuardarTerritorio = async () => {
     if (!onSavePoligono || !currentItem) return;
     
-    // Filtramos manualmente las propiedades vacías para no enviar "undefined" a Firebase
+    const isNew = !editingPolyId;
+    const finalId = isNew 
+      ? `poly_${Date.now()}_${Math.random().toString(36).substring(2,9)}` 
+      : editingPolyId;
+
     const nuevoPoligono: Record<string, any> = {
-      id: editingPolyId || `poly_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
+      id: finalId,
       nombre: polyName.trim(),
       color: polyColor,
       puntos: puntosActuales,
@@ -361,6 +386,9 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
           <TarjetaTurnoEnVivo 
             poligono={poligonoActivo} rolUsuario={currentUserRole}
             onClose={() => setPoligonoActivo(null)} onEdit={iniciarEdicion} onDelete={handleDeleteTerritorio}
+            dias={dias}
+            diaActivo={diaActivo}
+            participantes={participantes}
           />
         )}
 

@@ -69,6 +69,7 @@ export interface Turno {
   entregada?: boolean; // Para el checkbox 1
   devuelta?: boolean;  // Para el checkbox 2
   solicitaAsistencia?: boolean;
+  tipoAsistencia?: 'asistencia' | 'peligro' | null;
 }
 
 export interface Caja {

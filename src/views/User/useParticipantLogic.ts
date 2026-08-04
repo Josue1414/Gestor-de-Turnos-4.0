@@ -9,7 +9,6 @@ import type { UsuarioModalData } from '../../components/ModalInfoUsuario';
 import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 import { enviarAlertaVercel } from '../../utils/pushNotifications';
-
 import { useTiempoReal } from '../../hooks/useTiempoReal';
 
 export interface ParticipanteExtendidoDb extends Participante {
@@ -105,7 +104,6 @@ export const useParticipantLogic = () => {
         
         const currentUser = allParts.find(p => p.id === participanteId);
         
-        // 1. CORRECCIÓN: Leemos de diasGlobales si el evento está sincronizado
         const isSync = data.cajasSincronizadas === true;
         const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
 
@@ -308,7 +306,6 @@ export const useParticipantLogic = () => {
     } catch { return false; }
   }, []);
 
-  // 2. CORRECCIÓN: isBusy solo comprueba choques en los horarios de ESTE DÍA (diaActual)
   const isBusy = useCallback((horario: string) => {
     if (!diaActual || !miUsuario) return false;
     const misHorariosHoy: string[] = [];
@@ -324,58 +321,43 @@ export const useParticipantLogic = () => {
     return misHorariosHoy.some(miHor => hayChoque(miHor, horario));
   }, [diaActual, miUsuario, hayChoque]);
 
-  // 3. FUNCIONES DE ACTUALIZACIÓN (Detectan si se guarda global o personal)
+  const updateDiasData = async (nuevosDias: DiaEvento[]) => {
+    if (!eventoId) return;
+    const docRef = doc(db, 'eventos', eventoId);
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data().cajasSincronizadas) {
+       await updateDoc(docRef, { diasGlobales: nuevosDias });
+    } else {
+       await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+    }
+  };
+
   const handleAsignarme = async (cajaId: string, turnoId: string) => {
     if (!miUsuario || !eventoId || !adminId || !diaActual) return;
     try {
-      const docRef = doc(db, 'eventos', eventoId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) return;
-      
-      const data = docSnap.data();
-      const isSync = data.cajasSincronizadas === true;
-      const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
-      
-      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
+      const nuevosDias = dias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
           ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: miUsuario.id } : t)
         } : c)
       } : d);
-      
-      if (isSync) {
-         await updateDoc(docRef, { diasGlobales: nuevosDias });
-      } else {
-         await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
-      }
+      await updateDiasData(nuevosDias);
     } catch (error) { console.error(error); }
   };
 
   const handleQuitarme = async (cajaId: string, turnoId: string) => {
     if (!eventoId || !adminId || !diaActual) return;
     try {
-      const docRef = doc(db, 'eventos', eventoId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) return;
-      
-      const data = docSnap.data();
-      const isSync = data.cajasSincronizadas === true;
-      const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
-      
-      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
+      const nuevosDias = dias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
           ...c, turnos: c.turnos.map((t: any) => t.id === turnoId ? { ...t, participanteId: null } : t)
         } : c)
       } : d);
-      
-      if (isSync) {
-         await updateDoc(docRef, { diasGlobales: nuevosDias });
-      } else {
-         await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
-      }
+      await updateDiasData(nuevosDias);
     } catch (error) { console.error(error); }
   };
 
-  const handleSolicitarAsistencia = async (estado: boolean) => {
+  // ACTUALIZADO PARA ENVIAR EL TIPO DE ALERTA
+  const handleSolicitarAsistencia = async (estado: boolean, tipo: 'asistencia' | 'peligro' | null = null) => {
     if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
     
     try {
@@ -389,7 +371,11 @@ export const useParticipantLogic = () => {
 
       const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
-          ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
+          ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { 
+            ...t, 
+            solicitaAsistencia: estado,
+            tipoAsistencia: estado ? tipo : null 
+          } : t)
         } : c)
       } : d);
 
@@ -400,7 +386,7 @@ export const useParticipantLogic = () => {
       }
 
       if ("vibrate" in navigator) {
-        navigator.vibrate(estado ? [100, 50, 100] : [50]);
+        navigator.vibrate(estado && tipo === 'peligro' ? [500, 200, 500, 200, 500] : estado ? [100, 50, 100] : [50]);
       }
 
       if (estado) {
@@ -413,7 +399,8 @@ export const useParticipantLogic = () => {
         }
       }
 
-      showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
+      const mensajeExito = tipo === 'peligro' ? '⚠️ ALERTA DE EMERGENCIA ENVIADA' : 'Asistencia solicitada al administrador.';
+      showToast(estado ? mensajeExito : 'Alerta cancelada.', estado && tipo === 'peligro' ? 'error' : 'success');
     } catch (error) {
       console.error(error);
       showToast('Error al conectar con el servidor.', 'error');
@@ -473,6 +460,7 @@ export const useParticipantLogic = () => {
     return arr;
   }, [croquisGral, croquisIndiv, adminId, poligonosGral, poligonosIndiv]);
 
+ // ACTUALIZADO PARA LEER EL TIPO DE ALERTA
  const turnoAlertaInfo = useMemo(() => {
     if (!diaActual || !miUsuario || !horaActual) return null;
 
@@ -480,7 +468,12 @@ export const useParticipantLogic = () => {
       const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
       const turnoConAlerta = turnos.find((t: any) => t.participanteId === miUsuario.id && t.solicitaAsistencia);
       if (turnoConAlerta) {
-        return { cajaId: caja.id, turnoId: turnoConAlerta.id, solicitaAsistencia: true };
+        return { 
+          cajaId: caja.id, 
+          turnoId: turnoConAlerta.id, 
+          solicitaAsistencia: true,
+          tipoAsistencia: turnoConAlerta.tipoAsistencia // <-- Extrae si es peligro o asistencia
+        };
       }
     }
 
@@ -509,7 +502,12 @@ export const useParticipantLogic = () => {
       });
 
       if (turnoActual) {
-        return { cajaId: caja.id, turnoId: turnoActual.id, solicitaAsistencia: turnoActual.solicitaAsistencia };
+        return { 
+          cajaId: caja.id, 
+          turnoId: turnoActual.id, 
+          solicitaAsistencia: turnoActual.solicitaAsistencia,
+          tipoAsistencia: turnoActual.tipoAsistencia 
+        };
       }
     }
     return null;
