@@ -13,7 +13,6 @@ export const useEventStats = (diasFiltrados: DiaEvento[], participantes: Partici
 
     diasFiltrados.forEach((dia) => {
       dia.cajas.forEach((caja) => {
-        // 1. CORRECCIÓN: Contamos cajas únicas por su NOMBRE, igual que en statsCalculator
         const nombreNormalizado = (caja.nombre || '').trim().toLowerCase();
         if (nombreNormalizado) cajasUnicas.add(nombreNormalizado);
         

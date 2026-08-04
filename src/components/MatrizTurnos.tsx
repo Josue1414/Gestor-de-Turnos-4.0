@@ -69,18 +69,8 @@ const MatrizTurnos: React.FC<MatrizTurnosProps> = ({
     return (h || 0) * 60 + (m || 0);
   };
 
-  const horariosUnicos = useMemo(() => {
-      const horariosSet = new Set<string>();
-      cajasNormales.forEach(caja => {
-          const turnos = Array.isArray(caja.turnos) 
-              ? caja.turnos 
-              : (caja.turnos ? Object.values(caja.turnos) : []);
-          turnos.forEach((turno: any) => {
-              if (turno.horario) horariosSet.add(turno.horario);
-          });
-      });
-      return Array.from(horariosSet).sort((a, b) => getMinutos(a) - getMinutos(b));
-  }, [cajasNormales]);
+  const horariosUnicos = Array.from(new Set(cajasNormales.flatMap(caja => caja.turnos.map(t => t.horario))))
+    .sort((a, b) => getMinutos(a) - getMinutos(b));
 
   const formatHorarioVisual = (rango: string) => {
     const partes = rango.split('-').map(p => p.trim());

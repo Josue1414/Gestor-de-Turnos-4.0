@@ -69,6 +69,8 @@ const AdminPanelModals = (props: any) => {
         dias={dias}
         diaActivo={diaActivo}
         currentUserRole={props.isCapitan ? 'Capitan' : 'Administrador'}
+        onSavePoligono={props.onSavePoligono}       // <-- Recibimos de AdminPanel
+        onDeletePoligono={props.onDeletePoligono}
       />
       
       <ModalAsignarCapitan 

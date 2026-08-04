@@ -48,8 +48,14 @@ export interface PoligonoCroquis {
   color: string;           // Código Hexadecimal (ej: "#3b82f6")
   puntos: Coordenada[];    // Array de vértices que forman la figura
   notas?: string;          // Instrucciones o detalles del área
-  cajaVinculadaId?: string;// ID de la Caja para leer sus turnos al hacer clic
-  estado: 'publicado' | 'borrador'; // Control para mostrar u ocultar a los participantes
+  cajaId?: string;         // <-- NUEVO: ID de la Caja (Reemplaza a cajaVinculadaId)
+  encargadoNombre?: string;
+  encargadoTelefono?: string;
+  diasAplicables?: string[];
+  horarios?: string[];
+  visibilidad?: 'todos' | 'solo_admins_capitanes';
+  estado: string; // 'publicado' | 'borrador'
+  mostrarTexto?: boolean;
 }
 
 // ==========================================

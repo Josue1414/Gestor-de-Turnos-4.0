@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ShieldCheck, LogOut, Plus, Calendar, MapIcon, Download, Lock, Unlock } from 'lucide-react';
+import { ShieldCheck, LogOut, Plus, Calendar, MapIcon, Download, Lock, Unlock, Settings, ChevronDown, LayoutGrid } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore'; 
 import { db } from '../../firebase'; 
 
@@ -29,6 +29,8 @@ interface EventoExtended {
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
   globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
+  cajasSincronizadas?: boolean; // NUEVO
+  diasGlobales?: any[]; // NUEVO
 
   poligonosGlobales?: any[]; 
   poligonosPorAdmin?: Record<string, any[]>;
@@ -41,6 +43,7 @@ const SupervisorPanel = () => {
   const [showExitAlert, setShowExitAlert] = useState(false);
   const [globalBlockModal, setGlobalBlockModal] = useState(false); 
   const [syncTrigger, setSyncTrigger] = useState(0);
+  const [showMoreMenu, setShowMoreMenu] = useState(false); // ESTADO PARA EL MENÚ
 
   useEffect(() => {
     window.history.pushState(null, '', window.location.pathname);
@@ -58,7 +61,8 @@ const SupervisorPanel = () => {
   
   const { 
     evento, loading, handleAddAdmin, handleDeleteAdmin, 
-    handleEditAccess, handleSaveProfile, handleSaveGlobalStructure 
+    handleEditAccess, handleSaveProfile, handleSaveGlobalStructure,
+    handleToggleSincronizacion // IMPORTADO DEL HOOK
   } = useSupervisorLogic(eventoId);
 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, adminId: '', adminName: '' });
@@ -127,11 +131,11 @@ const SupervisorPanel = () => {
 
   const eventoExt = evento as EventoExtended;
 
-  // NUEVO: Extraemos TODOS los días para enviárselos al Croquis Modal
   const todosLosDiasSupervisor = useMemo(() => {
+    if (eventoExt?.cajasSincronizadas) return eventoExt.diasGlobales || [];
     if (!eventoExt?.diasPorAdmin) return [];
     return Object.values(eventoExt.diasPorAdmin).flat() as any[];
-  }, [eventoExt?.diasPorAdmin]);
+  }, [eventoExt?.diasPorAdmin, eventoExt?.cajasSincronizadas, eventoExt?.diasGlobales]);
 
   if (loading) {
     return (
@@ -161,7 +165,7 @@ const SupervisorPanel = () => {
   }
 
   return (
-    <div key={syncTrigger} className="min-h-screen bg-slate-50 p-4 sm:p-6 relative">
+    <div key={syncTrigger} className="min-h-screen bg-slate-50 p-4 sm:p-6 relative" onClick={() => { if(showMoreMenu) setShowMoreMenu(false) }}>
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 rounded-3xl shadow-sm border border-slate-200 mb-8 gap-4">
         <div className="flex items-center gap-4">
           <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg"><ShieldCheck className="text-white" size={24} /></div>
@@ -171,35 +175,62 @@ const SupervisorPanel = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          <button 
-            onClick={() => setGlobalBlockModal(true)} 
-            className={`flex-1 lg:flex-none px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm border ${
-              isGlobalLocked 
-                ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200' 
-                : 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
-            }`}
-          >
-            {isGlobalLocked ? <Lock size={16} /> : <Unlock size={16} />}
-            {isGlobalLocked ? "Bloqueos Activos" : "Desbloqueado Gral."}
-          </button>
-
+        <div className="flex flex-wrap gap-3 w-full lg:w-auto mt-2 lg:mt-0 items-center">
+          
           <button onClick={() => setCroquisModal({isOpen: true, adminId: null})} className="flex-1 lg:flex-none bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition">
             <MapIcon size={16} /> Croquis Gral.
           </button>
-          
-          <button onClick={handleExportGlobal} className="flex-1 lg:flex-none bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm">
-            <Download size={16} /> Excel Global
-          </button>
-          
-          <button onClick={() => setStructureModal(true)} className="flex-1 lg:flex-none bg-slate-800 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition hover:bg-slate-700">
-            <Calendar size={16} /> Añadir Día
-          </button>
-          <button onClick={handleAddAdmin} className="flex-1 lg:flex-none bg-blue-600 text-white px-3 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition hover:bg-blue-700">
-            <Plus size={16} /> Añadir Admin
-          </button>
-          <button onClick={() => setShowExitAlert(true)} className="px-3 py-2 text-red-500 hover:text-white hover:bg-red-500 bg-red-50 rounded-2xl font-bold text-xs sm:text-sm shrink-0 flex items-center gap-2 transition">
-            <LogOut size={16} /> Salir
+
+          {/* CONTENEDOR MÁS AJUSTES */}
+          <div className="relative flex-1 lg:flex-none" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="w-full bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 px-4 py-2 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm transition shadow-sm"
+            >
+              <Settings size={16} /> Más Ajustes <ChevronDown size={14} className={`transform transition ${showMoreMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showMoreMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-[100] flex flex-col gap-1">
+                <button 
+                  onClick={() => { handleToggleSincronizacion(!eventoExt?.cajasSincronizadas); setShowMoreMenu(false); }}
+                  className={`w-full px-3 py-2.5 rounded-xl font-bold flex items-center gap-2 text-xs transition ${
+                    eventoExt?.cajasSincronizadas ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <LayoutGrid size={16} />
+                  {eventoExt?.cajasSincronizadas ? "Sincronización (ON)" : "Sincronización (OFF)"}
+                </button>
+
+                <button 
+                  onClick={() => { setGlobalBlockModal(true); setShowMoreMenu(false); }} 
+                  className={`w-full px-3 py-2.5 rounded-xl font-bold flex items-center gap-2 text-xs transition ${
+                    isGlobalLocked ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {isGlobalLocked ? <Lock size={16} /> : <Unlock size={16} />}
+                  {isGlobalLocked ? "Bloqueos Activos" : "Desbloquear General"}
+                </button>
+
+                <button onClick={() => { handleExportGlobal(); setShowMoreMenu(false); }} className="w-full px-3 py-2.5 rounded-xl text-slate-600 font-bold flex items-center gap-2 text-xs transition hover:bg-emerald-50 hover:text-emerald-700">
+                  <Download size={16} /> Descargar Excel Global
+                </button>
+
+                <div className="h-px w-full bg-slate-100 my-1"></div>
+
+                <button onClick={() => { setStructureModal(true); setShowMoreMenu(false); }} className="w-full px-3 py-2.5 rounded-xl text-slate-600 font-bold flex items-center gap-2 text-xs transition hover:bg-slate-50">
+                  <Calendar size={16} /> Añadir Día Global
+                </button>
+
+                <button onClick={() => { handleAddAdmin(); setShowMoreMenu(false); }} className="w-full px-3 py-2.5 rounded-xl text-slate-600 font-bold flex items-center gap-2 text-xs transition hover:bg-slate-50">
+                  <Plus size={16} /> Añadir Administrador
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button onClick={() => setShowExitAlert(true)} className="p-2 text-red-500 hover:text-white hover:bg-red-500 bg-red-50 rounded-2xl font-bold transition">
+            <LogOut size={20} />
           </button>
         </div>
       </header>
@@ -209,9 +240,12 @@ const SupervisorPanel = () => {
           eventoExt.admins.map((adminRaw) => {
             const admin = adminRaw as AdminData;
             
-            const adminDias = (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
+            // Si están sincronizadas, los stats se calculan con base en diasGlobales
+            const adminDias = eventoExt.cajasSincronizadas 
+               ? (eventoExt.diasGlobales || []) 
+               : (eventoExt?.diasPorAdmin?.[admin.id] || []) as any[];
+
             const adminParticipantes = (eventoExt?.participantesPorAdmin?.[admin.id] || []) as any[];
-            
             const adminCapitanes = (eventoExt?.capitanesPorAdmin?.[admin.id] || []) as any[];
             const adminParticipantesCapitanes = adminCapitanes.flatMap((c: any) => 
               ((eventoExt?.participantesPorCapitan?.[c.id] || []) as any[]).map((p: any) => ({ ...p, creador: c.nombre }))
@@ -285,7 +319,7 @@ const SupervisorPanel = () => {
         onClose={() => setCroquisModal({ isOpen: false, adminId: null })}
         canEdit={true} 
         croquis={croquisDataParaMostrar}
-        dias={todosLosDiasSupervisor} // <-- NUEVO: Pasamos los días para rellenar las cajas
+        dias={todosLosDiasSupervisor}
         currentUserRole="Supervisor"
         onSaveCroquis={async (file, croquisId) => {
           if (eventoId) {
@@ -297,12 +331,14 @@ const SupervisorPanel = () => {
           const eventoRef = doc(db, 'eventos', eventoId);
           
           if (croquisId === 'general') {
-            const actuales = eventoExt?.poligonosGlobales || [];
-            await updateDoc(eventoRef, { poligonosGlobales: [...actuales, poligono] });
+            const actuales = eventoExt?.poligonosGlobales || []; // Nota: En AdminPanel usa "diaActual" u obtén los datos
+            const filtrados = actuales.filter((p: any) => p.id !== poligono.id); // CORRECCIÓN CLAVE
+            await updateDoc(eventoRef, { poligonosGlobales: [...filtrados, poligono] });
           } else {
-            const mapActual = (eventoExt as any).poligonosPorAdmin || {};
+            const mapActual = (eventoExt as any).poligonosPorAdmin || {}; // Igual aquí
             const adminPolys = mapActual[croquisId] || [];
-            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...adminPolys, poligono] });
+            const filtrados = adminPolys.filter((p: any) => p.id !== poligono.id); // CORRECCIÓN CLAVE
+            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...filtrados, poligono] });
           }
         }}
         onDeletePoligono={async (poligonoId, croquisId) => {

@@ -98,8 +98,11 @@ export const useAdminLogic = (eventoId: string) => {
       if (docSnap.exists()) {
         setEventoExiste(true);
         const data = docSnap.data();
+        const isSync = data.cajasSincronizadas === true;
         
-        const rawDias = data.diasPorAdmin?.[adminIdL] || [];
+        // 1. LEER DÍAS (Sincronizados o Personales)
+        const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminIdL] || []);
+        
         const validatedDias = Array.isArray(rawDias)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ? rawDias.map((d: any) => {
@@ -130,81 +133,88 @@ export const useAdminLogic = (eventoId: string) => {
           setCajasAsignadasCapitan(miDataCapitan?.cajasAsignadas || []);
         }
 
-        let allParts: any[] = [];
+        // 2. CONSOLIDAR PARTICIPANTES
+        const allPartsMap = new Map<string, any>();
         
-        if (isCapitan) {
-          const misParts = data.participantesPorCapitan?.[capitanIdL] || [];
-          const adminParts = data.participantesPorAdmin?.[adminIdL] || [];
-          const miDataCapitan = misCapitanes.find((c: any) => c.id === capitanIdL);
-          const misCajas = miDataCapitan?.cajasAsignadas || [];
-          
-          const partsEnMisCajas = adminParts.filter((p: any) => {
-            const rawDias = data.diasPorAdmin?.[adminIdL] || [];
-            const misDias = miDataCapitan?.diasAsignados || []; 
-            
-            return rawDias.some((dia: any) => 
-              misDias.includes(dia.id) && 
-              dia.cajas.some((caja: any) => 
-                misCajas.includes(caja.id) && caja.turnos.some((t: any) => t.participanteId === p.id)
-              )
-            );
-          });
-          
-          const mapCapitan = new Map();
-          
-          // IDENTIFICAR Y ASIGNAR PROPIEDAD "CREADOR" A LOS DEL CAPITÁN Y ADMIN
-          misParts.forEach((p: any) => mapCapitan.set(p.id, { ...p, creador: miDataCapitan?.nombre || 'Capitan' }));
-          partsEnMisCajas.forEach((p: any) => {
-            if (!mapCapitan.has(p.id)) {
-                mapCapitan.set(p.id, { ...p, creador: 'Admin' });
-            }
-          });
-          
-          allParts = Array.from(mapCapitan.values());
+        // Cargar participantes de Admin(s)
+        const adminIdsToLoad = isSync ? Object.keys(data.participantesPorAdmin || {}) : [adminIdL];
+        adminIdsToLoad.forEach(aId => {
+           const parts = data.participantesPorAdmin?.[aId] || [];
+           const isMyAdmin = aId === adminIdL;
+           parts.forEach((p: any) => {
+              allPartsMap.set(p.id, {
+                 ...p,
+                 creador: isMyAdmin ? 'Admin' : 'Otro Admin', // Aísla en el dropdown
+                 esMio: isMyAdmin, // Bandera de seguridad
+                 capitanesInvolucrados: new Set()
+              });
+           });
+        });
 
-        } else {
-          const allPartsMap = new Map<string, any>();
-          const misParts = data.participantesPorAdmin?.[adminIdL] || [];
-          misParts.forEach((p: any) => {
-            allPartsMap.set(p.id, { ...p, creador: 'Admin', capitanesInvolucrados: new Set() });
-          });
+        // Cargar participantes de Capitanes
+        Object.entries(data.capitanesPorAdmin || {}).forEach(([aId, caps]: [string, any]) => {
+           if (!isSync && aId !== adminIdL) return; // Si no es sync, ignoramos otros admins
+           const isMyAdmin = aId === adminIdL;
 
-          misCapitanes.forEach((cap: any) => {
-            const capParts = data.participantesPorCapitan?.[cap.id] || [];
-            capParts.forEach((p: any) => {
-              if (!allPartsMap.has(p.id)) {
-                allPartsMap.set(p.id, { ...p, creador: cap.nombre, capitanesInvolucrados: new Set([cap.nombre]) });
-              }
-            });
-          });
+           caps.forEach((cap: any) => {
+              const parts = data.participantesPorCapitan?.[cap.id] || [];
+              const isMeAsCapitan = isCapitan && cap.id === capitanIdL;
 
-          const rawDias = data.diasPorAdmin?.[adminIdL] || [];
-          rawDias.forEach((dia: any) => {
-            dia.cajas.forEach((caja: any) => {
-              const capitanDuenio = misCapitanes.find((c: any) => c.cajasAsignadas?.includes(caja.id));
+              parts.forEach((p: any) => {
+                 let esMio = false;
+                 let creadorLabel = 'Otro Capitan';
+
+                 if (isMyAdmin) {
+                    esMio = true;
+                    creadorLabel = cap.nombre;
+                 }
+                 if (isCapitan) {
+                    esMio = isMeAsCapitan; // Un capitán solo posee los suyos
+                 }
+                 if (!isMyAdmin) creadorLabel = 'Otro Capitan';
+
+                 allPartsMap.set(p.id, {
+                    ...p,
+                    creador: creadorLabel,
+                    esMio,
+                    capitanesInvolucrados: new Set([cap.nombre])
+                 });
+              });
+           });
+        });
+
+        // Relacionar capitanes con turnos de las cajas para estadísticas
+        rawDias.forEach((dia: any) => {
+           dia.cajas?.forEach((caja: any) => {
+              let capitanDuenio: any = null;
+              Object.values(data.capitanesPorAdmin || {}).forEach((caps: any) => {
+                 const found = caps.find((c:any) => c.cajasAsignadas?.includes(caja.id));
+                 if (found) capitanDuenio = found;
+              });
+
               if (capitanDuenio) {
-                caja.turnos.forEach((t: any) => {
-                  if (t.participanteId && allPartsMap.has(t.participanteId)) {
-                    const p = allPartsMap.get(t.participanteId);
-                    p.capitanesInvolucrados.add(capitanDuenio.nombre);
-                  }
-                });
+                 caja.turnos?.forEach((t: any) => {
+                    if (t.participanteId && allPartsMap.has(t.participanteId)) {
+                       const p = allPartsMap.get(t.participanteId);
+                       p.capitanesInvolucrados.add(capitanDuenio.nombre);
+                    }
+                 });
               }
-            });
-          });
+           });
+        });
 
-          allParts = Array.from(allPartsMap.values()).map(p => ({
-            ...p,
-            capitanesInvolucrados: Array.from(p.capitanesInvolucrados)
-          }));
-        }
+        const allParts = Array.from(allPartsMap.values()).map(p => ({
+           ...p,
+           capitanesInvolucrados: Array.from(p.capitanesInvolucrados)
+        }));
 
         const validatedParts = Array.isArray(allParts)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ? allParts.map((p: any) => {
               const res = ParticipanteSchema.safeParse(p);
               if (!res.success) return p;
-              return res.data as Participante;
+              // Mantenemos las propiedades inyectadas localmente
+              return { ...res.data, creador: p.creador, esMio: p.esMio } as Participante;
             })
           : [];
         setParticipantes(validatedParts as Participante[]);
@@ -248,9 +258,22 @@ export const useAdminLogic = (eventoId: string) => {
     return () => unsubscribe();
   }, [eventoId, adminIdL, isCapitan, capitanIdL]);
 
+
+  // 3. FUNCIONES ENRUTADORAS DE GUARDADO
+  const updateDiasData = async (nuevosDias: DiaEvento[]) => {
+    if (!eventoId) return;
+    const docRef = doc(db, 'eventos', eventoId);
+    const snap = await getDoc(docRef);
+    if (snap.exists() && snap.data().cajasSincronizadas) {
+       await updateDoc(docRef, { diasGlobales: nuevosDias });
+    } else {
+       await updateDoc(docRef, { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+    }
+  };
+
   const syncEvent = async (nuevosDias: DiaEvento[]) => {
-    if (isCapitan) return; 
-    await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+    if (isCapitan) return; // Capitanes no editan estructuras base
+    await updateDiasData(nuevosDias);
   };
 
   const diaActual = dias[diaActivo];
@@ -381,9 +404,9 @@ export const useAdminLogic = (eventoId: string) => {
   const abrirModalAsignacion = (cajaId: string, cajaNombre: string, turnoId: string, horario: string) => setModalAsignacion({ isOpen: true, cajaId, cajaNombre, turnoId, horario });
   const cerrarModalAsignacion = () => setModalAsignacion({ ...modalAsignacion, isOpen: false });
 
-  const asignarUsuarioExistente = (participanteId: string) => {
+  const asignarUsuarioExistente = async (participanteId: string) => {
     const nuevosDias = dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.map(c => c.id === modalAsignacion.cajaId ? { ...c, turnos: c.turnos.map(t => t.id === modalAsignacion.turnoId ? { ...t, participanteId } : t) } : c) } : d);
-    updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+    await updateDiasData(nuevosDias);
     cerrarModalAsignacion();
   };
 
@@ -418,9 +441,17 @@ export const useAdminLogic = (eventoId: string) => {
     }
   };
 
-  const quitarParticipante = (cajaId: string, turnoId: string) => {
+  const quitarParticipante = async (cajaId: string, turnoId: string, participanteId?: string) => {
+    // 4. CANDADO DE SEGURIDAD (Evita que quiten participantes de otros Admins)
+    if (participanteId) {
+        const p = participantes.find(part => part.id === participanteId);
+        if (p && !(p as any).esMio && !['superadmin', 'supervisor'].includes(userRole || '')) {
+            showToast('Bloqueado: No puedes remover a un participante de otro administrador.', 'error');
+            return;
+        }
+    }
     const nuevosDias = dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.map(c => c.id === cajaId ? { ...c, turnos: c.turnos.map(t => t.id === turnoId ? { ...t, participanteId: null } : t) } : c) } : d);
-    updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+    await updateDiasData(nuevosDias);
   };
 
   const handleAbrirMiPerfil = () => { setUsuarioActivo(misDatosAdmin); setIsViewingSelf(true); setIsUsuarioModalOpen(true); };
@@ -496,7 +527,7 @@ export const useAdminLogic = (eventoId: string) => {
     }));
 
     try {
-      await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+      await updateDiasData(nuevosDias);
       showToast('Estado del turno actualizado', 'success');
     } catch (error) {
       console.error("Error guardando checkbox:", error);
@@ -514,12 +545,20 @@ export const useAdminLogic = (eventoId: string) => {
     }));
 
     try {
-      await updateDoc(doc(db, 'eventos', eventoId), { [`diasPorAdmin.${adminIdL}`]: nuevosDias });
+      await updateDiasData(nuevosDias);
       showToast('Alerta marcada como resuelta.', 'success');
     } catch (error) {
       console.error(error);
       showToast('Error al resolver la alerta.', 'error');
     }
+  };
+
+  const handleDeleteTurnoEspecial = async (cajaId: string, turnoId: string) => {
+    if (!diaActual || !eventoId) return;
+    const nuevosDias = dias.map((d, i) => i === diaActivo ? { ...d, cajas: d.cajas.map(c => c.id === cajaId ? { ...c, turnos: c.turnos.filter(t => t.id !== turnoId) } : c) } : d);
+    try {
+      await updateDiasData(nuevosDias);
+    } catch (error) { console.error(error); }
   };
 
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -559,7 +598,7 @@ export const useAdminLogic = (eventoId: string) => {
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, horarioEditando, setHorarioEditando,
     clashModal, setClashModal, misDatosAdmin,
     capitanes, handleCrearCapitan, handleEliminarCapitan,handleEditarCapitan,
-    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta,
+    isCapitan, cajasAsignadasCapitan,actualizarEstadoTurno,resolverAlerta, handleDeleteTurnoEspecial,
     eventoExiste, pushEnabled, handleTogglePush
   };
 };

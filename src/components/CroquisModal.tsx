@@ -44,11 +44,15 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const [puntosActuales, setPuntosActuales] = useState<Coordenada[]>([]);
   const [editingPolyId, setEditingPolyId] = useState<string | null>(null);
   
+  const [formaDibujo, setFormaDibujo] = useState<'libre'|'cuadrado'|'rectangulo'|'circulo'>('libre'); 
+  
   const [polyName, setPolyName] = useState('');
   const [polyColor, setPolyColor] = useState('#6366f1');
   const [polyNotas, setPolyNotas] = useState('');
   const [polyVisibilidad, setPolyVisibilidad] = useState<'todos' | 'solo_admins_capitanes'>('todos');
   const [polyMostrarTexto, setPolyMostrarTexto] = useState(true);
+  
+  const [polyCajaLigada, setPolyCajaLigada] = useState(''); 
   
   const [polyEncargadoNombre, setPolyEncargadoNombre] = useState('');
   const [polyEncargadoTelefono, setPolyEncargadoTelefono] = useState('');
@@ -69,6 +73,31 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
   const currentItem = croquis?.[activeIndex];
   const imagenUrl = localOverride !== undefined ? localOverride : currentItem?.url;
 
+  const cajasDisponibles = useMemo(() => {
+    const map = new Map<string, { id: string, nombre: string }>();
+    dias.forEach(dia => {
+      dia.cajas?.forEach(caja => {
+        const nombreLlave = String(caja.nombre).trim().toLowerCase();
+        if (!map.has(nombreLlave)) {
+          map.set(nombreLlave, { id: caja.id, nombre: caja.nombre as string });
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [dias]);
+
+  const cajasConAlerta = useMemo(() => {
+    const alertas = new Set<string>();
+    dias.forEach(dia => {
+      dia.cajas?.forEach(caja => {
+        if (caja.turnos?.some(t => t.solicitaAsistencia)) {
+          alertas.add(caja.id);
+        }
+      });
+    });
+    return Array.from(alertas);
+  }, [dias]);
+
   const diasDisponibles = useMemo(() => {
     const nombresDias = dias.map((d, index) => d.nombreDia || d.fecha || `Día ${index + 1}`);
     return Array.from(new Set(nombresDias));
@@ -78,7 +107,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     const polys = (currentItem?.poligonos || []) as PoligonoCroquisExt[];
     const diaActualObj = dias[diaActivo];
     
-    // CREAMOS UN ARRAY CON TODAS LAS FORMAS DE FECHA POSIBLES PARA EL DÍA ACTUAL
     const posiblesNombresDia = [
       diaActualObj?.nombreDia, 
       diaActualObj?.fecha, 
@@ -92,7 +120,6 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
         return false;
       }
 
-      // VALIDACIÓN DE FECHAS ESTRICTA 
       if (p.diasAplicables && p.diasAplicables.length > 0) {
         const aplicaParaHoy = p.diasAplicables.some(diaAplicable => posiblesNombresDia.includes(diaAplicable));
         if (!aplicaParaHoy) {
@@ -163,29 +190,36 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     setPolyNotas('');
     setPolyVisibilidad('todos');
     setPolyMostrarTexto(true);
+    setPolyCajaLigada(''); 
     setPolyEncargadoNombre('');
     setPolyEncargadoTelefono('');
     setPolyDiasSeleccionados([]);
     setPolyHorarios([]);
+    setFormaDibujo('libre'); 
   };
 
   const handleGuardarTerritorio = async () => {
     if (!onSavePoligono || !currentItem) return;
-    const nuevoPoligono: PoligonoCroquisExt = {
-      id: editingPolyId || `poly_${Date.now()}`,
+    
+    // Filtramos manualmente las propiedades vacías para no enviar "undefined" a Firebase
+    const nuevoPoligono: Record<string, any> = {
+      id: editingPolyId || `poly_${Date.now()}_${Math.random().toString(36).substring(2,7)}`,
       nombre: polyName.trim(),
       color: polyColor,
       puntos: puntosActuales,
-      notas: polyNotas.trim(),
-      encargadoNombre: polyEncargadoNombre.trim(),
-      encargadoTelefono: polyEncargadoTelefono.trim(),
-      diasAplicables: polyDiasSeleccionados,
-      horarios: polyHorarios,
       visibilidad: polyVisibilidad,
       estado: 'publicado',
-      mostrarTexto: polyMostrarTexto 
+      mostrarTexto: polyMostrarTexto,
     };
-    await onSavePoligono(nuevoPoligono, currentItem.id);
+    
+    if (polyNotas.trim()) nuevoPoligono.notas = polyNotas.trim();
+    if (polyCajaLigada) nuevoPoligono.cajaId = polyCajaLigada;
+    if (polyEncargadoNombre.trim()) nuevoPoligono.encargadoNombre = polyEncargadoNombre.trim();
+    if (polyEncargadoTelefono.trim()) nuevoPoligono.encargadoTelefono = polyEncargadoTelefono.trim();
+    if (polyDiasSeleccionados.length > 0) nuevoPoligono.diasAplicables = polyDiasSeleccionados;
+    if (polyHorarios.length > 0) nuevoPoligono.horarios = polyHorarios;
+
+    await onSavePoligono(nuevoPoligono as PoligonoCroquisExt, currentItem.id);
     cancelarDibujo();
   };
 
@@ -202,6 +236,7 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     setPolyNotas(poly.notas || '');
     setPolyVisibilidad(poly.visibilidad || 'todos');
     setPolyMostrarTexto(poly.mostrarTexto ?? true);
+    setPolyCajaLigada(poly.cajaId || ''); 
     setPolyEncargadoNombre(poly.encargadoNombre || '');
     setPolyEncargadoTelefono(poly.encargadoTelefono || '');
     setPolyDiasSeleccionados(poly.diasAplicables || []);
@@ -210,7 +245,8 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
     
     setPoligonoActivo(null);
     setModoDibujo(true);
-    setEtapaDibujo('config');
+    setEtapaDibujo('trazando'); 
+    setFormaDibujo('libre'); 
   };
 
   if (!isOpen || !croquis || croquis.length === 0 || !currentItem) return null;
@@ -287,9 +323,14 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
                       <img src={imagenUrl} alt="Croquis" className="max-w-[1500px] max-h-[80vh] w-auto h-auto object-contain pointer-events-none block" />
                       <div className="absolute inset-0 z-10 w-full h-full">
                         <CapaTrazados 
-                          modoDibujo={modoDibujo && etapaDibujo === 'trazando'} puntosActuales={puntosActuales} colorActual={polyColor}
-                          poligonosGuardados={poligonosFiltrados as any[]} currentUserRole={currentUserRole}
-                          onAgregarPunto={(punto) => setPuntosActuales(prev => [...prev, punto])}
+                          modoDibujo={modoDibujo && etapaDibujo === 'trazando'} 
+                          puntosActuales={puntosActuales} 
+                          setPuntosActuales={setPuntosActuales} 
+                          formaDibujo={formaDibujo} 
+                          colorActual={polyColor}
+                          poligonosGuardados={poligonosFiltrados as any[]} 
+                          currentUserRole={currentUserRole}
+                          cajasConAlerta={cajasConAlerta} 
                           onPoligonoClick={setPoligonoActivo}
                         />
                       </div>
@@ -328,6 +369,11 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
             etapa={etapaDibujo} onIniciarTrazo={() => setEtapaDibujo('trazando')}
             puntosContados={puntosActuales.length} nombre={polyName} setNombre={setPolyName}
             color={polyColor} setColor={setPolyColor} notas={polyNotas} setNotas={setPolyNotas}
+            
+            formaDibujo={formaDibujo} setFormaDibujo={setFormaDibujo} 
+            
+            cajaLigada={polyCajaLigada} setCajaLigada={setPolyCajaLigada} cajasDisponibles={cajasDisponibles} 
+            
             encargadoNombre={polyEncargadoNombre} setEncargadoNombre={setPolyEncargadoNombre}
             encargadoTelefono={polyEncargadoTelefono} setEncargadoTelefono={setPolyEncargadoTelefono}
             diasDisponibles={diasDisponibles} diasSeleccionados={polyDiasSeleccionados} setDiasSeleccionados={setPolyDiasSeleccionados}

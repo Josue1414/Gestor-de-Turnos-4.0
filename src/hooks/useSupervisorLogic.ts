@@ -10,7 +10,6 @@ interface Caja { id: string; nombre: string; turnos: Turno[]; }
 interface Dia { id: string; nombreDia: string; fecha?: string; cajas: Caja[]; }
 interface ParticipanteData { id: string; nombre: string; estado?: string; organizationLabel?: string; }
 
-// 1. CORRECCIÓN: Nombres estandarizados con la base de datos del Admin
 export interface AdminData { 
   id: string; 
   name: string; 
@@ -29,7 +28,6 @@ export interface AdminData {
   inactivos?: number;
   diasAsignados?: string[]; 
   
-  // Mantenemos las propiedades antiguas como opcionales por seguridad temporal
   area?: string;
   org?: string;
   orgLabel?: string;
@@ -45,6 +43,9 @@ interface EventoDocument {
   globalPermissions?: { cajas: boolean; horarios: boolean; especiales: boolean };
   croquisUrl?: string;
   croquisPorAdmin?: Record<string, string>;
+  // NUEVOS CAMPOS PARA SINCRONIZACIÓN GLOBAL
+  cajasSincronizadas?: boolean;
+  diasGlobales?: Dia[];
 }
 
 export const useSupervisorLogic = (eventoId: string | undefined) => {
@@ -66,7 +67,11 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   const getAdminStats = (adminId: string) => {
     if (!evento) return { cajas: 0, horarios: 0, totales: 0, disponibles: 0, participantes: 0 };
     
-    const adminDias = evento.diasPorAdmin?.[adminId] || [];
+    // Si están sincronizadas, leemos de diasGlobales, si no, de sus propios días
+    const adminDias = evento.cajasSincronizadas 
+        ? (evento.diasGlobales || []) 
+        : (evento.diasPorAdmin?.[adminId] || []);
+        
     const adminParticipantes = evento.participantesPorAdmin?.[adminId] || [];
 
     let calcTotales = 0;
@@ -96,7 +101,10 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
     const newAdminId = `admin-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const newPassword = Math.random().toString(36).slice(-6);
 
-    const existingAdminDays = Object.values(evento.diasPorAdmin || {}).find((dias) => Array.isArray(dias) && dias.length > 0) as Dia[] | undefined;
+    const existingAdminDays = evento.cajasSincronizadas 
+        ? evento.diasGlobales 
+        : Object.values(evento.diasPorAdmin || {}).find((dias) => Array.isArray(dias) && dias.length > 0) as Dia[] | undefined;
+        
     const defaultHorario = existingAdminDays?.[0]?.cajas?.[0]?.turnos?.[0]?.horario || '08:00 - 09:00';
     const defaultDayItems = existingAdminDays && existingAdminDays.length > 0
       ? existingAdminDays.map((dia, index) => ({
@@ -142,19 +150,25 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       id: newAdminId,
       name: `Admin ${adminNum}`,
       password: newPassword,
-      supportArea: 'Sin asignar', // Estandarizado
-      organization: 'Sin asignar', // Estandarizado
-      organizationLabel: 'Empresa', // Estandarizado
+      supportArea: 'Sin asignar',
+      organization: 'Sin asignar',
+      organizationLabel: 'Empresa',
       countryCode: '+52',
       phone: ''
     };
 
     try {
-      await updateDoc(doc(db, 'eventos', eventoId), {
+      const payload: any = {
         admins: [...evento.admins, newAdmin],
-        [`diasPorAdmin.${newAdminId}`]: defaultDayItems,
         [`participantesPorAdmin.${newAdminId}`]: []
-      });
+      };
+      
+      // Si no están sincronizadas, le creamos su propia estructura base
+      if (!evento.cajasSincronizadas) {
+          payload[`diasPorAdmin.${newAdminId}`] = defaultDayItems;
+      }
+
+      await updateDoc(doc(db, 'eventos', eventoId), payload);
     } catch (e) {
       console.error(e);
       showToast('No se pudo agregar el administrador.', 'error');
@@ -183,7 +197,6 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
       const data = snap.data() as EventoDocument;
       const nuevosAdmins = data.admins.map((a: AdminData) => a.id === updatedAdmin.id ? updatedAdmin : a);
       
-      // 2. CORRECCIÓN: Actualizar también la etiqueta de organización en los participantes
       const participantesDelAdmin = data.participantesPorAdmin?.[updatedAdmin.id] || [];
       const participantesActualizados = participantesDelAdmin.map(p => ({
           ...p,
@@ -241,17 +254,44 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
     }
   };
 
+  // NUEVA FUNCIÓN: Habilitar o deshabilitar la sincronización global
+  const handleToggleSincronizacion = async (sincronizar: boolean) => {
+    if (!eventoId || !evento) return;
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const payload: any = { cajasSincronizadas: sincronizar };
+      
+      // Si activamos la sincronización y no hay cajas globales, 
+      // copiamos las cajas del primer admin como punto de partida.
+      if (sincronizar && (!evento.diasGlobales || evento.diasGlobales.length === 0)) {
+         const adminIds = Object.keys(evento.diasPorAdmin || {});
+         if (adminIds.length > 0) {
+            payload.diasGlobales = evento.diasPorAdmin![adminIds[0]];
+         } else {
+            payload.diasGlobales = []; 
+         }
+      }
+      
+      await updateDoc(docRef, payload);
+      showToast(sincronizar ? 'Cajas globalizadas y sincronizadas.' : 'Cajas separadas por administrador.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Error al cambiar la sincronización de cajas.', 'error');
+    }
+  };
+
+  // FUNCIÓN ADAPTADA: Ahora sabe si guardar en `diasGlobales` o `diasPorAdmin`
   const handleSaveGlobalStructure = async (estructura: { dias: string[], horarios: string[], cajas: string[] }) => {
     if (!eventoId || !evento) return false;
     try {
       const docRef = doc(db, 'eventos', eventoId);
-      const nuevosDias: Record<string, Dia[]> = { ...(evento.diasPorAdmin || {}) };
-
-      evento.admins.forEach((admin) => {
-        let adminDias = nuevosDias[admin.id] || [];
-
+      
+      // Función helper para construir la matriz
+      const buildDias = (baseDias: Dia[]) => {
+        let updatedDias = [...baseDias];
+        
         estructura.dias.forEach((fechaStr) => {
-          const exists = adminDias.some((d) => d.fecha === fechaStr || d.nombreDia === fechaStr);
+          const exists = updatedDias.some((d) => d.fecha === fechaStr || d.nombreDia === fechaStr);
           if (!exists) {
             const nuevasCajas = estructura.cajas.map((cajaNombre, cIdx) => ({
               id: `caja_${Date.now()}_${cIdx}`, 
@@ -262,11 +302,11 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
                 participanteId: null
               }))
             }));
-            adminDias.push({ id: `dia_${Date.now()}_${Math.random()}`, nombreDia: fechaStr, fecha: fechaStr, cajas: nuevasCajas });
+            updatedDias.push({ id: `dia_${Date.now()}_${Math.random()}`, nombreDia: fechaStr, fecha: fechaStr, cajas: nuevasCajas });
           }
         });
 
-        adminDias = adminDias.map((dia) => {
+        updatedDias = updatedDias.map((dia) => {
           const updatedCajas = [...(dia.cajas || [])];
           estructura.cajas.forEach((cajaNombre) => {
             if (!updatedCajas.some((c) => c.nombre === cajaNombre)) {
@@ -283,12 +323,24 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
           });
           return { ...dia, cajas: updatedCajas };
         });
+        
+        return updatedDias;
+      };
 
-        nuevosDias[admin.id] = adminDias;
-      });
+      if (evento.cajasSincronizadas) {
+        // Modo Sincronizado: Solo actualizamos la base global
+        const nuevosDiasGlobales = buildDias(evento.diasGlobales || []);
+        await updateDoc(docRef, { diasGlobales: nuevosDiasGlobales });
+      } else {
+        // Modo Individual: Actualizamos a cada admin
+        const nuevosDias: Record<string, Dia[]> = { ...(evento.diasPorAdmin || {}) };
+        evento.admins.forEach((admin) => {
+          nuevosDias[admin.id] = buildDias(nuevosDias[admin.id] || []);
+        });
+        await updateDoc(docRef, { diasPorAdmin: nuevosDias });
+      }
 
-      await updateDoc(docRef, { diasPorAdmin: nuevosDias });
-        showToast("Estructura global aplicada con éxito a todos los Administradores.", 'success');
+      showToast("Estructura global aplicada con éxito.", 'success');
       return true;
     } catch (e) {
       console.error(e);
@@ -298,6 +350,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
 
   return { 
     evento, loading, getAdminStats, handleAddAdmin, handleDeleteAdmin, 
-    handleEditAccess, handleSaveGlobalStructure, handleSaveProfile
+    handleEditAccess, handleSaveGlobalStructure, handleSaveProfile,
+    handleToggleSincronizacion // NUEVA FUNCIÓN EXPUESTA
   };
 };

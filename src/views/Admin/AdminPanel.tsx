@@ -511,6 +511,45 @@ const AdminPanel = () => {
     );
   }
 
+  // --- INICIO DE NUEVO BLOQUE: GUARDADO DE TRAZOS EN ADMIN PANEL ---
+  const handleSavePoligono = async (poligono: any, croquisId: string) => {
+    if (!eventoId) return;
+    const eventoRef = doc(db, 'eventos', eventoId);
+    const snap = await getDoc(eventoRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    
+    if (croquisId === 'general') {
+      const actuales = data.poligonosGlobales || data.poligonosGeneral || data.poligonos_general || [];
+      // LA CLAVE MAGICA: Filtramos el trazo viejo para evitar IDs duplicados
+      const filtrados = actuales.filter((p: any) => p.id !== poligono.id);
+      await updateDoc(eventoRef, { poligonosGlobales: [...filtrados, poligono] });
+    } else {
+      const mapActual = data.poligonosPorAdmin || {};
+      const adminPolys = mapActual[croquisId] || [];
+      const filtrados = adminPolys.filter((p: any) => p.id !== poligono.id);
+      await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...filtrados, poligono] });
+    }
+  };
+
+  const handleDeletePoligono = async (poligonoId: string, croquisId: string) => {
+    if (!eventoId) return;
+    const eventoRef = doc(db, 'eventos', eventoId);
+    const snap = await getDoc(eventoRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+
+    if (croquisId === 'general') {
+      const actuales = data.poligonosGlobales || data.poligonosGeneral || data.poligonos_general || [];
+      await updateDoc(eventoRef, { poligonosGlobales: actuales.filter((p: any) => p.id !== poligonoId) });
+    } else {
+      const mapActual = data.poligonosPorAdmin || {};
+      const adminPolys = mapActual[croquisId] || [];
+      await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: adminPolys.filter((p: any) => p.id !== poligonoId) });
+    }
+  };
+  // --- FIN DE NUEVO BLOQUE ---
+
   if (diasFiltrados.length === 0) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-6 text-center">
@@ -661,6 +700,9 @@ const AdminPanel = () => {
 
         handleCrearCapitan={handleCrearCapitan}
         isCapitan={isCapitan} customInviteLink={customInviteLink} 
+
+        onSavePoligono={handleSavePoligono}     // <-- AGREGAR
+        onDeletePoligono={handleDeletePoligono} // <-- AGREGAR
       />
     </div>
   );

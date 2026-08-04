@@ -1,6 +1,6 @@
 // src/components/CroquisInteractivo/PanelDibujo.tsx
 import React, { useState } from 'react';
-import { Undo, Trash2, Save, X, Loader2, Eye, PenTool, Type, User, Phone, Calendar, Clock, Plus } from 'lucide-react';
+import { Undo, Trash2, Save, X, Loader2, Eye, PenTool, Type, User, Phone, Calendar, Clock, Plus, Link, Square, RectangleHorizontal, Circle } from 'lucide-react';
 
 const PALETA_COLORES = [
   { nombre: 'Rojo', hex: '#ef4444' }, { nombre: 'Naranja', hex: '#f97316' },
@@ -9,7 +9,7 @@ const PALETA_COLORES = [
   { nombre: 'Cian', hex: '#06b6d4' }, { nombre: 'Azul', hex: '#3b82f6' },
   { nombre: 'Índigo', hex: '#6366f1' }, { nombre: 'Violeta', hex: '#8b5cf6' },
   { nombre: 'Fucsia', hex: '#d946ef' }, { nombre: 'Rosa', hex: '#ec4899' },
-  { nombre: 'Invisible / Transparente', hex: 'transparent' } // NUEVA OPCIÓN
+  { nombre: 'Invisible / Transparente', hex: 'transparent' }
 ];
 
 interface PanelDibujoProps {
@@ -22,6 +22,13 @@ interface PanelDibujoProps {
   setColor: (val: string) => void;
   notas: string;
   setNotas: (val: string) => void;
+  
+  formaDibujo: 'libre'|'cuadrado'|'rectangulo'|'circulo';
+  setFormaDibujo: (val: 'libre'|'cuadrado'|'rectangulo'|'circulo') => void;
+
+  cajaLigada: string;
+  setCajaLigada: (val: string) => void;
+  cajasDisponibles: { id: string, nombre: string }[];
   
   encargadoNombre: string;
   setEncargadoNombre: (val: string) => void;
@@ -46,6 +53,8 @@ interface PanelDibujoProps {
 
 const PanelDibujo: React.FC<PanelDibujoProps> = ({
   etapa, onIniciarTrazo, puntosContados, nombre, setNombre, color, setColor, notas, setNotas,
+  formaDibujo, setFormaDibujo,
+  cajaLigada, setCajaLigada, cajasDisponibles,
   encargadoNombre, setEncargadoNombre, encargadoTelefono, setEncargadoTelefono,
   diasDisponibles, diasSeleccionados, setDiasSeleccionados, horarios, setHorarios,
   visibilidad, setVisibilidad, mostrarTexto, setMostrarTexto,
@@ -62,6 +71,17 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
       await onGuardar();
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const handleCajaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    setCajaLigada(selectedId);
+    if (selectedId) {
+      const caja = cajasDisponibles.find(c => c.id === selectedId);
+      if (caja) setNombre(caja.nombre);
+    } else {
+      setNombre('');
     }
   };
 
@@ -92,7 +112,7 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
     <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[95%] max-w-md max-h-[85vh] overflow-y-auto z-[300] bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl rounded-3xl p-5 custom-scrollbar">
       <div className="flex justify-between items-center mb-4 sticky top-0 bg-white/90 pb-2 z-10">
         <h3 className="font-black text-slate-800 flex items-center gap-2">
-          <PenTool size={18} className="text-indigo-600" /> Territorio
+          <PenTool size={18} className="text-indigo-600" /> Configuración de Área
         </h3>
         <button onClick={onCancelar} className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition">
           <X size={18} />
@@ -100,15 +120,39 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
       </div>
 
       <div className="space-y-4 pb-4">
+        
+        <div className="space-y-1.5 bg-indigo-50 border border-indigo-100 p-3 rounded-xl">
+          <label className="text-[10px] font-black text-indigo-700 uppercase flex items-center gap-1"><Link size={12}/> Tipo de Trazo</label>
+          <select 
+            value={cajaLigada} onChange={handleCajaChange}
+            className="w-full border border-indigo-200 rounded-lg p-2.5 bg-white text-xs font-bold text-indigo-900 outline-none focus:border-indigo-500"
+          >
+            <option value="">-- Área Libre (Sin Vincular) --</option>
+            {cajasDisponibles.map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+          <p className="text-[9px] text-indigo-500 font-medium mt-1">Vincular una caja permite que el área parpadee en rojo al solicitar ayuda.</p>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Nombre (Requerido)</label>
-            <input 
-              type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} 
-              placeholder="Ej: Acceso VIP" 
-              className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 transition" 
-            />
-          </div>
+          {!cajaLigada ? (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Nombre (Requerido)</label>
+              <input 
+                type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} 
+                placeholder="Ej: Acceso VIP" 
+                className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 transition" 
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Nombre Asignado</label>
+              <div className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-100 text-sm font-bold text-slate-500 cursor-not-allowed">
+                {nombre}
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1"><Eye size={10}/> Visibilidad</label>
             <select 
@@ -121,11 +165,53 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-xl">
-           <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs">
+        {/* HERRAMIENTAS DE DIBUJO RÁPIDO */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Forma del Trazo</label>
+          <div className="grid grid-cols-4 gap-2">
+            <button onClick={() => setFormaDibujo('libre')} className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition ${formaDibujo === 'libre' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              <PenTool size={18} />
+              <span className="text-[9px] font-bold">Libre</span>
+            </button>
+            <button onClick={() => setFormaDibujo('cuadrado')} className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition ${formaDibujo === 'cuadrado' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              <Square size={18} />
+              <span className="text-[9px] font-bold">Cuadrado</span>
+            </button>
+            <button onClick={() => setFormaDibujo('rectangulo')} className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition ${formaDibujo === 'rectangulo' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              <RectangleHorizontal size={18} />
+              <span className="text-[9px] font-bold">Rectángulo</span>
+            </button>
+            <button onClick={() => setFormaDibujo('circulo')} className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition ${formaDibujo === 'circulo' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              <Circle size={18} />
+              <span className="text-[9px] font-bold">Círculo</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
+           <div className="flex items-center gap-2 text-slate-600 font-bold text-xs">
               <Type size={16} /> Mostrar nombre en el mapa
            </div>
            <input type="checkbox" checked={mostrarTexto} onChange={(e) => setMostrarTexto(e.target.checked)} className="w-5 h-5 accent-indigo-600 cursor-pointer" />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Color de Marcador</label>
+          <div className="flex flex-wrap gap-2 justify-start py-1">
+            {PALETA_COLORES.map((c) => (
+              <button 
+                key={c.hex} type="button" onClick={() => setColor(c.hex)} 
+                className={`w-7 h-7 rounded-full border-2 transition-all flex items-center justify-center ${color === c.hex ? 'border-slate-800 scale-125 shadow-md' : 'border-slate-200 opacity-70 hover:opacity-100 hover:scale-110'}`} 
+                style={{ 
+                  backgroundColor: c.hex === 'transparent' ? 'transparent' : c.hex,
+                  backgroundImage: c.hex === 'transparent' ? 'repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 2px, #ffffff 2px, #ffffff 4px)' : 'none'
+                }} 
+                title={c.nombre}
+              >
+                {c.hex === 'transparent' && <Eye size={12} className="text-slate-500 opacity-50" />}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
@@ -142,7 +228,6 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
                 type="tel" 
                 maxLength={10}
                 value={encargadoTelefono} 
-                // Restricción para números únicamente y hasta 10 dígitos.
                 onChange={(e) => setEncargadoTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))} 
                 placeholder="Teléfono (10 dígitos)" 
                 className="w-full border border-slate-200 rounded-lg p-2 pl-7 text-xs outline-none focus:border-indigo-500" 
@@ -154,7 +239,7 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
           {diasDisponibles.length > 0 && (
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1"><Calendar size={12}/> Días del Evento (Opcional)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1"><Calendar size={12}/> Días de actividad (Opcional)</label>
               <div className="flex flex-wrap gap-2">
                 {diasDisponibles.map(dia => (
                   <button
@@ -202,31 +287,12 @@ const PanelDibujo: React.FC<PanelDibujoProps> = ({
             </div>
           </div>
         </div>
-        
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Color de Marcador</label>
-          <div className="flex flex-wrap gap-2 justify-start py-1">
-            {PALETA_COLORES.map((c) => (
-              <button 
-                key={c.hex} type="button" onClick={() => setColor(c.hex)} 
-                className={`w-7 h-7 rounded-full border-2 transition-all flex items-center justify-center ${color === c.hex ? 'border-slate-800 scale-125 shadow-md' : 'border-slate-200 opacity-70 hover:opacity-100 hover:scale-110'}`} 
-                style={{ 
-                  backgroundColor: c.hex === 'transparent' ? 'transparent' : c.hex,
-                  backgroundImage: c.hex === 'transparent' ? 'repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 2px, #ffffff 2px, #ffffff 4px)' : 'none'
-                }} 
-                title={c.nombre}
-              >
-                {c.hex === 'transparent' && <Eye size={12} className="text-slate-500 opacity-50" />}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Información General / Notas</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">Notas y Reglas del Área</label>
           <textarea 
             value={notas} onChange={(e) => setNotas(e.target.value)} 
-            placeholder="Notas, reglas o detalles de esta área..." 
+            placeholder="Añade instrucciones especiales o reglas..." 
             className="w-full border border-slate-200 rounded-xl p-3 bg-slate-50 text-xs text-slate-600 outline-none focus:border-indigo-500 transition resize-none h-20" 
           />
         </div>

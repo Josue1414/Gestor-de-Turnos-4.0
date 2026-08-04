@@ -16,6 +16,7 @@ export interface PoligonoCroquisExt {
   visibilidad?: 'todos' | 'solo_admins_capitanes';
   estado: string;
   mostrarTexto?: boolean;
+  cajaId?: string;
 }
 
 interface TarjetaTurnoEnVivoProps {

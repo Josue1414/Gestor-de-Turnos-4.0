@@ -265,12 +265,15 @@ const SuperAdminPanel = () => {
           
           if (croquisId === 'general') {
             const actuales = activeEvent.poligonosGlobales || [];
-            await updateDoc(eventoRef, { poligonosGlobales: [...actuales, poligono] });
+            // FILTRAMOS ANTES DE GUARDAR PARA EVITAR KEYS DUPLICADAS
+            const filtrados = actuales.filter((p: any) => p.id !== poligono.id); 
+            await updateDoc(eventoRef, { poligonosGlobales: [...filtrados, poligono] });
           } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const mapActual = (activeEvent as any).poligonosPorAdmin || {};
             const adminPolys = mapActual[croquisId] || [];
-            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...adminPolys, poligono] });
+            // FILTRAMOS ANTES DE GUARDAR PARA EVITAR KEYS DUPLICADAS
+            const filtrados = adminPolys.filter((p: any) => p.id !== poligono.id);
+            await updateDoc(eventoRef, { [`poligonosPorAdmin.${croquisId}`]: [...filtrados, poligono] });
           }
         }}
         onDeletePoligono={async (poligonoId, croquisId) => {

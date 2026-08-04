@@ -37,12 +37,9 @@ export const useParticipantLogic = () => {
   const [participantes, setParticipantes] = useState<ParticipanteExtendidoDb[]>([]);
   const [eventoNombre, setEventoNombre] = useState('Evento');
   
-  const [misHorariosGlobales, setMisHorariosGlobales] = useState<string[]>([]);
-  
   const [croquisGral, setCroquisGral] = useState<string | null>(null);
   const [croquisIndiv, setCroquisIndiv] = useState<string | null>(null);
   
-  // NUEVOS ESTADOS PARA ALMACENAR TRAZOS
   const [poligonosGral, setPoligonosGral] = useState<any[]>([]);
   const [poligonosIndiv, setPoligonosIndiv] = useState<any[]>([]);
   
@@ -108,18 +105,9 @@ export const useParticipantLogic = () => {
         
         const currentUser = allParts.find(p => p.id === participanteId);
         
-        const rawDias = data.diasPorAdmin?.[adminId] || [];
-        const ocupadosGlobales: string[] = [];
-        rawDias.forEach((d: any) => {
-          d.cajas.forEach((c: any) => {
-            c.turnos.forEach((t: any) => {
-              if (t.participanteId === participanteId) {
-                ocupadosGlobales.push(t.horario);
-              }
-            });
-          });
-        });
-        setMisHorariosGlobales(ocupadosGlobales);
+        // 1. CORRECCIÓN: Leemos de diasGlobales si el evento está sincronizado
+        const isSync = data.cajasSincronizadas === true;
+        const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
 
         let diasProcesados: DiaEvento[] = rawDias;
         const viewCapitanId = localStorage.getItem('view_capitan_id');
@@ -160,8 +148,7 @@ export const useParticipantLogic = () => {
         setCroquisGral(data.croquisUrl || null);
         setCroquisIndiv(data.croquisPorAdmin?.[adminId] || null);
 
-        // EXTRAER POLÍGONOS DE LA BASE DE DATOS
-        setPoligonosGral(data.poligonos_general || data.poligonosGeneral || data.croquisPoligonos?.general || []);
+        setPoligonosGral(data.poligonos_general || data.poligonosGeneral || data.croquisPoligonos?.general || data.poligonosGlobales || []);
         setPoligonosIndiv(data[`poligonos_${adminId}`] || data.poligonosPorAdmin?.[adminId] || data.croquisPoligonos?.[adminId] || []);
 
       } else {
@@ -321,18 +308,33 @@ export const useParticipantLogic = () => {
     } catch { return false; }
   }, []);
 
+  // 2. CORRECCIÓN: isBusy solo comprueba choques en los horarios de ESTE DÍA (diaActual)
   const isBusy = useCallback((horario: string) => {
-      return misHorariosGlobales.some(miHor => hayChoque(miHor, horario));
-  }, [misHorariosGlobales, hayChoque]);
+    if (!diaActual || !miUsuario) return false;
+    const misHorariosHoy: string[] = [];
+    
+    diaActual.cajas.forEach(c => {
+      c.turnos.forEach(t => {
+        if (t.participanteId === miUsuario.id) {
+          misHorariosHoy.push(t.horario);
+        }
+      });
+    });
 
+    return misHorariosHoy.some(miHor => hayChoque(miHor, horario));
+  }, [diaActual, miUsuario, hayChoque]);
+
+  // 3. FUNCIONES DE ACTUALIZACIÓN (Detectan si se guarda global o personal)
   const handleAsignarme = async (cajaId: string, turnoId: string) => {
     if (!miUsuario || !eventoId || !adminId || !diaActual) return;
     try {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return;
+      
       const data = docSnap.data();
-      const rawDias = data.diasPorAdmin?.[adminId] || [];
+      const isSync = data.cajasSincronizadas === true;
+      const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
       
       const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
@@ -340,7 +342,11 @@ export const useParticipantLogic = () => {
         } : c)
       } : d);
       
-      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+      if (isSync) {
+         await updateDoc(docRef, { diasGlobales: nuevosDias });
+      } else {
+         await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+      }
     } catch (error) { console.error(error); }
   };
 
@@ -350,8 +356,10 @@ export const useParticipantLogic = () => {
       const docRef = doc(db, 'eventos', eventoId);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return;
+      
       const data = docSnap.data();
-      const rawDias = data.diasPorAdmin?.[adminId] || [];
+      const isSync = data.cajasSincronizadas === true;
+      const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
       
       const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
         ...d, cajas: d.cajas.map((c: any) => c.id === cajaId ? {
@@ -359,8 +367,57 @@ export const useParticipantLogic = () => {
         } : c)
       } : d);
       
-      await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+      if (isSync) {
+         await updateDoc(docRef, { diasGlobales: nuevosDias });
+      } else {
+         await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+      }
     } catch (error) { console.error(error); }
+  };
+
+  const handleSolicitarAsistencia = async (estado: boolean) => {
+    if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
+    
+    try {
+      const docRef = doc(db, 'eventos', eventoId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+      
+      const data = docSnap.data();
+      const isSync = data.cajasSincronizadas === true;
+      const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminId] || []);
+
+      const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
+        ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
+          ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
+        } : c)
+      } : d);
+
+      if (isSync) {
+         await updateDoc(docRef, { diasGlobales: nuevosDias });
+      } else {
+         await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
+      }
+
+      if ("vibrate" in navigator) {
+        navigator.vibrate(estado ? [100, 50, 100] : [50]);
+      }
+
+      if (estado) {
+        const targetId = miUsuario.capitanId || adminId;
+        const subscription = data.suscripcionesPush?.[targetId];
+        
+        if (subscription) {
+          const cajaObj = diaActual.cajas.find((c: any) => c.id === turnoAlertaInfo.cajaId);
+          await enviarAlertaVercel(subscription, miUsuario.nombre, cajaObj?.nombre || 'Caja');
+        }
+      }
+
+      showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Error al conectar con el servidor.', 'error');
+    }
   };
 
   const handleLogout = useCallback(() => {
@@ -397,7 +454,6 @@ export const useParticipantLogic = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [handleLogout]);
 
-  // AHORA SÍ SE INYECTAN LOS POLÍGONOS A LA VISTA
   const croquisDataParaMostrar: CroquisItem[] = useMemo(() => {
     const arr: CroquisItem[] = [];
     arr.push({ 
@@ -420,7 +476,6 @@ export const useParticipantLogic = () => {
  const turnoAlertaInfo = useMemo(() => {
     if (!diaActual || !miUsuario || !horaActual) return null;
 
-    // 1. Verificamos si ya hay una alerta ACTIVA (por si el turno terminó pero el admin no la ha resuelto)
     for (const caja of diaActual.cajas) {
       const turnos: any[] = Array.isArray(caja.turnos) ? caja.turnos : (caja.turnos ? Object.values(caja.turnos) : []);
       const turnoConAlerta = turnos.find((t: any) => t.participanteId === miUsuario.id && t.solicitaAsistencia);
@@ -429,10 +484,7 @@ export const useParticipantLogic = () => {
       }
     }
 
-    // 2. Si no hay alertas activas, buscamos si el participante está en un turno EN ESTE MOMENTO EXACTO
     const hoyStr = `${horaActual.getFullYear()}-${String(horaActual.getMonth() + 1).padStart(2, '0')}-${String(horaActual.getDate()).padStart(2, '0')}`;
-    
-    // Validamos que el día seleccionado en la pantalla coincida con el día actual real
     if (!diaActual.fecha || !diaActual.fecha.includes(hoyStr)) return null;
 
     const minActual = horaActual.getHours() * 60 + horaActual.getMinutes();
@@ -460,49 +512,8 @@ export const useParticipantLogic = () => {
         return { cajaId: caja.id, turnoId: turnoActual.id, solicitaAsistencia: turnoActual.solicitaAsistencia };
       }
     }
-
-    // Si no está en su horario, retornamos null (esto ocultará el botón automáticamente en ParticipantPanel)
     return null;
   }, [diaActual, miUsuario, horaActual]);
-
-  const handleSolicitarAsistencia = async (estado: boolean) => {
-  if (!eventoId || !adminId || !diaActual || !turnoAlertaInfo || !miUsuario) return;
-  
-  try {
-    const docRef = doc(db, 'eventos', eventoId);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return;
-    const data = docSnap.data();
-    const rawDias = data.diasPorAdmin?.[adminId] || [];
-
-    const nuevosDias = rawDias.map((d: any) => d.id === diaActual.id ? {
-      ...d, cajas: d.cajas.map((c: any) => c.id === turnoAlertaInfo.cajaId ? {
-        ...c, turnos: c.turnos.map((t: any) => t.id === turnoAlertaInfo.turnoId ? { ...t, solicitaAsistencia: estado } : t)
-      } : c)
-    } : d);
-
-    await updateDoc(docRef, { [`diasPorAdmin.${adminId}`]: nuevosDias });
-
-    if ("vibrate" in navigator) {
-      navigator.vibrate(estado ? [100, 50, 100] : [50]);
-    }
-
-    if (estado) {
-      const targetId = miUsuario.capitanId || adminId;
-      const subscription = data.suscripcionesPush?.[targetId];
-      
-      if (subscription) {
-        const cajaObj = diaActual.cajas.find((c: any) => c.id === turnoAlertaInfo.cajaId);
-        await enviarAlertaVercel(subscription, miUsuario.nombre, cajaObj?.nombre || 'Caja');
-      }
-    }
-
-    showToast(estado ? 'Asistencia solicitada. Un administrador ha sido notificado.' : 'Alerta cancelada.', 'success');
-  } catch (error) {
-    console.error(error);
-    showToast('Error al conectar con el servidor.', 'error');
-  }
-};
 
   return {
     eventoId, adminId, loading, dias, participantes, eventoNombre,
