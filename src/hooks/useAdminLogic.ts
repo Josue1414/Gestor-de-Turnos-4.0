@@ -37,7 +37,8 @@ interface TurnoEspecialConfig {
 }
 
 export const useAdminLogic = (eventoId: string) => {
-  const userRole = localStorage.getItem('user_role');
+  const rawRole = localStorage.getItem('user_role') || '';
+  const userRole = rawRole.toLowerCase();
   const isCapitan = userRole === 'capitan';
   const adminIdL = localStorage.getItem('current_admin_id') || 'demo';
   const capitanIdL = localStorage.getItem('current_capitan_id') || '';
@@ -100,7 +101,7 @@ export const useAdminLogic = (eventoId: string) => {
         const data = docSnap.data();
         const isSync = data.cajasSincronizadas === true;
         
-        // 1. LEER DÍAS (Sincronizados o Personales)
+        // 1. LEER DÍAS
         const rawDias = isSync ? (data.diasGlobales || []) : (data.diasPorAdmin?.[adminIdL] || []);
         
         const validatedDias = Array.isArray(rawDias)
@@ -153,7 +154,7 @@ export const useAdminLogic = (eventoId: string) => {
               allPartsMap.set(p.id, {
                  ...p,
                  creador: isMyAdmin ? 'Admin' : 'Otro Admin', 
-                 esMio: isMyAdmin, 
+                 esMio: isCapitan ? false : isMyAdmin, 
                  capitanesInvolucrados: new Set()
               });
            });
@@ -191,14 +192,21 @@ export const useAdminLogic = (eventoId: string) => {
            });
         });
 
-        // Relacionar capitanes con turnos de las cajas para estadísticas
+        // 3. Relacionar capitanes con turnos
         rawDias.forEach((dia: any) => {
            dia.cajas?.forEach((caja: any) => {
               let capitanDuenio: any = null;
-              Object.values(data.capitanesPorAdmin || {}).forEach((caps: any) => {
-                 const found = caps.find((c:any) => c.cajasAsignadas?.includes(caja.id));
-                 if (found) capitanDuenio = found;
+              
+              // CORRECCIÓN: Validamos que la caja y el día coincidan con la asignación del capitán
+              const found = misCapitanes.find((c:any) => {
+                 const tieneCaja = c.cajasAsignadas?.includes(caja.id);
+                 const tieneDia = c.diasAsignados?.includes(dia.id) || c.diasAsignados?.includes(dia.nombreDia);
+                 return tieneCaja && tieneDia;
               });
+
+              if (found) {
+                 capitanDuenio = found;
+              }
 
               if (capitanDuenio) {
                  caja.turnos?.forEach((t: any) => {
@@ -216,14 +224,53 @@ export const useAdminLogic = (eventoId: string) => {
            capitanesInvolucrados: Array.from(p.capitanesInvolucrados)
         }));
 
-        const validatedParts = Array.isArray(allParts)
+        let validatedParts = Array.isArray(allParts)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ? allParts.map((p: any) => {
               const res = ParticipanteSchema.safeParse(p);
               if (!res.success) return p;
-              return { ...res.data, creador: p.creador, esMio: p.esMio } as Participante;
+              
+              // CORRECCIÓN: Rescatamos explícitamente el array completo de capitanesInvolucrados
+              return { 
+                ...res.data, 
+                creador: p.creador, 
+                esMio: p.esMio, 
+                capitanesInvolucrados: p.capitanesInvolucrados 
+              } as Participante;
             })
           : [];
+
+        // 4. Filtrar participantes para el Capitán (FILTRO ESTRICTO ABSOLUTO)
+        if (isCapitan) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const miDataCapitan = misCapitanes.find((c: any) => c.id === capitanIdL);
+            const misCajas = miDataCapitan?.cajasAsignadas || [];
+            const misDias = miDataCapitan?.diasAsignados || []; 
+            
+            const participantesEnMisCajas = new Set();
+
+            rawDias.forEach((dia: any) => {
+                // Validación para asegurar que la caja solo se evalúe en sus días correspondientes
+                if (misDias.includes(dia.id) || misDias.includes(dia.nombreDia)) {
+                    dia.cajas?.forEach((caja: any) => {
+                        if (misCajas.includes(caja.id)) {
+                            caja.turnos?.forEach((t: any) => {
+                                if (t.participanteId) {
+                                    participantesEnMisCajas.add(t.participanteId);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+            validatedParts = validatedParts.filter((p: any) => {
+                const loCreeYo = p.creador === (miDataCapitan?.nombre || 'Capitan');
+                const estaEnMisCajas = participantesEnMisCajas.has(p.id);
+                return loCreeYo || estaEnMisCajas;
+            });
+        }
+
         setParticipantes(validatedParts as Participante[]);
 
         if (data.nombre) setSeccionName(data.nombre);

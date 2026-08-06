@@ -95,15 +95,19 @@ const CroquisModal: React.FC<CroquisModalProps> = ({
       dia.cajas?.forEach(caja => {
         const turnosArr = Array.isArray(caja.turnos) ? caja.turnos : Object.values(caja.turnos || {});
         const turnosConAlerta = turnosArr.filter((t: any) => t.solicitaAsistencia);
-        
+
         if (turnosConAlerta.length > 0) {
-          const esPeligro = turnosConAlerta.some((t: any) => t.tipoAsistencia === 'peligro');
+          const esPeligro = turnosConAlerta.some((t: any) => String(t.tipoAsistencia).toLowerCase() === 'peligro');
           const tipo = esPeligro ? 'peligro' : 'asistencia';
-          
-          if (caja.id) alertas[caja.id] = tipo;
+
+          if (caja.id && alertas[caja.id] !== 'peligro') {
+            alertas[caja.id] = tipo;
+          }
           if (caja.nombre) {
             const nombreLlave = String(caja.nombre).trim().toLowerCase();
-            alertas[nombreLlave] = tipo;
+            if (alertas[nombreLlave] !== 'peligro') {
+              alertas[nombreLlave] = tipo;
+            }
           }
         }
       });

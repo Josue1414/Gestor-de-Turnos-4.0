@@ -9,6 +9,7 @@ export interface ParticipanteExtendido extends Participante {
   notas?: string;
   creador?: string; 
   capitanesInvolucrados?: string[]; 
+  esMio?: boolean;
 }
 
 interface ParticipantDrawerProps {
@@ -139,20 +140,16 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
               const tieneTelefono = Boolean(p.telefono && p.telefono.trim().length > 7);
               const isExpanded = expandedId === p.id;
 
-              // REGLAS ESTRICTAS DE VISIBILIDAD DE BOTONES
               const esAdminOSuper = currentUserRole === 'Administrador' || currentUserRole === 'SuperAdmin';
               const isAdminParticipant = !p.creador || p.creador === 'Admin';
               
-              // 1. Permisos Completos (Editar y Eliminar): Admin borra a todos, Capitán solo borra a los suyos.
-              const esCapitanYEsSuCreador = currentUserRole === 'Capitan' && !isAdminParticipant;
-              const tienePermisosCompletos = esAdminOSuper || esCapitanYEsSuCreador;
+              // 1. Permisos Completos dependientes directamente de esMio
+              const tienePermisosCompletos = esAdminOSuper || (currentUserRole === 'Capitan' && p.esMio === true);
               
-              // 2. Botones de Comunicación (WhatsApp y Copiar Link Único)
-              // El Capitán se puede comunicar con TODOS los de su lista (incluso los creados por Admin)
+              // 2. Botones de Comunicación
               const canShowCommunicationButtons = currentUserRole === 'Capitan' || (esAdminOSuper && isAdminParticipant);
 
               // 3. Generar Link Único
-              // Si lo está viendo el Capitán, SIEMPRE manda al login de SU equipo. Si lo ve el Admin, manda al general.
               const participantInviteUrl = currentUserRole === 'Capitan'
                 ? `${window.location.origin}/invite-team/${eventoId}/${adminId}/${customInviteLink}/${p.id}`
                 : `${window.location.origin}/invite/${eventoId}/${adminId}/${p.id}`;
@@ -168,7 +165,6 @@ const ParticipantDrawer: React.FC<ParticipantDrawerProps> = ({
                         {esMiUsuario && <span className="text-xs text-blue-500 font-black shrink-0">(Tú)</span>}
                       </div>
 
-                      {/* LÓGICA DE PASTILLAS */}
                       {currentUserRole !== 'Participante' && (
                         <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
                           {isAdminParticipant ? (

@@ -1,6 +1,6 @@
 // src/components/AdminFiche.tsx
 import React, { useState } from 'react';
-import { Settings, Trash2, Key, Eye, Download, ChevronDown, ChevronUp, MapIcon } from 'lucide-react';
+import { Settings, Trash2, Key, Eye, EyeOff, Download, ChevronDown, ChevronUp, MapIcon, Copy, Check } from 'lucide-react';
 import type { AdminData } from '../hooks/useSuperAdminLogic';
 
 const StatBadge = ({ label, value, colorClass }: { label: string, value: string | number, colorClass: string }) => (
@@ -22,6 +22,16 @@ interface AdminFicheProps {
 
 const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, onDownload, onView, onDelete, onOpenCroquisAdmin }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedField, setCopiedField] = useState<'id' | 'password' | null>(null);
+
+  // Función para manejar el copiado al portapapeles
+  const handleCopy = (text: string, field: 'id' | 'password') => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    // Ocultar la palomita verde después de 2 segundos
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   return (
     <div className="w-full sm:w-[280px] bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 transition-all rounded-xl overflow-hidden">
@@ -37,7 +47,6 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
 
           <div className="min-w-0 flex-1">
             <h4 className="font-black text-slate-800 leading-tight text-base truncate">{data.name}</h4>
-            {/* 4. CORRECCIÓN: Leemos data.organization (y permitimos el tipado extendido) */}
             <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{(data as any).organization || 'Sin Organización'}</p>
             <div className="flex flex-wrap gap-1 mt-2 text-[10px] text-slate-500">
               <span className="bg-white/90 border border-slate-200 rounded-full px-2 py-1">Cajas {stats.cajas}</span>
@@ -81,14 +90,48 @@ const AdminFiche: React.FC<AdminFicheProps> = ({ data, stats, onOpenSettings, on
               <Key size={12} /> Datos de Acceso
             </p>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Usuario (ID):</span>
-                <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all">{data.id}</span>
+              
+              {/* FILA DE USUARIO */}
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Usuario (ID):</span>
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all truncate">
+                    {data.id}
+                  </span>
+                  <button 
+                    onClick={() => handleCopy(data.id, 'id')} 
+                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded transition shrink-0"
+                    title="Copiar Usuario"
+                  >
+                    {copiedField === 'id' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Contraseña:</span>
-                <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all">{data.password}</span>
+
+              {/* FILA DE CONTRASEÑA */}
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Contraseña:</span>
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-xs font-mono font-black text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 select-all truncate tracking-widest">
+                    {showPassword ? data.password : '••••••••'}
+                  </span>
+                  <button 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100 rounded transition shrink-0"
+                    title={showPassword ? 'Ocultar Contraseña' : 'Ver Contraseña'}
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button 
+                    onClick={() => handleCopy(data.password || '', 'password')} 
+                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded transition shrink-0"
+                    title="Copiar Contraseña"
+                  >
+                    {copiedField === 'password' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  </button>
+                </div>
               </div>
+
             </div>
           </div>
 
