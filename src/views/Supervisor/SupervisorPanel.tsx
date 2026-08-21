@@ -11,7 +11,7 @@ import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
-import ModalBloqueoGlobal from '../../components/ModalBloqueoGlobal'; 
+import ModalBloqueoGlobal from '../../components/ModalBloqueoGlobal';
 import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 
 import { guardarCroquis } from '../../utils/croquisService';

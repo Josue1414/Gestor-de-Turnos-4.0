@@ -54,13 +54,14 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   const [loading, setLoading] = useState(true);
   const [eventoExiste, setEventoExiste] = useState(true);
 
+
   useEffect(() => {
     if (!eventoId) return;
     const unsubscribe = onSnapshot(doc(db, 'eventos', eventoId), (snap) => {
       if (snap.exists()) {
         setEventoExiste(true);
         setEvento({ id: snap.id, ...snap.data() } as EventoDocument & { id: string });
-      } else {
+        } else {
         setEventoExiste(false);
       }
       setLoading(false);
@@ -353,7 +354,7 @@ export const useSupervisorLogic = (eventoId: string | undefined) => {
   };
 
   return { 
-    evento, loading, eventoExiste, getAdminStats, handleAddAdmin, handleDeleteAdmin, 
+   evento, loading, eventoExiste, getAdminStats, handleAddAdmin, handleDeleteAdmin,
     handleEditAccess, handleSaveGlobalStructure, handleSaveProfile,
     handleToggleSincronizacion // NUEVA FUNCIÓN EXPUESTA
   };

@@ -9,7 +9,7 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 import InstallGuideModal from '../../components/InstallGuideModal';
-import ModalPedirAyuda, { type ContactoAyuda } from '../../components/ModalPedirAyuda'; // <-- NUEVO
+import ModalPedirAyuda, { type ContactoAyuda } from '../../components/ModalPedirAyuda';
 import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 
 import { useParticipantLogic } from './useParticipantLogic';

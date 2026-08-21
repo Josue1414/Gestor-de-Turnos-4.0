@@ -1,5 +1,5 @@
 // src/utils/sessionCleanup.ts
-
+ 
 const LOCAL_KEYS = [
   'user_role',
   'current_admin_id',
@@ -10,9 +10,9 @@ const LOCAL_KEYS = [
   'saved_participant_url',
   'last_invite_url',
 ];
-
+ 
 const SESSION_KEYS = ['visor_externo_tipo', 'return_to_invite'];
-
+ 
 /**
  * Borra cualquier rastro de sesión guardado en el dispositivo.
  * Se usa cuando el evento ya no existe (finalizó o fue eliminado) para que el

@@ -10,10 +10,9 @@ import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 import { enviarAlertaVercel } from '../../utils/pushNotifications';
 import { useTiempoReal } from '../../hooks/useTiempoReal';
+
 import { limpiarSesionLocal } from '../../utils/sessionCleanup';
 import type { MotivoSalida } from '../../components/EventoFinalizadoScreen';
-
-const TIEMPO_MAXIMO_CARGA_MS = 15000;
 
 export interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
@@ -61,6 +60,9 @@ export const useParticipantLogic = () => {
 
   const horaActual = useTiempoReal();
 
+  const TIEMPO_MAXIMO_CARGA_MS = 15000;
+
+
   // Al detectar que el evento ya no está disponible borramos la sesión guardada
   // para que el dispositivo no vuelva a entrar en bucle al panel inexistente.
   const cerrarPorEventoNoDisponible = useCallback((motivo: MotivoSalida) => {
@@ -69,6 +71,7 @@ export const useParticipantLogic = () => {
     loadingRef.current = false;
     setLoading(false);
   }, []);
+
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -85,9 +88,10 @@ export const useParticipantLogic = () => {
     const timeoutCarga = setTimeout(() => {
       if (loadingRef.current) cerrarPorEventoNoDisponible('sin-conexion');
     }, TIEMPO_MAXIMO_CARGA_MS);
-
+    
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       clearTimeout(timeoutCarga);
+
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.nombre) setEventoNombre(data.nombre);
@@ -182,13 +186,14 @@ export const useParticipantLogic = () => {
           cerrarPorEventoNoDisponible('sin-acceso');
           return;
         }
+
       } else {
         cerrarPorEventoNoDisponible('finalizado');
         return;
       }
       loadingRef.current = false;
       setLoading(false);
-    }, (error) => {
+      }, (error) => {
       clearTimeout(timeoutCarga);
       console.error('Error escuchando el evento:', error);
       cerrarPorEventoNoDisponible('sin-conexion');

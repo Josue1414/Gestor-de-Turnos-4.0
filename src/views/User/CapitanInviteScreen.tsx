@@ -5,6 +5,7 @@ import { User, Lock } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ParticipanteSchema } from '../../utils/schemas';
+
 import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 import { limpiarSesionLocal } from '../../utils/sessionCleanup';
 
@@ -108,7 +109,7 @@ const CapitanInviteScreen = () => {
             setEventoFinalizado(true);
             return;
           }
-
+          
           const capitanes = data.capitanesPorAdmin?.[adminId] || [];
           const capitanEncontrado = capitanes.find((c: any) => c.linkUnico === capitanLink);
           

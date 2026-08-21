@@ -1,6 +1,6 @@
 // src/components/CroquisInteractivo/TarjetaTurnoEnVivo.tsx
 import React, { useState, useMemo } from 'react';
-import { X, MapPin, Info, Lock, Trash2, MessageCircle, Calendar, CheckSquare, Square, Clock, Edit2, AlertTriangle, LifeBuoy, User, ShieldCheck } from 'lucide-react';
+import { X, MapPin, Info, Lock, Trash2, MessageCircle, Calendar, CheckSquare, Square, Clock, Edit2, AlertTriangle, LifeBuoy, User, ShieldCheck, Users } from 'lucide-react';
 import type { Coordenada } from '../../types';
 
 export interface PoligonoCroquisExt {
@@ -32,7 +32,7 @@ interface TarjetaTurnoEnVivoProps {
   participantes?: any[];
 }
 
-const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUsuario, onClose, onEdit, onDelete, dias, participantes }) => {
+const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUsuario, onClose, onEdit, onDelete, dias, diaActivo, participantes }) => {
   const [horariosOcultos, setHorariosOcultos] = useState<Set<number>>(new Set());
 
   const bloqueadoParaUsuario = poligono.visibilidad === 'solo_admins_capitanes' && rolUsuario === 'Participante';
@@ -64,12 +64,88 @@ const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUs
           horario: turnoAlerta.horario,
           participanteNombre: participante?.nombre || 'Participante Desconocido',
           encargadoNombre: participante?.capitanNombre || participante?.creador || poligono.encargadoNombre || 'Administrador',
-          telefonoEncargado: participante?.capitanTelefono || poligono.encargadoTelefono || ''
+          telefonoEncargado: participante?.telefono || participante?.capitanTelefono || poligono.encargadoTelefono || ''
         };
       }
     }
     return null;
   }, [poligono.cajaId, poligono.nombre, dias, participantes]);
+
+  const encargadosCaja = useMemo(() => {
+    if (!poligono.cajaId || !dias) return null;
+
+    const participantesAcargo: any[] = [];
+    const capitanesSet = new Set<string>();
+    let telefonoContacto = poligono.encargadoTelefono || '';
+    let diaEncontrado = '';
+
+    // 1. Buscar en el día activo actual
+    const diaActivoObj = dias[diaActivo || 0];
+    if (diaActivoObj) {
+      const cajaHoy = diaActivoObj.cajas?.find((c: any) => c.id === poligono.cajaId);
+      if (cajaHoy) {
+        const turnos = Array.isArray(cajaHoy.turnos) ? cajaHoy.turnos : Object.values(cajaHoy.turnos || {});
+        // Ordenamos los turnos de manera cronológica
+        const turnosOrdenados = [...turnos].sort((a: any, b: any) => a.horario.localeCompare(b.horario));
+        
+        turnosOrdenados.forEach((t: any) => {
+          if (t.participanteId && participantes) {
+            const p = participantes.find((part: any) => part.id === t.participanteId);
+            // Evitamos duplicar al mismo participante si tiene varios turnos el mismo día
+            if (p && !participantesAcargo.find(x => x.id === p.id)) {
+              participantesAcargo.push(p);
+            }
+          }
+        });
+        if (participantesAcargo.length > 0) {
+          diaEncontrado = 'hoy';
+        }
+      }
+    }
+
+    // 2. Si hoy no hay nadie, escaneamos los días siguientes buscando el primer turno ocupado
+    if (participantesAcargo.length === 0) {
+      for (let i = 0; i < dias.length; i++) {
+        const dia = dias[i];
+        const caja = dia.cajas?.find((c: any) => c.id === poligono.cajaId);
+        if (caja) {
+          const turnos = Array.isArray(caja.turnos) ? caja.turnos : Object.values(caja.turnos || {});
+          const turnosOrdenados = [...turnos].sort((a: any, b: any) => a.horario.localeCompare(b.horario));
+          const primerTurnoOcupado = turnosOrdenados.find((t: any) => t.participanteId);
+          
+          if (primerTurnoOcupado && participantes) {
+            const p = participantes.find((part: any) => part.id === primerTurnoOcupado.participanteId);
+            if (p) {
+              participantesAcargo.push(p);
+              diaEncontrado = dia.nombreDia || dia.fecha || `Día ${i + 1}`;
+              break; // Al encontrar al primero del evento futuro, detenemos la búsqueda
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Extraer capitanes y teléfono de contacto principal (priorizando el del participante)
+    participantesAcargo.forEach(p => {
+      if (p.capitanesInvolucrados && p.capitanesInvolucrados.length > 0) {
+        p.capitanesInvolucrados.forEach((c: string) => capitanesSet.add(c));
+      } else if (p.creador && p.creador !== 'Admin' && p.creador !== 'Otro Admin') {
+        capitanesSet.add(p.creador);
+      }
+
+      if (!telefonoContacto && p.telefono) {
+        telefonoContacto = p.telefono;
+      }
+    });
+
+    return {
+      participantes: participantesAcargo,
+      capitanes: Array.from(capitanesSet),
+      telefono: telefonoContacto,
+      diaEncontrado,
+      adminOriginal: poligono.encargadoNombre
+    };
+  }, [poligono.cajaId, poligono.encargadoTelefono, poligono.encargadoNombre, dias, diaActivo, participantes]);
 
   const toggleHorario = (index: number) => {
     setHorariosOcultos(prev => {
@@ -124,7 +200,8 @@ const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUs
             <h3 className="font-black text-slate-800 text-lg leading-none mb-1">{poligono.nombre}</h3>
           </div>
 
-          {poligono.encargadoNombre && !infoAlerta && (
+          {/* Ocultamos este encabezado si es una caja, para que no haga redundancia con la sección de abajo */}
+          {poligono.encargadoNombre && !poligono.cajaId && !infoAlerta && (
             <div className="ml-1 pl-3 sm:pl-4 border-l-2 border-slate-300/60 flex flex-col justify-center truncate">
               <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase leading-none mb-1.5 tracking-wide truncate">
                 Encargado: <span className="text-slate-700">{poligono.encargadoNombre}</span>
@@ -206,11 +283,64 @@ const TarjetaTurnoEnVivo: React.FC<TarjetaTurnoEnVivoProps> = ({ poligono, rolUs
                   })}
                 </div>
               </div>
-            ) : (
-              <div className="text-center p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50">
-                <p className="text-xs font-bold text-slate-500">Esta área no tiene horarios específicos configurados.</p>
+            ) : poligono.cajaId ? (
+              <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl flex flex-col gap-3">
+                <h4 className="text-xs font-black text-indigo-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <ShieldCheck size={14} /> Asignaciones del Área
+                </h4>
+                
+                <div className="flex flex-col gap-2 mt-1">
+                  {encargadosCaja?.participantes && encargadosCaja.participantes.length > 0 ? (
+                    <>
+                      <div className="text-sm text-slate-700 flex items-start gap-2">
+                        <User size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                        <div className="leading-tight flex flex-col gap-1">
+                          <span className="font-bold text-xs uppercase text-slate-500">
+                            {encargadosCaja.diaEncontrado === 'hoy' ? 'A cargo hoy:' : `Próximo a cargo (${encargadosCaja.diaEncontrado}):`}
+                          </span> 
+                          {encargadosCaja.participantes.map(p => (
+                            <span key={p.id} className="font-medium">{p.nombre}</span>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {encargadosCaja.capitanes && encargadosCaja.capitanes.length > 0 && (
+                        <div className="text-sm text-slate-700 flex items-start gap-2 mt-1">
+                          <Users size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                          <span className="leading-tight">
+                            <span className="font-bold text-xs uppercase text-slate-500 block">Capitán(es): </span> 
+                            <span className="font-medium">{encargadosCaja.capitanes.join(', ')}</span>
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">No hay participantes asignados a esta caja aún.</p>
+                  )}
+
+                  {/* Mostrar admin fijo si fue escrito a mano y no es el por defecto */}
+                  {encargadosCaja?.adminOriginal && encargadosCaja.adminOriginal !== 'Administrador Principal' && (
+                    <div className="text-sm text-slate-700 flex items-start gap-2 mt-1 pt-2 border-t border-indigo-100/50">
+                      <ShieldCheck size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                      <span className="leading-tight">
+                        <span className="font-bold text-xs uppercase text-slate-500 block">Administrador: </span> 
+                        <span className="font-medium">{encargadosCaja.adminOriginal}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {encargadosCaja?.telefono && (
+                  <a
+                    href={`https://wa.me/${encargadosCaja.telefono.replace(/\D/g, '')}`}
+                    target="_blank" rel="noreferrer"
+                    className="mt-2 flex items-center justify-center gap-2 w-full bg-[#25D366] text-white px-3 py-2.5 rounded-xl text-sm font-bold hover:scale-[1.02] transition shadow-sm"
+                  >
+                    <MessageCircle size={18} /> Contactar por WhatsApp
+                  </a>
+                )}
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>

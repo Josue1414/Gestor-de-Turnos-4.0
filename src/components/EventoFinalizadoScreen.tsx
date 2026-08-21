@@ -3,15 +3,15 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarX, LogOut, Phone, WifiOff } from 'lucide-react';
 import { limpiarSesionLocal } from '../utils/sessionCleanup';
-
+ 
 export type MotivoSalida = 'finalizado' | 'sin-acceso' | 'sin-conexion';
-
+ 
 interface EventoFinalizadoScreenProps {
   motivo?: MotivoSalida;
   eventoNombre?: string;
   contacto?: { nombre?: string; telefono?: string };
 }
-
+ 
 const TEXTOS: Record<MotivoSalida, { titulo: string; detalle: string }> = {
   finalizado: {
     titulo: 'Este evento finalizó',
@@ -29,7 +29,7 @@ const TEXTOS: Record<MotivoSalida, { titulo: string; detalle: string }> = {
       'No hay conexión con el servidor o el evento ya no existe. Cierra tu sesión e intenta ingresar de nuevo; si continúa, contacta a tu supervisor.',
   },
 };
-
+ 
 const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
   motivo = 'finalizado',
   eventoNombre,
@@ -37,19 +37,19 @@ const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
 }) => {
   const navigate = useNavigate();
   const { titulo, detalle } = TEXTOS[motivo];
-
+ 
   const telefonoLimpio = (contacto?.telefono || '').replace(/\D/g, '');
-
+ 
   const handleVolverAlLogin = () => {
     limpiarSesionLocal();
     navigate('/', { replace: true });
   };
-
+ 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-
+ 
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="bg-slate-50 p-8 text-center flex flex-col items-center border-b border-slate-100">
           <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4">
@@ -64,10 +64,10 @@ const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
             <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-widest">{eventoNombre}</p>
           )}
         </div>
-
+ 
         <div className="p-8">
           <p className="text-sm font-medium text-slate-600 leading-relaxed text-center">{detalle}</p>
-
+ 
           {(contacto?.nombre || telefonoLimpio) && (
             <div className="mt-6 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tu contacto</p>
@@ -84,7 +84,7 @@ const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
               )}
             </div>
           )}
-
+ 
           <button
             type="button"
             onClick={handleVolverAlLogin}
@@ -92,7 +92,7 @@ const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
           >
             <LogOut size={16} /> Cerrar sesión y volver al inicio
           </button>
-
+ 
           <p className="text-[10px] text-slate-400 font-bold text-center mt-3 uppercase tracking-wider">
             Se borrarán los datos de acceso guardados en este dispositivo
           </p>
@@ -101,5 +101,5 @@ const EventoFinalizadoScreen: React.FC<EventoFinalizadoScreenProps> = ({
     </div>
   );
 };
-
+ 
 export default EventoFinalizadoScreen;
