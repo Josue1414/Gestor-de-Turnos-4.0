@@ -1,5 +1,5 @@
 // src/views/User/useParticipantLogic.ts
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
@@ -10,6 +10,9 @@ import type { CroquisItem } from '../../components/CroquisModal';
 import { useToast } from '../../components/ToastProvider';
 import { enviarAlertaVercel } from '../../utils/pushNotifications';
 import { useTiempoReal } from '../../hooks/useTiempoReal';
+
+import { limpiarSesionLocal } from '../../utils/sessionCleanup';
+import type { MotivoSalida } from '../../components/EventoFinalizadoScreen';
 
 export interface ParticipanteExtendidoDb extends Participante {
   telefono?: string;
@@ -31,7 +34,8 @@ export const useParticipantLogic = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(eventoId && adminId));
+  const loadingRef = useRef(loading);
   const [dias, setDias] = useState<DiaEvento[]>([]);
   const [participantes, setParticipantes] = useState<ParticipanteExtendidoDb[]>([]);
   const [eventoNombre, setEventoNombre] = useState('Evento');
@@ -52,8 +56,22 @@ export const useParticipantLogic = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [adminContacto, setAdminContacto] = useState({ nombre: 'Administrador', telefono: '' });
+  const [motivoSalida, setMotivoSalida] = useState<MotivoSalida | null>(null);
 
   const horaActual = useTiempoReal();
+
+  const TIEMPO_MAXIMO_CARGA_MS = 15000;
+
+
+  // Al detectar que el evento ya no está disponible borramos la sesión guardada
+  // para que el dispositivo no vuelva a entrar en bucle al panel inexistente.
+  const cerrarPorEventoNoDisponible = useCallback((motivo: MotivoSalida) => {
+    limpiarSesionLocal();
+    setMotivoSalida(motivo);
+    loadingRef.current = false;
+    setLoading(false);
+  }, []);
+
 
   useEffect(() => {
     const role = localStorage.getItem('user_role');
@@ -65,11 +83,23 @@ export const useParticipantLogic = () => {
   useEffect(() => {
     if (!eventoId || !adminId) return;
     const docRef = doc(db, 'eventos', eventoId);
+
+    // Si Firestore nunca responde (sin conexión) evitamos la pantalla eterna de carga.
+    const timeoutCarga = setTimeout(() => {
+      if (loadingRef.current) cerrarPorEventoNoDisponible('sin-conexion');
+    }, TIEMPO_MAXIMO_CARGA_MS);
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      clearTimeout(timeoutCarga);
+
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.nombre) setEventoNombre(data.nombre);
+
+        if (data.finalizado === true || data.estado === 'finalizado') {
+          cerrarPorEventoNoDisponible('finalizado');
+          return;
+        }
         
         const adminsList = data.admins || [];
         const currentAdmin = adminsList.find((a: any) => a.id === adminId);
@@ -149,15 +179,31 @@ export const useParticipantLogic = () => {
         setPoligonosGral(data.poligonos_general || data.poligonosGeneral || data.croquisPoligonos?.general || data.poligonosGlobales || []);
         setPoligonosIndiv(data[`poligonos_${adminId}`] || data.poligonosPorAdmin?.[adminId] || data.croquisPoligonos?.[adminId] || []);
 
+        // El participante fue eliminado del evento: mostramos la salida en vez
+        // de una pantalla en blanco. Ignoramos snapshots de caché para no
+        // expulsar a alguien que acaba de registrarse.
+        if (!currentUser && !docSnap.metadata.fromCache) {
+          cerrarPorEventoNoDisponible('sin-acceso');
+          return;
+        }
+
       } else {
-        showToast('El evento no existe.', 'error');
-        navigate('/');
+        cerrarPorEventoNoDisponible('finalizado');
+        return;
       }
+      loadingRef.current = false;
       setLoading(false);
+      }, (error) => {
+      clearTimeout(timeoutCarga);
+      console.error('Error escuchando el evento:', error);
+      cerrarPorEventoNoDisponible('sin-conexion');
     });
 
-    return () => unsubscribe();
-  }, [eventoId, adminId, navigate, participanteId, showToast]);
+    return () => {
+      clearTimeout(timeoutCarga);
+      unsubscribe();
+    };
+  }, [eventoId, adminId, participanteId, cerrarPorEventoNoDisponible]);
 
   const formatHorario12h = (horario: string) => {
     const formatPart = (t: string) => {
@@ -521,7 +567,7 @@ export const useParticipantLogic = () => {
     showLogoutConfirm, setShowLogoutConfirm, miUsuario, participantesDirectorio,
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
-    handleAsignarme, handleQuitarme, handleLogout,
+    handleAsignarme, handleQuitarme, handleLogout, motivoSalida,
     adminContacto,handleSolicitarAsistencia,turnoAlertaInfo
   };
 };

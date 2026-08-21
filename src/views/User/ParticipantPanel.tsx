@@ -9,7 +9,8 @@ import ParticipantDrawer from '../../components/ParticipantDrawer';
 import DownloadScheduleModal from '../../components/DownloadScheduleModal';
 import CroquisModal from '../../components/CroquisModal';
 import InstallGuideModal from '../../components/InstallGuideModal';
-import ModalPedirAyuda, { type ContactoAyuda } from '../../components/ModalPedirAyuda'; // <-- NUEVO
+import ModalPedirAyuda, { type ContactoAyuda } from '../../components/ModalPedirAyuda';
+import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 
 import { useParticipantLogic } from './useParticipantLogic';
 
@@ -23,7 +24,7 @@ const ParticipantPanel = () => {
     datosParaModal, diaActual, turnosLibresCount, turnosOcupadosCount,
     croquisDataParaMostrar, handleGuardarPerfilAjustado, isBusy,
     handleAsignarme, handleQuitarme,
-    adminContacto, turnoAlertaInfo, handleSolicitarAsistencia
+    adminContacto, turnoAlertaInfo, handleSolicitarAsistencia, motivoSalida
   } = useParticipantLogic();
 
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
@@ -56,6 +57,16 @@ const ParticipantPanel = () => {
     }
   };
 
+  if (motivoSalida) {
+    return (
+      <EventoFinalizadoScreen
+        motivo={motivoSalida}
+        eventoNombre={eventoNombre}
+        contacto={{ nombre: adminContacto.nombre, telefono: adminContacto.telefono }}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center">
@@ -65,7 +76,15 @@ const ParticipantPanel = () => {
     );
   }
 
-  if (!miUsuario || !eventoId || !adminId) return null;
+  if (!miUsuario || !eventoId || !adminId) {
+    return (
+      <EventoFinalizadoScreen
+        motivo="sin-acceso"
+        eventoNombre={eventoNombre}
+        contacto={{ nombre: adminContacto.nombre, telefono: adminContacto.telefono }}
+      />
+    );
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const safeHandleAsignarme = (cajaId: string, turnoOrId: any) => {

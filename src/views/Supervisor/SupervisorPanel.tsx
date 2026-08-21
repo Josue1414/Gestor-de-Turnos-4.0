@@ -11,7 +11,8 @@ import CountdownDeleteModal from '../../components/CountdownDeleteModal';
 import BaseStructureModal from '../../components/BaseStructureModal';
 import AdminSettingsFlow from '../../components/AdminSettingsFlow'; 
 import CroquisModal, { type CroquisItem } from '../../components/CroquisModal';
-import ModalBloqueoGlobal from '../../components/ModalBloqueoGlobal'; 
+import ModalBloqueoGlobal from '../../components/ModalBloqueoGlobal';
+import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 
 import { guardarCroquis } from '../../utils/croquisService';
 import { exportToExcel, exportGlobalToExcel } from '../../utils/exportExcel';
@@ -60,7 +61,7 @@ const SupervisorPanel = () => {
   }, [navigate]);
   
   const { 
-    evento, loading, handleAddAdmin, handleDeleteAdmin, 
+    evento, loading, eventoExiste, handleAddAdmin, handleDeleteAdmin, 
     handleEditAccess, handleSaveProfile, handleSaveGlobalStructure,
     handleToggleSincronizacion 
   } = useSupervisorLogic(eventoId);
@@ -144,6 +145,10 @@ const SupervisorPanel = () => {
     const capParts = Object.values(eventoExt.participantesPorCapitan || {}).flat();
     return [...adminParts, ...capParts];
   }, [eventoExt]);
+
+  if (!eventoExiste) {
+    return <EventoFinalizadoScreen motivo="finalizado" />;
+  }
 
   if (loading) {
     return (

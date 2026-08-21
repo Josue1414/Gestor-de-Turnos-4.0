@@ -18,6 +18,7 @@ import type { CroquisItem } from '../../components/CroquisModal';
 
 import { getLocalBusyUserIds, getSiguienteHorario, validarNuevoHorario } from './AdminPanelFunciones';
 import AdminPanelModals from './AdminPanelModals';
+import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
 
 import { useEventStats } from '../../hooks/useEventStats';
 
@@ -71,7 +72,7 @@ const AdminPanel = () => {
     handleCheckNameDuplicate, createShiftModal, setCreateShiftModal, confirmarCrearHorario, clashModal, setClashModal,
     capitanes, handleCrearCapitan, handleEliminarCapitan, handleEditarCapitan,
     isCapitan, cajasAsignadasCapitan, actualizarEstadoTurno, resolverAlerta,
-    pushEnabled, handleTogglePush, horarioEditando
+    pushEnabled, handleTogglePush, horarioEditando, eventoExiste
   } = useAdminLogic(eventoId || 'demo'); 
 
   const [deletePartModal, setDeletePartModal] = useState({ isOpen: false, id: '', nombre: '' });
@@ -497,6 +498,10 @@ const AdminPanel = () => {
     sessionStorage.removeItem('visor_externo_tipo');
     navigate('/');
   };
+
+  if (!eventoExiste) {
+    return <EventoFinalizadoScreen motivo="finalizado" />;
+  }
 
   if (loading || !currentAdminInfo) {
     return (
