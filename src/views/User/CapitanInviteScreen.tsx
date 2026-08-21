@@ -5,6 +5,8 @@ import { User, Lock } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ParticipanteSchema } from '../../utils/schemas';
+import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
+import { limpiarSesionLocal } from '../../utils/sessionCleanup';
 
 interface ParticipanteEnDB {
   id: string;
@@ -19,6 +21,8 @@ interface EventoDB {
   participantesPorAdmin?: Record<string, ParticipanteEnDB[]>; 
   capitanesPorAdmin?: Record<string, any[]>;
   nombre?: string;
+  finalizado?: boolean;
+  estado?: string;
 }
 
 const MESES = [
@@ -52,6 +56,7 @@ const CapitanInviteScreen = () => {
   const [error, setError] = useState('');
   
   const [eventoNombre, setEventoNombre] = useState('Cargando...');
+  const [eventoFinalizado, setEventoFinalizado] = useState(false);
   const [capitanNombre, setCapitanNombre] = useState('');
   const [capitanId, setCapitanId] = useState('');
 
@@ -89,10 +94,21 @@ const CapitanInviteScreen = () => {
       try {
         const docRef = doc(db, 'eventos', eventoId);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        if (!docSnap.exists()) {
+          limpiarSesionLocal();
+          setEventoFinalizado(true);
+          return;
+        }
+        {
           const data = docSnap.data() as EventoDB;
           setEventoNombre(data.nombre || 'Evento');
-          
+
+          if (data.finalizado === true || data.estado === 'finalizado') {
+            limpiarSesionLocal();
+            setEventoFinalizado(true);
+            return;
+          }
+
           const capitanes = data.capitanesPorAdmin?.[adminId] || [];
           const capitanEncontrado = capitanes.find((c: any) => c.linkUnico === capitanLink);
           
@@ -125,6 +141,10 @@ const CapitanInviteScreen = () => {
     };
     fetchEventoInfo();
   }, [eventoId, adminId, capitanLink, participanteId]);
+
+  if (eventoFinalizado) {
+    return <EventoFinalizadoScreen motivo="finalizado" />;
+  }
 
   if (!eventoId || !adminId || !capitanLink) {
     return (
@@ -169,7 +189,8 @@ const CapitanInviteScreen = () => {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        setError("El evento no existe.");
+        limpiarSesionLocal();
+        setEventoFinalizado(true);
         setLoading(false);
         return;
       }

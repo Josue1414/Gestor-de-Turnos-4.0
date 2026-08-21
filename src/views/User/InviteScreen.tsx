@@ -5,6 +5,8 @@ import { User, Lock } from 'lucide-react';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ParticipanteSchema } from '../../utils/schemas';
+import EventoFinalizadoScreen from '../../components/EventoFinalizadoScreen';
+import { limpiarSesionLocal } from '../../utils/sessionCleanup';
 
 interface ParticipanteEnDB {
   id: string;
@@ -17,6 +19,8 @@ interface ParticipanteEnDB {
 interface EventoDB {
   participantesPorAdmin?: Record<string, ParticipanteEnDB[]>;
   nombre?: string;
+  finalizado?: boolean;
+  estado?: string;
 }
 
 const MESES = [
@@ -49,6 +53,7 @@ const InviteScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [eventoNombre, setEventoNombre] = useState('Cargando...');
+  const [eventoFinalizado, setEventoFinalizado] = useState(false);
 
   const listaAnios = useMemo(() => {
     const anioMaximo = new Date().getFullYear() - 18;
@@ -84,9 +89,20 @@ const InviteScreen = () => {
       try {
         const docRef = doc(db, 'eventos', eventoId);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        if (!docSnap.exists()) {
+          limpiarSesionLocal();
+          setEventoFinalizado(true);
+          return;
+        }
+        {
           const data = docSnap.data() as EventoDB;
           setEventoNombre(data.nombre || 'Evento');
+
+          if (data.finalizado === true || data.estado === 'finalizado') {
+            limpiarSesionLocal();
+            setEventoFinalizado(true);
+            return;
+          }
 
           if (participanteId) {
             const participantesDelTarget = data.participantesPorAdmin?.[adminId] || [];
@@ -104,6 +120,10 @@ const InviteScreen = () => {
     };
     fetchEventoInfo();
   }, [eventoId, adminId, participanteId]);
+
+  if (eventoFinalizado) {
+    return <EventoFinalizadoScreen motivo="finalizado" />;
+  }
 
   if (!eventoId || !adminId) {
     return (
@@ -148,7 +168,8 @@ const InviteScreen = () => {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        setError("El evento no existe o fue eliminado.");
+        limpiarSesionLocal();
+        setEventoFinalizado(true);
         setLoading(false);
         return;
       }
